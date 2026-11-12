@@ -80,6 +80,9 @@ if (!ExternalAligner::isAvailable($engine)) {
     respond(503, array('error' => ExternalAligner::label($engine) . ' is not installed on this server.'));
 }
 
+// a circular plasmid is read round the origin
+$circular = ($payload['circular'] ?? false) === true;
+
 $results = array();
 foreach ($reads as $read) {
     $sequence = is_array($read) ? ($read['sequence'] ?? null) : null;
@@ -88,7 +91,7 @@ foreach ($reads as $read) {
         respond(400, array('error' => 'Invalid read.'));
     }
     try {
-        $alignment = SequenceAligner::align($reference, $sequence, $engine);
+        $alignment = SequenceAligner::align($reference, $sequence, $engine, $circular);
     } catch (RuntimeException $e) {
         respond(500, array('error' => $e->getMessage()));
     }

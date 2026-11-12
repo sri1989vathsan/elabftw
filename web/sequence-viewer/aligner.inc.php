@@ -35,6 +35,8 @@ use function substr;
  * strand, then aligns it base by base with affine gaps. The whole read is aligned, the ends of the reference are free,
  * so a read covering a part of the plasmid is what it is made for.
  * The result is what the sequence editor needs: the reference and the read, both with gaps, of the same length.
+ * A circular reference is aligned unrolled (twice in a row), so a read that crosses the origin is one alignment: the reference of
+ * the answer then goes on past its end by the part of the read that is beyond it (`wraps`), and the positions are those of the plasmid.
  */
 final class SequenceAligner
 {
@@ -69,19 +71,21 @@ final class SequenceAligner
     }
 
     /**
-     * @return array{strand: string, refStart: int, refEnd: int, alignedReference: string, alignedRead: string, read: string, matches: int, mismatches: array<int, array{position: int, reference: string, read: string}>, unknown: array<int, int>, insertions: array<int, int>, deletions: array<int, int>, identity: float}|null null when the read is not found on the reference
+     * @return array{strand: string, refStart: int, refEnd: int, wraps: bool, alignedReference: string, alignedRead: string, read: string, matches: int, mismatches: array<int, array{position: int, reference: string, read: string}>, unknown: array<int, int>, insertions: array<int, int>, deletions: array<int, int>, identity: float}|null null when the read is not found on the reference
      */
-    public static function align(string $reference, string $read, string $engine = ExternalAligner::BUILTIN): ?array
+    public static function align(string $reference, string $read, string $engine = ExternalAligner::BUILTIN, bool $circular = false): ?array
     {
         $reference = self::clean($reference);
         $read = self::clean($read);
         $n = strlen($reference);
         $m = strlen($read);
-        if ($n < self::K || $m < self::K) {
+        if ($n < self::K || $m < self::K || ($circular && $m > $n)) {
             return null;
         }
+        // the sequence the read is looked for in: a circular one is read twice in a row
+        $unrolled = $circular ? $reference . $reference : $reference;
 
-        $index = self::indexKmers($reference);
+        $index = self::indexKmers($unrolled);
         $best = null;
         foreach (array('+' => $read, '-' => self::reverseComplement($read)) as $strand => $oriented) {
             $found = self::findPlace($index, $oriented);
@@ -93,9 +97,11 @@ final class SequenceAligner
             return null;
         }
 
-        $windowStart = max(0, $best['diagonal'] - self::MARGIN);
-        $windowEnd = min($n, $best['diagonal'] + $m + self::MARGIN);
-        $window = substr($reference, $windowStart, $windowEnd - $windowStart);
+        // the same place in the first turn of a circular reference
+        $diagonal = $circular ? $best['diagonal'] % $n : $best['diagonal'];
+        $windowStart = max(0, $diagonal - self::MARGIN);
+        $windowEnd = min(strlen($unrolled), $diagonal + $m + self::MARGIN);
+        $window = substr($unrolled, $windowStart, $windowEnd - $windowStart);
         // the built-in aligner, or MAFFT / Clustal Omega on the same read and the same stretch of the reference (aligner-external.inc.php)
         $aligned = $engine === ExternalAligner::BUILTIN ? self::alignToWindow($best['read'], $window) : ExternalAligner::align($engine, $best['read'], $window);
         if ($aligned === null) {
@@ -104,20 +110,27 @@ final class SequenceAligner
 
         $refStart = $windowStart + $aligned['windowStart'];
         $refEnd = $windowStart + $aligned['windowEnd'];
-        // both sequences over the whole reference: the read is gaps where it does not reach
-        $alignedReference = substr($reference, 0, $refStart) . $aligned['reference'] . substr($reference, $refEnd);
-        $alignedRead = str_repeat('-', $refStart) . $aligned['read'] . str_repeat('-', $n - $refEnd);
+        if ($circular && $refStart >= $n) {
+            // it starts in the second turn: the same place in the first one
+            $refStart -= $n;
+            $refEnd -= $n;
+        }
+        // both sequences over the whole reference (and as far beyond its end as the read goes): the read is gaps where it does not reach
+        $total = max($n, $refEnd);
+        $alignedReference = substr($unrolled, 0, $refStart) . $aligned['reference'] . substr($unrolled, $refEnd, $total - $refEnd);
+        $alignedRead = str_repeat('-', $refStart) . $aligned['read'] . str_repeat('-', $total - $refEnd);
 
         return array_merge(
             array(
                 'strand' => $best['strand'],
                 'refStart' => $refStart,
                 'refEnd' => $refEnd,
+                'wraps' => $refEnd > $n,
                 'alignedReference' => $alignedReference,
                 'alignedRead' => $alignedRead,
                 'read' => $best['read'],
             ),
-            self::describe($aligned['reference'], $aligned['read'], $refStart),
+            self::describe($aligned['reference'], $aligned['read'], $refStart, $n),
         );
     }
 
@@ -290,7 +303,7 @@ final class SequenceAligner
     /**
      * @return array{matches: int, mismatches: array<int, array{position: int, reference: string, read: string}>, unknown: array<int, int>, insertions: array<int, int>, deletions: array<int, int>, identity: float}
      */
-    private static function describe(string $reference, string $read, int $refStart): array
+    private static function describe(string $reference, string $read, int $refStart, int $length): array
     {
         $matches = 0;
         $mismatches = array();
@@ -305,18 +318,20 @@ final class SequenceAligner
             $r = $reference[$c];
             $q = $read[$c];
             if ($r === '-') {
-                $insertions[] = $position;
+                $insertions[] = $position > $length ? $position - $length : $position;
                 continue;
             }
             $position++;
+            // past the end of a circular reference the positions are those at its start
+            $where = $position > $length ? $position - $length : $position;
             if ($q === '-') {
-                $deletions[] = $position;
+                $deletions[] = $where;
             } elseif ($q === 'N' || $r === 'N') {
-                $unknown[] = $position;
+                $unknown[] = $where;
             } elseif ($r === $q) {
                 $matches++;
             } else {
-                $mismatches[] = array('position' => $position, 'reference' => $r, 'read' => $q);
+                $mismatches[] = array('position' => $where, 'reference' => $r, 'read' => $q);
             }
         }
         $compared = $matches + count($mismatches);
