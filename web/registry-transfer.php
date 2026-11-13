@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Elabftw\Elabftw;
 
+use Elabftw\Elabftw\Backbone;
 use Elabftw\Elabftw\CreateUploadFromFs;
 use Elabftw\Elabftw\GenbankPrimers;
 use Elabftw\Enums\AccessType;
@@ -77,6 +78,8 @@ use function trim;
  */
 require_once __DIR__ . '/app/init.inc.php';
 require_once __DIR__ . '/sequence-viewer/genbank-primers.inc.php';
+require_once __DIR__ . '/ai-features.inc.php';
+require_once __DIR__ . '/backbone.inc.php';
 
 function respond(int $status, array $body): never
 {
@@ -1032,6 +1035,29 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'apply_owner_map') {
 
 // the people matched to "open for all the users" (by e-mail or by name): the entries they own in the file are opened at the import
 $openKeys = array();
+
+// the Backbone of a plasmid is filled in from its sequence file when the field is empty (what the lab knows of its backbones, see backbone.inc.php);
+// $backbones lists what was filled and how many were not clear enough, for the answer
+$backbones = array('filled' => array(), 'unclear' => 0);
+$backboneFinder = null;
+$fillBackbone = static function (int $entryId, string $fileName, string $content, string $title) use ($App, $pdo, $teamId, &$backbones, &$backboneFinder): void {
+    if (preg_match('/\.(gb|gbk|gbff|genbank|ape|fasta|fa)$/i', $fileName) !== 1) {
+        return;
+    }
+    try {
+        $backboneFinder ??= new Backbone($pdo, $teamId);
+        $done = $backboneFinder->fill(new Inventory($App->Users, $entryId), $entryId, $content);
+        if ($done['filled']) {
+            $backbones['filled'][] = array('title' => $title, 'backbone' => $done['backbone']);
+        } elseif ($done['reason'] !== 'It is not a plasmid.' && $done['reason'] !== 'There is a Backbone already.' && $done['reason'] !== 'The module has no Backbone field.') {
+            $backbones['unclear']++;
+        }
+    } catch (Throwable $e) {
+        // the Backbone is a help: an import goes on without it (the reason is in the answer)
+        $backbones['error'] = $e->getMessage();
+    }
+};
+
 // one row of a file becomes an entry of the module; returns the id, or the reason it was not made
 $makeEntry = static function (array $row, int $categoryId, array $definitions, string $register, ?Users $Owner = null, bool $keepNumber = false) use ($App, $pdo, $teamId, &$openKeys, $nameTokens): array {
     // 'lab' (the lab Database only) and 'both' (the lab Database and the own database of the user) give the number of the lab
@@ -1375,6 +1401,7 @@ try {
                         $fs->write($path, $content);
                         $Entry->Uploads->create(new CreateUploadFromFs($fs, $fileName, $path, new FileHash($fs, $path)));
                         $filesAttached++;
+                        $fillBackbone((int) $made['id'], $fileName, $content, (string) $row['title']);
                         if ($primerMode !== '' && preg_match('/\.(gb|gbk|gbff|genbank)$/i', $fileName) === 1) {
                             $genbankFiles[] = array('plasmid' => (int) $made['id'], 'title' => (string) $row['title'], 'content' => $content, 'row' => $row);
                         }
@@ -1391,7 +1418,7 @@ try {
         }
         $zip->close();
         $primerReport = $primerMode !== '' ? $linkFilePrimers($genbankFiles, $primerMode) : null;
-        respond(200, array('created' => count($created), 'files' => $filesAttached, 'skipped' => $skipped, 'owners_not_found' => array_keys($notFound), 'primers' => $primerReport));
+        respond(200, array('created' => count($created), 'files' => $filesAttached, 'skipped' => $skipped, 'owners_not_found' => array_keys($notFound), 'primers' => $primerReport, 'backbones' => $backbones));
     }
 
     foreach (array_slice(is_array($payload['rows'] ?? null) ? $payload['rows'] : array(), 0, 200) as $index => $row) {
@@ -1441,6 +1468,7 @@ try {
                     $path = $jsonTmp . '/' . bin2hex(random_bytes(4)) . '-' . $fileName;
                     $jsonFs->write($path, $content);
                     new Inventory($App->Users, (int) $made['id'])->Uploads->create(new CreateUploadFromFs($jsonFs, $fileName, $path, new FileHash($jsonFs, $path)));
+                    $fillBackbone((int) $made['id'], $fileName, $content, (string) $row['title']);
                 } catch (Throwable $e) {
                     $skipped[] = array('row' => 'File of row ' . ((int) ($payload['offset'] ?? 0) + $index + 1), 'reason' => $e->getMessage());
                 }
@@ -1454,7 +1482,7 @@ try {
             // cleaned later with the exports
         }
     }
-    respond(200, array('created' => count($created), 'skipped' => $skipped, 'owners_not_found' => array_keys($notFound)));
+    respond(200, array('created' => count($created), 'skipped' => $skipped, 'owners_not_found' => array_keys($notFound), 'backbones' => $backbones));
 } catch (Throwable $e) {
     respond(400, array('error' => $e->getMessage()));
 }

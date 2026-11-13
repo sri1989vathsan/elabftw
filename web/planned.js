@@ -17,6 +17,16 @@
     return meta ? meta.content : (document.body.dataset.csrf || '');
   };
 
+  // what the import says about the Backbone it filled in from the sequence files (the server compares them with the plasmids of the lab)
+  const backboneNote = function (found) {
+    const filled = found && found.filled ? found.filled.length : 0;
+    const unclear = found && found.unclear ? found.unclear : 0;
+    if (filled === 0 && unclear === 0) {
+      return '';
+    }
+    return ' Backbone filled in from the sequence for ' + filled + (filled === 1 ? ' plasmid' : ' plasmids') + ' (check it)' + (unclear ? ', ' + unclear + ' left empty (not clear enough)' : '') + '.';
+  };
+
   const element = function (tag, className, text) {
     const node = document.createElement(tag);
     if (className) {
@@ -540,6 +550,7 @@
           message.textContent = body.created + ' entries made, ' + body.files + ' files attached.' + ((body.owners_not_found || []).length ? ' No user was found for: ' + body.owners_not_found.slice(0, 6).join(', ') + '; those entries are yours.' : '') + (body.skipped.length ? ' Not made (' + body.skipped.length + '): ' + body.skipped.slice(0, 6).map(function (i) {
             return i.row + ': ' + i.reason;
           }).join(' ') : '');
+          message.textContent += backboneNote(body.backbones);
           if (body.primers) {
             const p = body.primers;
             message.textContent += ' Primers of the files: ' + p.attached + ' attached' + (p.already ? ', ' + p.already + ' already attached' : '') + (p.created ? ', ' + p.created + ' made' : '') + (p.missing ? ', ' + p.missing + ' not in the database' : '') + (p.too_short ? ', ' + p.too_short + ' too short' : '') + '.'
@@ -599,6 +610,8 @@
       });
       run.disabled = true;
       let created = 0;
+      let backbonesFilled = 0;
+      let backbonesUnclear = 0;
       const notFound = [];
       const skipped = [];
       try {
@@ -616,6 +629,10 @@
             throw new Error(body.error || 'The import failed.');
           }
           created += body.created;
+          if (body.backbones) {
+            backbonesFilled += body.backbones.filled.length;
+            backbonesUnclear += body.backbones.unclear;
+          }
           (body.owners_not_found || []).forEach(function (o) {
             if (notFound.indexOf(o) === -1) {
               notFound.push(o);
@@ -626,7 +643,7 @@
           });
         }
         message.className = 'small mb-2 text-success';
-        message.textContent = created + ' entries made.' + (notFound.length ? ' No user was found for: ' + notFound.slice(0, 6).join(', ') + '; those entries are yours.' : '') + (skipped.length ? ' Not made (' + skipped.length + '): ' + skipped.slice(0, 8).join(' ') + (skipped.length > 8 ? ' ...' : '') : '');
+        message.textContent = created + ' entries made.' + backboneNote({ filled: new Array(backbonesFilled), unclear: backbonesUnclear }) + (notFound.length ? ' No user was found for: ' + notFound.slice(0, 6).join(', ') + '; those entries are yours.' : '') + (skipped.length ? ' Not made (' + skipped.length + '): ' + skipped.slice(0, 8).join(' ') + (skipped.length > 8 ? ' ...' : '') : '');
         cancel.textContent = 'Close and reload';
         cancel.addEventListener('click', function () {
           window.location.reload();

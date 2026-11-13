@@ -147,6 +147,22 @@
     }
   }
 
+  // the Backbone the sequence points to: the server compares it with the plasmids of the lab that have a Backbone and fills the empty field
+  // (an entry that has one keeps it); returns {filled, backbone, score, reason} or null
+  async function fillBackbone(entryId) {
+    try {
+      const response = await fetch('backbone.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() },
+        body: JSON.stringify({ entry: entryId }),
+      });
+      return response.ok ? await response.json() : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
   // a line that tells what was read from the file
   function describeDetails(details) {
     const parts = [];
@@ -632,6 +648,7 @@
           await uploadFile(id, sequenceFile);
           // what the GenBank file says is filled in the fields of the entry
           await applyDetails(id, await summaryOf(sequenceFile));
+          await fillBackbone(id);
         }
         for (const parentId of parents.ids()) {
           await addParent(id, parentId);
@@ -775,6 +792,7 @@
     let done = 0;
     const failed = [];
     const withPrimers = [];
+    const backbones = [];
     const made = [];
     // where the new entries go: 'both' the lab database (with the number of the lab), 'personal' the own database of the user (My entries,
     // private), 'none' no number yet (My entries)
@@ -793,6 +811,11 @@
         if (entry === 0) {
           await applyDetails(target, details);
         }
+        // the Backbone from the sequence (an entry that has one keeps it)
+        const backbone = await fillBackbone(target);
+        if (backbone && backbone.filled) {
+          backbones.push(named + ': ' + backbone.backbone);
+        }
         if (GENBANK_FILE.test(file.name)) {
           withPrimers.push({ entry: target, title: named, file: file });
         }
@@ -810,7 +833,7 @@
       return;
     }
     const placed = where === 'both' || where === 'lab' ? 'in the lab database' : where === 'none' ? 'in My entries, without a number yet' : 'in My entries, in your own database (private)';
-    toast((entry > 0 ? done + ' attached to the entry.' : done + ' new ' + (done === 1 ? 'entry' : 'entries') + ' ' + placed + ', one per file.') + (failed.length ? ' Not added: ' + failed.join('; ') : ''), failed.length > 0, 10);
+    toast((entry > 0 ? done + ' attached to the entry.' : done + ' new ' + (done === 1 ? 'entry' : 'entries') + ' ' + placed + ', one per file.') + (backbones.length ? ' Backbone filled in from the sequence (check it): ' + backbones.slice(0, 5).join('; ') + (backbones.length > 5 ? ' ...' : '') + '.' : '') + (failed.length ? ' Not added: ' + failed.join('; ') : ''), failed.length > 0, 10);
     if (done > 0) {
       window.setTimeout(function () {
         window.location.reload();
