@@ -129,17 +129,20 @@
     return window.bioParsers.jsonToGenbank({ name: name, circular: false, sequence: item.sequence, features: features, primers: {}, parts: {}, translations: {} });
   }
 
-  function saveProduct(item, card, context, editor, byBases) {
+  /**
+   * The form that makes a sequence an entry of the Database (module of the plasmids): name, where it goes, the plasmids it was made
+   * from (lineage) and the primers that make it (attached). Used by the products of the PCR and of the cloning tools.
+   *
+   * @param {Element} card where the form goes
+   * @param {{name: string, genbank: function(string): string, parents: number[], parentLabel: string, primers: object[], primersLabel: string, saveLabel: string}} spec
+   *   genbank(fileName) returns the text of the file, primers are entries of the Database ({id}) to attach
+   */
+  function saveEntryForm(card, spec) {
     const csrf = document.body.dataset.csrf || '';
     const form = element('div', 'tool-card');
-    const names = {
-      forward: (byBases[item.forward.primer] || {}).title || 'Primer 1',
-      reverse: (byBases[item.reverse.primer] || {}).title || 'Primer 2',
-    };
-    const template = String(context.name || 'plasmid').replace(/\.[^.]+$/, '');
     const name = element('input', 'tools-select');
     name.type = 'text';
-    name.value = template + ' PCR ' + names.forward + ' + ' + names.reverse + ' (' + item.size + ' bp)';
+    name.value = spec.name;
     const where = element('select', 'tools-select');
     [['none', 'My entries (private, no number yet)'], ['lab', 'The lab database (it is locked)']].forEach(function (choice) {
       where.append(Object.assign(element('option', '', choice[1]), { value: choice[0] }));
@@ -147,20 +150,20 @@
     const parent = element('label', 'tool-muted');
     const parentBox = element('input');
     parentBox.type = 'checkbox';
-    parentBox.checked = Boolean(context.entryId);
-    parentBox.disabled = !context.entryId;
-    parent.append(parentBox, document.createTextNode(' Made from this plasmid'));
+    parentBox.checked = spec.parents.length > 0;
+    parentBox.disabled = spec.parents.length === 0;
+    parent.append(parentBox, document.createTextNode(' ' + spec.parentLabel));
     const primersLabel = element('label', 'tool-muted');
     const primersBox = element('input');
     primersBox.type = 'checkbox';
-    const ids = [byBases[item.forward.primer], byBases[item.reverse.primer]].filter(function (entry) {
+    const ids = spec.primers.filter(function (entry) {
       return entry && entry.id;
     });
     primersBox.checked = ids.length > 0;
     primersBox.disabled = ids.length === 0;
-    primersLabel.append(primersBox, document.createTextNode(' Attach the two primers to it'));
+    primersLabel.append(primersBox, document.createTextNode(' ' + spec.primersLabel));
     const message = element('div', 'tool-muted');
-    const save = element('button', 'tool-btn tool-btn-primary', 'Save the product');
+    const save = element('button', 'tool-btn tool-btn-primary', spec.saveLabel);
     save.type = 'button';
     save.addEventListener('click', async function () {
       if (name.value.trim() === '') {
@@ -186,15 +189,17 @@
           throw new Error('The entry could not be made (' + made.status + ').');
         }
         const id = Number((made.headers.get('Location') || '').split('/').pop());
-        const text = genbankOf(item, editor.getState().sequenceData, name.value.trim().replace(/[^A-Za-z0-9_.-]+/g, '_').slice(0, 40), names);
+        const text = spec.genbank(name.value.trim().replace(/[^A-Za-z0-9_.-]+/g, '_').slice(0, 40));
         const data = new FormData();
         data.append('file', new File([text], name.value.trim().replace(/[^A-Za-z0-9_.-]+/g, '_') + '.gb', { type: 'text/plain' }));
         const uploaded = await fetch('../api/v2/inventory/' + id + '/uploads', { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': csrf, 'X-Requested-With': 'XMLHttpRequest' }, body: data });
         if (!uploaded.ok) {
           throw new Error('The sequence could not be saved (' + uploaded.status + ').');
         }
-        if (parentBox.checked && context.entryId) {
-          await fetch('../lineage.php', { method: 'POST', credentials: 'same-origin', headers: headers, body: JSON.stringify({ action: 'add', entry: id, parent: context.entryId }) });
+        if (parentBox.checked) {
+          for (const parentId of spec.parents) {
+            await fetch('../lineage.php', { method: 'POST', credentials: 'same-origin', headers: headers, body: JSON.stringify({ action: 'add', entry: id, parent: parentId }) });
+          }
         }
         if (primersBox.checked) {
           for (const entry of ids) {
@@ -217,6 +222,25 @@
     });
     form.append(element('div', 'tool-muted', 'Name'), name, element('div', 'tool-muted', 'Where it goes'), where, parent, primersLabel, save, message);
     card.append(form);
+  }
+
+  function saveProduct(item, card, context, editor, byBases) {
+    const names = {
+      forward: (byBases[item.forward.primer] || {}).title || 'Primer 1',
+      reverse: (byBases[item.reverse.primer] || {}).title || 'Primer 2',
+    };
+    const template = String(context.name || 'plasmid').replace(/\.[^.]+$/, '');
+    saveEntryForm(card, {
+      name: template + ' PCR ' + names.forward + ' + ' + names.reverse + ' (' + item.size + ' bp)',
+      genbank: function (fileName) {
+        return genbankOf(item, editor.getState().sequenceData, fileName, names);
+      },
+      parents: context.entryId ? [context.entryId] : [],
+      parentLabel: 'Made from this plasmid',
+      primers: [byBases[item.forward.primer], byBases[item.reverse.primer]],
+      primersLabel: 'Attach the two primers to it',
+      saveLabel: 'Save the product',
+    });
   }
 
   async function pcr(editor, context) {
@@ -396,6 +420,7 @@
   window.ToolsTab.add({ id: 'mutagenesis', title: 'Mutagenesis', build: mutagenesis });
   window.ToolsPcr = {
     products: products,
+    saveEntryForm: saveEntryForm,
     // the PCR section of the Tools panel is opened with two primers in it (called by the Primers tab)
     show: function (a, b) {
       window.ToolsPcr.pending = { a: a, b: b };
