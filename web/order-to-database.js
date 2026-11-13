@@ -2066,8 +2066,9 @@
       const notes = card.querySelector('.orders-notes-editor');
       return { card: card, title: title ? title.value.trim() : '', notes: notes ? notes.innerHTML : '', notesText: notes ? notes.textContent : '' };
     };
-    // under each new entry of the form: the columns of its module, filled in from the order and, when the server can read it, from the page of
-    // the link; the person sees them and can change them, and what is there is what the entry gets when it is made
+    // The columns of the module of a new entry of the form, filled in from the order and, when the server can read it, from the page of the
+    // link. They are in a window (like Details... of the window of an order) that opens when "Add a new entry of the database instead" is
+    // clicked, and again with "Columns..." on the row; the person can change them, and what is there is what the entry gets when it is made.
     const panels = new WeakMap();
     let moduleListPromise = null;
     const moduleList = function () {
@@ -2083,6 +2084,7 @@
       }
       return moduleListPromise;
     };
+    // the values of the columns of a row are computed again when the title, the module, the order or the page change; what was changed by hand stays
     const refreshPanel = async function (rowEl) {
       const form = orderForm();
       const input = rowEl.querySelector('input[placeholder^="New entry title"]');
@@ -2095,60 +2097,21 @@
         return Number(candidate.id) === Number(select.value);
       });
       let panel = panels.get(rowEl);
+      let button = rowEl.querySelector('.otd-columns-button');
       if (!module || input.value.trim() === '') {
-        if (panel) {
-          panel.box.style.display = 'none';
+        if (button) {
+          button.style.display = 'none';
         }
         return;
       }
-      if (!panel || panel.moduleId !== module.id) {
-        if (panel) {
-          panel.box.remove();
-        }
-        const box = element('details', 'otd-columns', '', 'font-size:0.85rem;margin:0.2rem 0 0.6rem 0');
-        box.open = true;
-        const summary = element('summary', '', 'Columns of ' + module.title);
-        const grid = element('div', '', '', 'display:grid;gap:0.3rem 0.6rem;grid-template-columns:repeat(auto-fill,minmax(14rem,1fr));margin-top:0.3rem');
-        box.append(summary, grid);
-        const inputs = {};
-        const dirty = {};
-        (module.fields || []).forEach(function (f) {
-          const label = element('label', 'd-block mb-1');
-          label.append(element('span', 'd-block text-muted', f.name));
-          let control;
-          if (f.type === 'select') {
-            control = element('select', 'form-control form-control-sm');
-            const blank = element('option', '', '');
-            blank.value = '';
-            control.append(blank);
-            (f.options || []).forEach(function (o) {
-              const option = element('option', '', o);
-              option.value = o;
-              control.append(option);
-            });
-          } else {
-            control = element('input', 'form-control form-control-sm');
-            control.type = f.type === 'number' ? 'number' : (f.type === 'date' ? 'date' : 'text');
-          }
-          control.addEventListener('input', function () {
-            dirty[f.name] = true;
-          });
-          control.addEventListener('change', function () {
-            dirty[f.name] = true;
-          });
-          inputs[f.name] = control;
-          label.append(control);
-          grid.append(label);
-        });
-        rowEl.after(box);
-        panel = { box: box, summary: summary, inputs: inputs, dirty: dirty, moduleId: module.id, page: null, link: '' };
+      if (!panel || panel.module.id !== module.id) {
+        panel = { module: module, values: {}, dirty: {}, page: null, link: '', popup: null };
         panels.set(rowEl, panel);
       }
-      panel.box.style.display = '';
       const vendorPart = form.title.indexOf(';') !== -1 ? form.title.slice(form.title.indexOf(';')) : '';
       const row = parseOrder({ title: input.value.trim() + vendorPart, notes: form.notes })[0];
       row.moduleTitle = module.title;
-      // the page behind the link: asked once for a link, and the panel is drawn again when it has come
+      // the page behind the link: asked once for a link, and the values are computed again when it has come
       if (row.link && panel.link !== row.link) {
         panel.link = row.link;
         pageFromLink(row.link).then(function (read) {
@@ -2163,12 +2126,114 @@
       }
       row.fields = null;
       const values = defaultsFor(module, row);
-      Object.keys(panel.inputs).forEach(function (key) {
-        if (!panel.dirty[key] && values[key] !== undefined) {
-          panel.inputs[key].value = values[key];
+      Object.keys(values).forEach(function (key) {
+        if (!panel.dirty[key]) {
+          panel.values[key] = values[key];
         }
       });
-      panel.summary.textContent = 'Columns of ' + module.title + (panel.page ? ' (read from the link)' : '');
+      // an open window shows what has come
+      if (panel.popup) {
+        Object.keys(panel.popup.inputs).forEach(function (key) {
+          if (!panel.popup.touched[key] && panel.values[key] !== undefined) {
+            panel.popup.inputs[key].value = panel.values[key];
+          }
+        });
+      }
+      if (!button) {
+        const source = form.card.querySelector('button.btn-ghost');
+        button = element('button', source ? source.className : 'btn btn-sm btn-ghost', '', 'margin-bottom:0.25rem');
+        button.type = 'button';
+        button.classList.add('otd-columns-button');
+        button.addEventListener('click', function () {
+          openColumns(rowEl);
+        });
+        rowEl.append(button);
+      }
+      button.style.display = '';
+      const filled = Object.keys(panel.values).filter(function (key) {
+        return panel.values[key] !== '' && panel.values[key] !== undefined;
+      }).length;
+      button.textContent = 'Columns (' + filled + ')...';
+      button.title = 'The columns of ' + module.title + ' that the entry gets' + (panel.page ? ' (read from the link)' : '');
+    };
+    const openColumns = function (rowEl) {
+      const panel = panels.get(rowEl);
+      if (!panel || panel.popup) {
+        return;
+      }
+      const module = panel.module;
+      const input = rowEl.querySelector('input[placeholder^="New entry title"]');
+      const layer = element('div', '', '', 'position:fixed;inset:0;z-index:1060;background:rgba(0,0,0,.35);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:3rem 1rem');
+      const card = element('div', '', '', 'background:var(--bg,#fff);border-radius:8px;max-width:560px;width:100%;padding:1rem 1.25rem;box-shadow:0 8px 30px rgba(0,0,0,.3)');
+      layer.append(card);
+      card.append(element('h6', '', (input && input.value.trim()) || 'New entry'), element('p', 'small text-muted', 'The columns of ' + module.title + ' that the entry gets. They are filled in from the order' + (panel.page ? ' and the page of its link' : ' and its link') + '; change what is not right.'));
+      const inputs = {};
+      const touched = {};
+      (module.fields || []).forEach(function (f) {
+        const label = element('label', 'd-block mb-2');
+        label.append(element('span', 'd-block small text-muted', f.name));
+        let control;
+        if (f.type === 'select') {
+          control = element('select', 'form-control form-control-sm');
+          const blank = element('option', '', '');
+          blank.value = '';
+          control.append(blank);
+          (f.options || []).forEach(function (o) {
+            const option = element('option', '', o);
+            option.value = o;
+            control.append(option);
+          });
+        } else {
+          control = element('input', 'form-control form-control-sm');
+          control.type = f.type === 'number' ? 'number' : (f.type === 'date' ? 'date' : 'text');
+        }
+        control.value = panel.values[f.name] || '';
+        control.addEventListener('input', function () {
+          touched[f.name] = true;
+        });
+        control.addEventListener('change', function () {
+          touched[f.name] = true;
+        });
+        inputs[f.name] = control;
+        label.append(control);
+        card.append(label);
+      });
+      const close = function () {
+        panel.popup = null;
+        layer.remove();
+        document.removeEventListener('keydown', onKey);
+      };
+      const onKey = function (event) {
+        if (event.key === 'Escape') {
+          close();
+        }
+      };
+      document.addEventListener('keydown', onKey);
+      const done = element('button', 'btn btn-primary btn-sm', 'Done');
+      done.type = 'button';
+      done.addEventListener('click', function () {
+        Object.keys(inputs).forEach(function (key) {
+          if (inputs[key].value !== (panel.values[key] || '')) {
+            panel.dirty[key] = true;
+          }
+          panel.values[key] = inputs[key].value;
+        });
+        close();
+        refreshPanel(rowEl);
+      });
+      const cancel = element('button', 'btn btn-secondary btn-sm mr-2', 'Cancel');
+      cancel.type = 'button';
+      cancel.addEventListener('click', close);
+      const bar = element('div', 'text-right');
+      bar.append(cancel, done);
+      card.append(bar);
+      layer.addEventListener('mousedown', function (event) {
+        if (event.target === layer) {
+          close();
+        }
+      });
+      panel.popup = { inputs: inputs, touched: touched };
+      document.body.append(layer);
     };
     const prefillNewEntries = function () {
       const form = orderForm();
@@ -2199,6 +2264,23 @@
     };
     // an order with a link adds its entry of the Database by itself, once for each link, unless the item is there already
     let autoTimer = 0;
+    let autoClicking = false;
+    // a click on "Add a new entry of the database instead" adds the row (the form does it) and opens the window of its columns
+    document.addEventListener('click', function (event) {
+      const clicked = event.target && event.target.closest ? event.target.closest('button') : null;
+      if (autoClicking || !clicked || !/Add a new entry of the database instead/.test(clicked.textContent) || !clicked.closest('.orders-new-card')) {
+        return;
+      }
+      window.setTimeout(async function () {
+        prefillNewEntries();
+        const rows = document.querySelectorAll('.orders-new-card .orders-pending-resource');
+        const rowEl = rows[rows.length - 1];
+        if (rowEl) {
+          await refreshPanel(rowEl);
+          openColumns(rowEl);
+        }
+      }, 300);
+    });
     const autoAddEntry = function () {
       const form = orderForm();
       if (!form || form.title === '') {
@@ -2224,7 +2306,10 @@
           return /Add a new entry of the database instead/.test(candidate.textContent);
         });
         if (button) {
+          // the row is added by itself: its window does not open (the "Columns..." button of the row opens it)
+          autoClicking = true;
           button.click();
+          autoClicking = false;
           window.setTimeout(prefillNewEntries, 100);
         }
       });
@@ -2291,10 +2376,7 @@
             const chosen = rowEl.querySelector('select.orders-category-select');
             const panel = panels.get(rowEl);
             if (panel && typed && chosen && typed.value.trim() === made.title && Number(chosen.value) === Number(made.category)) {
-              made.values = {};
-              Object.keys(panel.inputs).forEach(function (key) {
-                made.values[key] = panel.inputs[key].value;
-              });
+              made.values = Object.assign({}, panel.values);
             }
           });
         }

@@ -401,7 +401,12 @@ test('placing an order: a link adds the new entry of the Database by itself, wit
   assert.match(js, /findExisting\(\{ name: row\.name, catalog: row\.catalog, sequence: '' \}\)/);
   // the columns of the module under the row, and what the person sees is what the entry gets
   assert.match(js, /const refreshPanel = async function \(rowEl\)/);
-  assert.match(js, /made\.values\[key\] = panel\.inputs\[key\]\.value;/);
+  // the columns are in a window that opens when the button of the new entry is clicked (not for a row that is added by itself), and again
+  // from the "Columns..." button of the row; what is there is what the entry gets
+  assert.match(js, /const openColumns = function \(rowEl\)/);
+  assert.match(js, /autoClicking = true;\s*button\.click\(\);\s*autoClicking = false;/);
+  assert.match(js, /button\.textContent = 'Columns \(' \+ filled \+ '\)\.\.\.';/);
+  assert.match(js, /made\.values = Object\.assign\(\{\}, panel\.values\);/);
   assert.match(js, /window\.fetch = function \(input, init\)/);
   // the page behind the link, asked of the server (link-page.php), once, with a short wait and a breaker; also used by the window of an order
   assert.match(js, /fetch\('link-page\.php\?url=' \+ encodeURIComponent\(link\)/);
