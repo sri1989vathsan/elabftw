@@ -1999,6 +1999,10 @@
           }
           open({ orderId: orderId });
         });
+        if (kind === 'Primers') {
+          // the button of the card does the work of the one on the sheet: that one is hidden (order-primers.js), it is clicked from here
+          add.classList.add('otd-add-primers');
+        }
         meta.append(add);
         // when the lines of the order are in the Database already, the button says so; asked when the card is seen, not for all the cards at once
         whenSeen(card, function () {

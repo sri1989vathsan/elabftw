@@ -221,6 +221,8 @@
       'li.orders-upload.op-row .op-add:hover:not(:disabled) { background: #1a9bb0; color: #fff; }',
     ].join('\n');
     document.head.append(style);
+      // a card with "Add primers to database" has one button for the sheet: the one of the sheet is not shown twice (the card button clicks it)
+      'li.orders-card:has(.otd-add-primers) .op-add { display: none !important; }',
   }
 
   // the icon of a file by its kind
