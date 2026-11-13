@@ -89,6 +89,7 @@ services:
       - ./src/sql/custom/149_personal_entries_admins.sql:/elabftw/src/sql/custom/149_personal_entries_admins.sql:ro
       - ./src/sql/custom/150_personal_module_views_closed.sql:/elabftw/src/sql/custom/150_personal_module_views_closed.sql:ro
       - ./src/sql/custom/151_personal_module_views_module.sql:/elabftw/src/sql/custom/151_personal_module_views_module.sql:ro
+      - ./src/sql/custom/152_backbone_cache.sql:/elabftw/src/sql/custom/152_backbone_cache.sql:ro
       - ./src/Models/InventoryCategories.php:/elabftw/src/Models/InventoryCategories.php:ro
       - ./web/admin-plasmid-checks.js:/elabftw/web/admin-plasmid-checks.js:ro
       - ./web/ai-chat.js:/elabftw/web/ai-chat.js:ro
