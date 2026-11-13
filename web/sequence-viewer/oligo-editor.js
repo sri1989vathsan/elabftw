@@ -71,6 +71,10 @@
     };
     const startInput = numberInput();
     const endInput = numberInput();
+    // the overhang: how many bases at the 5' end hang over (the others bind). Giving it moves the window of the binding part, its 3' end stays
+    const overhangInput = numberInput();
+    overhangInput.min = '0';
+    overhangInput.title = 'The bases at the 5′ end that do not bind: the binding part is the rest, its 3′ end stays where it is';
     const strandForward = element('input');
     strandForward.type = 'radio';
     strandForward.name = 'oligo-strand';
@@ -153,6 +157,11 @@
       }
       flushRun();
       shown.append(element('span', 'oligo-shown-label', "3′"));
+      // the field says how long the overhang is (not while it is being typed)
+      overhangInput.max = String(Math.max(0, now.sequence.length - 1));
+      if (document.activeElement !== overhangInput) {
+        overhangInput.value = String(now.tail);
+      }
       facts.textContent = '';
       const add = function (label, value) {
         const tr = element('tr');
@@ -183,6 +192,35 @@
         window.PrimerPanel.setEdit(now.sequence.length >= 4 ? { name: name.value || 'oligo', start: now.start - 1, end: now.end - 1, forward: now.forward, tail: now.tail, bases: now.sequence } : null);
       }
     };
+    // a length of overhang: the binding part is the rest of the oligo; its 3' end stays (the right end of a forward oligo, the left end of a reverse one)
+    overhangInput.addEventListener('input', function () {
+      const length = tools.clean(bases.value).length;
+      const wanted = parseInt(overhangInput.value, 10);
+      if (!(length > 0) || Number.isNaN(wanted)) {
+        return;
+      }
+      const bound = Math.max(1, length - Math.max(0, Math.min(length - 1, wanted)));
+      const now = state();
+      let start = now.start;
+      let end = now.end;
+      if (now.forward) {
+        end = now.end;
+        start = end - bound + 1;
+        if (start < 1) {
+          start = 1;
+          end = bound;
+        }
+      } else {
+        end = start + bound - 1;
+        if (end > plasmid.length) {
+          end = plasmid.length;
+          start = end - bound + 1;
+        }
+      }
+      startInput.value = String(Math.max(1, start));
+      endInput.value = String(Math.min(plasmid.length, end));
+      update();
+    });
     [bases, startInput, endInput, strandForward, strandReverse, name].forEach(function (control) {
       control.addEventListener('input', update);
       control.addEventListener('change', update);
@@ -355,9 +393,10 @@
     strand.append(forwardLabel, reverseLabel);
     const window2 = element('div', 'oligo-window');
     window2.append(row('Binding start', startInput), row('Binding end', endInput));
+    const overhangRow = row('Overhang (bases)', overhangInput);
 
     host.append(
-      element('p', 'tool-muted', 'The bases bind with their 3′ end; what is before it hangs over. Move the binding window with its start and end, the overhang is what is left. It is drawn on the map in violet while you edit.'),
+      element('p', 'tool-muted', 'The bases bind with their 3′ end; what is before it hangs over. Move the binding window with its start and end, or give the length of the overhang. It is drawn on the map in violet while you edit.'),
       row('Name', name),
       element('div', 'oligo-field-label', 'Oligo (overhang in red, binding part boxed)'),
       shown,
@@ -365,6 +404,7 @@
       element('div', 'oligo-field-label', 'Strand'),
       strand,
       window2,
+      overhangRow,
       element('div', 'oligo-field-label', 'Binds this sequence at (click to move it there)'),
       where,
       facts,
