@@ -592,3 +592,14 @@ test('similar primers are shown in the sheet dialog (new, but like..., not ticke
   assert.match(panel, /tools\.findSimilar\(now\.sequence, database\.filter\(/);
   assert.match(panel, /'Similar primers in the Database'/);
 });
+
+test('the edit page: the fields of Details are one line each (name, value, small faded tools), the name above the value on a narrow screen', () => {
+  const planned = read('web/planned.js');
+  assert.match(planned, /style\.id = 'otd-details-compact';/);
+  assert.match(planned, /display: contents !important/);
+  assert.match(planned, /grid-template-columns: minmax\(7rem, 11rem\) minmax\(0, 1fr\) auto/);
+  assert.match(planned, /@media \(max-width: 700px\)/);
+  // only on the edit page, only the fields that have their tools
+  assert.match(planned, /\[\?&\]mode=edit\\b/);
+  assert.match(planned, /:has\(\[data-action="metadata-edit-field"\]\)/);
+});

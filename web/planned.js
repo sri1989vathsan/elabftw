@@ -1451,3 +1451,42 @@
     }
   });
 })();
+
+/**
+ * The edit page of an entry of a module: the fields of "Details" are one line each (the name at the left, the value in the middle, the small
+ * type and the tools at the right, faded until the line is pointed at) and not a tall block each with a row of big buttons. Only styles: the
+ * template of the page is not changed. On a narrow screen the name is above the value.
+ */
+(function () {
+  'use strict';
+  if (!/registry\.php$/.test(window.location.pathname) || !/[?&]mode=edit\b/.test(window.location.search)) {
+    return;
+  }
+  const field = '#metadataDiv li.list-group-item:has([data-action="metadata-edit-field"])';
+  const style = document.createElement('style');
+  style.id = 'otd-details-compact';
+  style.textContent = [
+    field + ' { align-items: center; column-gap: 0.75rem; display: grid; grid-template-columns: minmax(7rem, 11rem) minmax(0, 1fr) auto; padding: 0.3rem 0.6rem; }',
+    // the line with the name and the tools is not a box of its own: its two parts are cells of the line of the field
+    field + ' > .d-flex:first-child { display: contents !important; }',
+    field + ' > .d-flex:first-child > label { font-size: 0.9rem; grid-column: 1; grid-row: 1; margin: 0; overflow-wrap: anywhere; padding: 0.15rem 0 !important; }',
+    field + ' > .d-flex:first-child > .d-flex { grid-column: 3; grid-row: 1; transition: opacity 0.15s; }',
+    field + ' > div:empty { display: none; }',
+    field + ' > :is(input, select, textarea, div):not(:first-child) { grid-column: 2; grid-row: 1; }',
+    field + ' .form-control { font-size: 0.9rem; min-height: 0; padding: 0.2rem 0.5rem; }',
+    field + ' textarea.form-control { height: 2rem; line-height: 1.4; resize: vertical; }',
+    field + ' select.form-control { height: 2rem; }',
+    field + ' input.form-control { height: 2rem; }',
+    // the type and the tools: small, and faded until the line is pointed at or used
+    field + ' .badge { font-size: 0.65rem; font-weight: 500; margin-right: 0.35rem !important; }',
+    field + ' .btn { font-size: 0.75rem; line-height: 1; margin: 0 !important; padding: 0.3rem 0.4rem; }',
+    field + ':not(:hover):not(:focus-within) > .d-flex:first-child > .d-flex { opacity: 0.3; }',
+    '@media (max-width: 700px) {',
+    '  ' + field + ' { grid-template-columns: minmax(0, 1fr) auto; }',
+    '  ' + field + ' > .d-flex:first-child > label { grid-column: 1; grid-row: 1; }',
+    '  ' + field + ' > .d-flex:first-child > .d-flex { grid-column: 2; grid-row: 1; }',
+    '  ' + field + ' > :is(input, select, textarea, div):not(:first-child) { grid-column: 1 / -1; grid-row: 2; }',
+    '}',
+  ].join('\n');
+  document.head.append(style);
+})();
