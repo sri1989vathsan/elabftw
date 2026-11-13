@@ -570,7 +570,9 @@
         // a pages repeats the label in the value ("Suitable for: IHC-P, WB"): the label is taken off
         value = value.replace(/^(?:suitable for|reacts with|tested applications|species reactivity)\s*:\s*/i, '');
         // a value is short: a long line is a sentence that starts with the word
-        if (value !== '' && value.length <= 120 && !/^(is|are|of|for|to|and|the|in|with)\b/i.test(value) && !/^[\/:]/.test(value)) {
+        // a heading is not a value ("Target data", "Product details", "Application notes" are the titles of the parts of a page)
+        const heading = /^(data|information|info|details?|overview|summary|profile|description|specifications?|specs|properties|notes?|sheets?|section|tab|images?|figures?)$/i.test(value);
+        if (value !== '' && !heading && value.length <= 120 && !/^(is|are|of|for|to|and|the|in|with)\b/i.test(value) && !/^[\/:]/.test(value)) {
           page.props[entry[0]] = value;
           break;
         }
@@ -768,6 +770,13 @@
     if (!row.target && /antibod|\banti[- ]/i.test(said + ' ' + row.name)) {
       const target = /\banti[- ]\s*(?:mouse|rabbit|rat|goat|human)?\s*([A-Za-z0-9-]{2,})/i.exec(row.name || '') || /\banti[- ]\s*(?:mouse|rabbit|rat|goat|human)?\s*([A-Za-z0-9-]{2,})/i.exec(page.name || '');
       row.target = target ? target[1] : '';
+    }
+    // "Vimentin antibody": the word before "antibody" is the target (not "Monoclonal antibody", "Rabbit antibody"...)
+    if (!row.target) {
+      const before = /^([A-Za-z][A-Za-z0-9-]{2,})\s+antibod/i.exec(String(row.name || '').trim());
+      if (before && !/^(primary|secondary|monoclonal|polyclonal|recombinant|purified|rabbit|mouse|goat|rat|human|donkey|sheep|chicken|unconjugated|conjugated|control|isotype|anti)$/i.test(before[1])) {
+        row.target = before[1];
+      }
     }
     if (row.host) {
       const known = HOSTS.find(function (name) {

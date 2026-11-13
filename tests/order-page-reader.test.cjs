@@ -170,3 +170,17 @@ test('the name of a page read by the server: the label "Product name" and the ve
   const page = O.readPageText('Product name Anti-vimentin antibody - rabbit polyclonal (ab137321) | Abcam\nCatalog number AB137321\nHost species Rabbit', 'https://www.abcam.com/x');
   assert.strictEqual(O.cleanPageName(page.name), 'Anti-vimentin antibody - rabbit polyclonal');
 });
+
+test('a heading of the page is not the value of a column: "Target data" does not make the target "data"', () => {
+  const page = read('Vimentin antibody [EPR3776] (ab92547) | Abcam\nCatalog number ab92547\nTarget data\nHost species Rabbit\nClonality Monoclonal', 'https://www.abcam.com/products/primary-antibodies/vimentin-antibody-epr3776-ab92547');
+  assert.notStrictEqual(page.props.Target, 'data');
+  assert.strictEqual(page.props.Target, undefined);
+  assert.strictEqual(page.props['Host species'], 'Rabbit');
+  // a real target is still read
+  assert.strictEqual(read('Target: Vimentin\nHost species Rabbit', 'https://x.example/p').props.Target, 'Vimentin');
+});
+
+test('the target of "Vimentin antibody" is its first word; "Monoclonal antibody" has no target from the name', () => {
+  assert.strictEqual(read('Product name Vimentin antibody\nHost species Rabbit', 'https://x.example/p', 'Vimentin antibody').target, 'Vimentin');
+  assert.strictEqual(read('Product name Antibody\nHost species Rabbit', 'https://x.example/p', 'Monoclonal antibody').target || '', '');
+});
