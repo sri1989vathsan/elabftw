@@ -275,3 +275,12 @@ test('each order says what kind it is and has a button to add it to the database
   assert.match(js, /card\.querySelector\('\.op-add'\)/);
   assert.match(js, /open\(\{ orderId: orderId \}\);/);
 });
+
+test('the window of the primers of an order sheet says what it does, and links nothing to the order', () => {
+  const js = read('web/order-primers.js');
+  assert.match(js, /'Nothing new to add'/);
+  assert.match(js, /' new ' \+ \(fresh === 1 \? 'primer' : 'primers'\) \+ ' to the database'/);
+  assert.doesNotMatch(js, /to the order'/);
+  assert.doesNotMatch(js, /action: 'order'/);
+  assert.match(js, /tools\.destinationControl\(\)/);
+});

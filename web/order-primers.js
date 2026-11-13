@@ -2,7 +2,7 @@
  * On the orders page: a button on each Excel sheet attached to an order (the sheet of IDT, the form of Microsynth) that adds the
  * primers of the sheet to the database. The sheet is read on the server (primers.php?order_sheet=1); the primers are listed with
  * a tick each, the ones that are already in the database are recognised by their sequence, and the ticked ones are created in the
- * module of primers (the others are only linked) and linked to the order. Needs primer-tools.js (loaded here when it is not).
+ * module of primers (the others are left as they are; nothing is linked to the order). Needs primer-tools.js (loaded here when it is not).
  */
 (function () {
   'use strict';
@@ -108,11 +108,9 @@
       const fresh = rows.filter(function (row) {
         return row.chosen && !row.existing;
       }).length;
-      const linked = rows.filter(function (row) {
-        return row.chosen && row.existing;
-      }).length;
-      send.textContent = (fresh > 0 ? 'Add ' + fresh + ' to the database' : 'Link') + (linked > 0 && fresh > 0 ? ', link ' + linked : '') + (fresh === 0 && linked > 0 ? ' ' + linked : '') + ' to the order';
-      send.disabled = fresh + linked === 0;
+      // only the new primers are added; the ones that are in the database already are left as they are (nothing is linked to the order)
+      send.textContent = fresh > 0 ? 'Add ' + fresh + ' new ' + (fresh === 1 ? 'primer' : 'primers') + ' to the database' : 'Nothing new to add';
+      send.disabled = fresh === 0;
     };
     rows.forEach(function (row) {
       const tr = element('tr');
@@ -159,7 +157,7 @@
     const cancel = element('button', 'btn btn-secondary', 'Cancel');
     cancel.type = 'button';
     actions.append(cancel, send);
-    dialog.append(element('p', 'text-muted', 'The new ones are added to the primers of the database and everything ticked is linked to this order.'), wrap, message, actions);
+    dialog.append(element('p', 'text-muted', 'Primers marked "new" are not in the database yet: ticked ones are added to it. Primers that are in the database already are left as they are.'), wrap, tools.destinationControl(), message, actions);
     backdrop.append(dialog);
     document.body.append(backdrop);
     const close = function () {
@@ -177,31 +175,17 @@
       message.textContent = '';
       message.className = 'sa-message';
       try {
-        const ids = [];
         let created = 0;
         for (const row of rows) {
-          if (!row.chosen) {
+          if (!row.chosen || row.existing) {
             continue;
           }
-          if (row.existing) {
-            ids.push(row.existing.id);
-          } else {
-            // the direction of an ordered primer is not known from the sheet: no orientation is written
-            ids.push(await tools.createPrimer(row.oligo.name.trim() || 'Primer ' + (row.index + 1), row.oligo.sequence, null, ''));
-            created++;
-          }
-        }
-        const linked = await fetch('primers.php', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() },
-          body: JSON.stringify({ action: 'order', primers: ids, order: orderId }),
-        });
-        if (!linked.ok) {
-          throw new Error('The primers could not be linked to the order (' + linked.status + ').');
+          // the direction of an ordered primer is not known from the sheet: no orientation is written
+          await tools.createPrimer(row.oligo.name.trim() || 'Primer ' + (row.index + 1), row.oligo.sequence, null, '');
+          created++;
         }
         close();
-        say(created + ' primer' + (created === 1 ? '' : 's') + ' added to the database; ' + ids.length + ' linked to the order.');
+        say(created + ' primer' + (created === 1 ? '' : 's') + ' added to the database.');
       } catch (error) {
         message.textContent = error.message || String(error);
         message.className = 'sa-message error';
