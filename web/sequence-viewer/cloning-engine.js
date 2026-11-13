@@ -467,6 +467,195 @@
     };
   }
 
+  // ---- Golden Gate -------------------------------------------------------------------------------------------------------------
+  /**
+   * Golden Gate assembly: a Type IIS enzyme cuts the destination vector and every part outside its recognition site, the overhangs
+   * it leaves chain the pieces into a ring. Each piece (a fragment of a digest with both ends cut) is tried in both orientations; the
+   * search starts with a piece of the destination and follows the overhangs until every part is used once and the ring closes. A ring that
+   * still holds the site of the enzyme would be cut again, so rings without a site are preferred (this also tells the part from the
+   * backbone of an entry vector, and the dropout from the backbone of the destination).
+   *
+   * @param {object} options enzyme (record of the library), destination {sequence, features, circular}, parts [{name, sequence,
+   *   features, circular}]
+   * @returns {{assemblies: object[], warnings: string[], parts: object[]}} each assembly: order [{name, orientation, size, left, right}],
+   *   sequence, length, features, lostFeatures, overhangs [{between, sequence}], stable (no site of the enzyme left)
+   */
+  function designGoldenGate(options) {
+    const enzyme = options.enzyme;
+    const warnings = [];
+    if (!enzyme) {
+      throw new Error('Choose an enzyme.');
+    }
+    if (!options.destination || !options.destination.circular) {
+      throw new Error('The destination vector has to be circular.');
+    }
+    if (!options.parts || options.parts.length === 0) {
+      throw new Error('Add at least one part.');
+    }
+    const groups = [{ name: options.destination.name || 'Destination vector', data: options.destination }].concat(options.parts.map(function (part, index) {
+      return { name: part.name || 'Part ' + (index + 1), data: part };
+    }));
+    groups.forEach(function (group) {
+      const sequence = clean(group.data.sequence);
+      const circular = !!group.data.circular;
+      if (sequence.length < 20) {
+        throw new Error(group.name + ' is too short.');
+      }
+      const found = findCuts(sequence, circular, enzyme);
+      if (found.cuts.length === 0) {
+        throw new Error(enzyme.name + ' does not cut ' + group.name + (found.dropped ? ' (its site is too near the end: the cut falls outside the sequence)' : '') + '.');
+      }
+      if (found.dropped) {
+        warnings.push('A site of ' + enzyme.name + ' in ' + group.name + ' is too near the end to cut.');
+      }
+      group.sequence = sequence;
+      group.cuts = found.cuts.length;
+      group.candidates = digest(sequence, circular, found.cuts).filter(function (fragment) {
+        return fragment.left.type !== 'free' && fragment.right.type !== 'free';
+      });
+      if (group.candidates.length === 0) {
+        throw new Error(enzyme.name + ' cuts ' + group.name + ' only once or at its end: no piece has both ends cut.');
+      }
+      if (group.candidates.some(function (fragment) {
+        return fragment.left.len === 0 || fragment.right.len === 0;
+      })) {
+        throw new Error(enzyme.name + ' leaves blunt ends, it cannot be used for Golden Gate.');
+      }
+      if (group !== groups[0] && !circular && found.cuts.length > 2) {
+        warnings.push(group.name + ' has ' + found.cuts.length + ' sites of ' + enzyme.name + ' (more than the 2 at its ends): an internal site cuts the part.');
+      }
+    });
+
+    // the search: pieces chain by their overhangs
+    const solutions = [];
+    let steps = 0;
+    const extend = function (chain, used) {
+      steps++;
+      if (solutions.length >= 100 || steps > 300000) {
+        return;
+      }
+      const last = chain[chain.length - 1];
+      if (used.length === groups.length) {
+        if (joins(last.fragment, chain[0].fragment)) {
+          solutions.push(chain.slice());
+        }
+        return;
+      }
+      groups.forEach(function (group, index) {
+        if (used.indexOf(index) >= 0) {
+          return;
+        }
+        group.candidates.forEach(function (candidate) {
+          [candidate, reversed(candidate)].forEach(function (oriented) {
+            if (joins(last.fragment, oriented)) {
+              chain.push({ group: index, fragment: oriented, original: candidate });
+              used.push(index);
+              extend(chain, used);
+              used.pop();
+              chain.pop();
+            }
+          });
+        });
+      });
+    };
+    groups[0].candidates.forEach(function (candidate) {
+      extend([{ group: 0, fragment: candidate, original: candidate }], [0]);
+    });
+
+    const build = function (chain) {
+      let joined = chain[0].fragment.full;
+      const offsets = [0];
+      const overhangs = [];
+      for (let k = 1; k < chain.length; k++) {
+        const piece = chain[k].fragment;
+        offsets.push(joined.length - piece.left.len);
+        overhangs.push({ between: groups[chain[k - 1].group].name + ' / ' + groups[chain[k].group].name, sequence: piece.full.slice(0, piece.left.len) });
+        joined += piece.full.slice(piece.left.len);
+      }
+      const first = chain[0].fragment;
+      overhangs.push({ between: groups[chain[chain.length - 1].group].name + ' / ' + groups[0].name, sequence: first.full.slice(0, first.left.len) });
+      const sequence = joined.slice(0, joined.length - first.left.len);
+      const features = {};
+      const counter = { n: 0 };
+      let lost = 0;
+      chain.forEach(function (entry, k) {
+        lost += mapFeatures(groups[entry.group].data.features, entry.fragment, groups[entry.group].sequence.length, offsets[k], sequence.length, features, counter);
+      });
+      return {
+        order: chain.map(function (entry) {
+          return { name: groups[entry.group].name, group: entry.group, orientation: entry.fragment.reversed === entry.original.reversed ? 'forward' : 'reverse', size: entry.fragment.len, left: entry.fragment.left.enzyme, right: entry.fragment.right.enzyme };
+        }),
+        sequence: sequence,
+        length: sequence.length,
+        features: features,
+        lostFeatures: lost,
+        overhangs: overhangs,
+        stable: findCuts(sequence, true, enzyme).cuts.length === 0,
+      };
+    };
+    let assemblies = solutions.map(build).filter(function (item, index, all) {
+      return all.findIndex(function (other) {
+        return other.length === item.length && (other.sequence + other.sequence).includes(item.sequence);
+      }) === index;
+    });
+    if (assemblies.length === 0) {
+      // which ends have no partner: the overhangs of all the pieces, in both strands
+      const ends = [];
+      groups.forEach(function (group) {
+        group.candidates.forEach(function (candidate) {
+          ends.push({ name: group.name, side: 'left', f: candidate.left, text: candidate.full.slice(0, candidate.left.len) });
+          ends.push({ name: group.name, side: 'right', f: candidate.right, text: candidate.full.slice(candidate.full.length - candidate.right.len) });
+        });
+      });
+      const lonely = ends.filter(function (end) {
+        return !ends.some(function (other) {
+          return other !== end && other.name !== end.name && other.f.type === end.f.type && other.text === end.text && other.side !== end.side;
+        }) && !ends.some(function (other) {
+          return other !== end && other.name !== end.name && other.f.type === end.f.type && other.text === reverseComplement(end.text) && other.side === end.side;
+        });
+      });
+      warnings.push('No assembly closes into a ring.' + (lonely.length ? ' Overhangs without a partner: ' + lonely.slice(0, 6).map(function (end) {
+        return end.name + ' ' + end.side + ' ' + end.text;
+      }).join(', ') + '.' : ''));
+    } else {
+      const stable = assemblies.filter(function (item) {
+        return item.stable;
+      });
+      if (stable.length > 0) {
+        assemblies = stable;
+      } else {
+        warnings.push('Every possible assembly still holds a site of ' + enzyme.name + ': it is cut again in the reaction.');
+      }
+      if (assemblies.length > 1) {
+        warnings.push(assemblies.length + ' different assemblies fit the overhangs: some overhangs repeat or are palindromic.');
+      }
+      assemblies.forEach(function (item) {
+        const seen = {};
+        item.overhangs.forEach(function (overhang) {
+          const key = overhang.sequence;
+          const twin = reverseComplement(key);
+          if (key === twin) {
+            item.warn = (item.warn || []).concat('The overhang ' + key + ' is palindromic: it can ligate to itself.');
+          }
+          if (seen[key] || seen[twin]) {
+            item.warn = (item.warn || []).concat('The overhang ' + key + ' is used at two junctions.');
+          }
+          seen[key] = true;
+        });
+        if (item.lostFeatures > 0) {
+          item.warn = (item.warn || []).concat(item.lostFeatures + ' feature' + (item.lostFeatures === 1 ? '' : 's') + ' cut by the enzyme or in a dropped piece are not in the new plasmid.');
+        }
+      });
+    }
+    return {
+      assemblies: assemblies,
+      warnings: warnings,
+      parts: groups.map(function (group) {
+        return { name: group.name, sites: group.cuts, pieces: group.candidates.length };
+      }),
+    };
+  }
+
   function enzymesByName(list) {
     const map = {};
     list.forEach(function (enzyme) {
@@ -475,7 +664,7 @@
     return map;
   }
 
-  const api = { METHODS: METHODS, designHomology: designHomology, designRestriction: designRestriction, findCuts: findCuts, digest: digest, findEnzyme: findEnzyme, clean: clean, reverseComplement: reverseComplement };
+  const api = { METHODS: METHODS, designHomology: designHomology, designRestriction: designRestriction, designGoldenGate: designGoldenGate, findCuts: findCuts, digest: digest, findEnzyme: findEnzyme, clean: clean, reverseComplement: reverseComplement };
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = api;
   } else {
