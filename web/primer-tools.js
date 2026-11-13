@@ -173,6 +173,58 @@
     });
   }
 
+  /**
+   * The primers of a list that are like a sequence without being it: the same 3' end with another 5' tail (a share of at least 15 bases at
+   * the 3' end), or the same length with up to 3 bases that differ. A primer is read in both orientations (an oligo of a sheet has no direction),
+   * the primers that are the same sequence are left out (they are "in the database"). The most alike come first.
+   *
+   * @returns {Array<{primer: object, kind: string, count: number, shared: number, text: string}>}
+   */
+  function findSimilar(sequence, list, limit) {
+    const query = clean(sequence);
+    if (query.length < MIN_LENGTH) {
+      return [];
+    }
+    const forms = [query, reverseComplement(query)];
+    const found = [];
+    (list || []).forEach(function (primer) {
+      const other = clean(primer.sequence);
+      if (other.length < MIN_LENGTH || forms.indexOf(other) !== -1) {
+        return;
+      }
+      let best = null;
+      forms.forEach(function (form) {
+        if (form.length === other.length) {
+          const count = mismatches(form, other);
+          if (count > 0 && count <= MAX_MISMATCHES) {
+            const candidate = { kind: 'differs', count: count, shared: form.length - count, text: 'differs by ' + count + (count === 1 ? ' base' : ' bases') };
+            if (best === null || candidate.count < best.count) {
+              best = candidate;
+            }
+          }
+        }
+        let shared = 0;
+        while (shared < form.length && shared < other.length && form[form.length - 1 - shared] === other[other.length - 1 - shared]) {
+          shared++;
+        }
+        if (shared >= TAIL_ANCHOR && shared < Math.max(form.length, other.length) && (best === null || (best.kind !== 'differs' && shared > best.shared))) {
+          const candidate = { kind: 'end', count: 0, shared: shared, text: 'same 3′ end (' + shared + ' bases), another 5′ part' };
+          // a smaller difference is the better one
+          if (best === null || best.kind === 'end') {
+            best = candidate;
+          }
+        }
+      });
+      if (best !== null) {
+        found.push({ primer: primer, kind: best.kind, count: best.count, shared: best.shared, text: best.text });
+      }
+    });
+    found.sort(function (a, b) {
+      return (a.kind === 'differs' ? 0 : 1) - (b.kind === 'differs' ? 0 : 1) || a.count - b.count || b.shared - a.shared;
+    });
+    return found.slice(0, limit || 5);
+  }
+
   async function json(path, options) {
     const response = await fetch(base + path, Object.assign({ credentials: 'same-origin' }, options || {}));
     if (!response.ok) {
@@ -618,6 +670,7 @@
     tm: tm,
     gc: gcPercent,
     findSites: findSites,
+    findSimilar: findSimilar,
     allPrimers: allPrimers,
     createPrimer: createPrimer,
     destination: destination,
