@@ -2422,6 +2422,13 @@
           body: JSON.stringify({ metadata: JSON.stringify(metadata) }),
         });
       }
+      // the entry is in the lab Database: it is locked when its columns are filled in (the owner or an admin unlocks it by hand)
+      await fetch('registry-lock.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() },
+        body: JSON.stringify({ id: id }),
+      });
     };
     const nativeFetch = window.fetch;
     window.fetch = function (input, init) {

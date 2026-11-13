@@ -183,7 +183,8 @@ test('sequence files dropped on the import dialog wait for "Where the entries go
   assert.match(js, /async function addFiles\(files, entry, category, register\)/);
   assert.match(js, /createEntry\(category, named, where\)/);
   // one new entry made without a failure is opened, like the dialog of a new entry; else a message says where they are, and stays long enough
-  assert.match(js, /window\.location\.href = 'registry\.php\?mode=edit&id=' \+ made\[0\];/);
+  // an entry of the lab is locked: it is opened to be looked at; one of My entries is opened to be edited
+  assert.match(js, /window\.location\.href = 'registry\.php\?mode=' \+ \(where === 'both' \|\| where === 'lab' \? 'view' : 'edit'\) \+ '&id=' \+ made\[0\];/);
   assert.match(js, /in My entries, in your own database \(private\)/);
   assert.match(js, /failed\.length > 0, 10\);/);
 });
@@ -450,4 +451,39 @@ test('the page of an entry of a module has "Started on", owner and team at the b
   assert.doesNotMatch(permissions, /target\.append\(button\)/);
   // it applies to the view and the edit page of the Database only
   assert.match(js, /mode=\(view\|edit\)/);
+});
+
+test('an entry that enters the lab Database is locked, a plasmid sequence is not changed while it is locked, and an entry that was unlocked by hand goes back to locked after the edit', () => {
+  // one call that only locks (the lock button toggles), for an entry with a number; used when an entry enters the Database and when an edit is over
+  const lock = read('web/registry-lock.php');
+  assert.match(lock, /\(\$Entry->entityData\['custom_id'\] \?\? null\) === null/);
+  assert.match(lock, /UPDATE inventory SET locked = 1, lockedby = :user, locked_at = CURRENT_TIMESTAMP WHERE id = :id AND locked = 0/);
+  // the imports and the window "Add from an order" lock what went into the lab, when everything of the request is done
+  const transfer = read('web/registry-transfer.php');
+  assert.match(transfer, /\$lockCreated = static function \(array \$ids, string \$register\)/);
+  assert.equal((transfer.match(/\$lockCreated\(\$created, \$register\);/g) || []).length, 2);
+  assert.match(transfer, /in_array\(\$register, array\('both', 'lab'\), true\)/);
+  // the order form and the plasmid dialogs lock the entry they made in the lab
+  assert.match(read('web/order-to-database.js'), /fetch\('registry-lock\.php'/);
+  assert.match(read('web/sequence-add.js'), /await lockEntry\(id\);/);
+  assert.match(read('web/sequence-add.js'), /for \(const id of made\) \{\s*await lockEntry\(id\);/);
+  // the sequence of a locked plasmid: the server refuses a new file, a new version and the removal of the file
+  const uploads = read('src/Models/Uploads.php');
+  assert.match(uploads, /private function assertPlasmidSequenceNotLocked\(string \$realName\): void/);
+  assert.match(uploads, /\$this->assertPlasmidSequenceNotLocked\(\$realName\);/);
+  assert.match(uploads, /\$this->assertPlasmidSequenceNotLocked\(\(string\) \(\$this->uploadData\['real_name'\] \?\? ''\)\);/);
+  // the sequence editor is read only while it is locked, also for the person who locked it
+  assert.match(read('web/sequence-viewer/index.php'), /\$canWrite = !\$Entity->isReadOnly && !\$isLocked;/);
+  assert.match(read('web/sequence-viewer/viewer.js'), /Locked: unlock this entry to edit its sequence/);
+  // after an edit it is locked again: 30 seconds after the last save of the sequence, when the page is left, and when the edit page is left
+  assert.match(read('web/sequence-viewer/viewer.js'), /relock\(false\);\s*\}, 30000\)/);
+  assert.match(read('web/sequence-viewer/viewer.js'), /window\.addEventListener\('pagehide', function \(\) \{\s*relock\(true\);/);
+  assert.match(read('web/planned.js'), /params\.get\('mode'\) !== 'edit'/);
+  assert.match(read('web/planned.js'), /keepalive: true/);
+  // the mounts of the new files
+  const compose = read('docker-compose.inventory.yml');
+  assert.match(compose, /\.\/web\/registry-lock\.php:\/elabftw\/web\/registry-lock\.php:ro/);
+  assert.match(compose, /\.\/src\/Models\/Uploads\.php:\/elabftw\/src\/Models\/Uploads\.php:ro/);
+  // "Started on" is not shown
+  assert.match(read('web/planned.js'), /"Started on" is not shown/);
 });

@@ -32,13 +32,16 @@ if (!$App->Session->has('is_auth')) {
 $entryId = (int) ($_GET['entry'] ?? 0);
 $title = '';
 $canWrite = false;
+$isLocked = false;
 try {
     $Entity = new Inventory($App->Users, $entryId > 0 ? $entryId : null);
     $Entity->readOne();
     $title = (string) ($Entity->entityData['title'] ?? '');
     try {
         $Entity->canOrExplode(AccessType::Write);
-        $canWrite = !$Entity->isReadOnly;
+        // a locked entry is read only in the sequence editor, also for the person who locked it, until it is unlocked by hand
+        $isLocked = (int) ($Entity->entityData['locked'] ?? 0) === 1;
+        $canWrite = !$Entity->isReadOnly && !$isLocked;
     } catch (Throwable) {
         $canWrite = false;
     }
@@ -109,6 +112,7 @@ $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'U
   data-entry="<?= $entryId ?>"
   data-upload="<?= (int) ($_GET['upload'] ?? 0) ?>"
   data-can-write="<?= $canWrite ? '1' : '0' ?>"
+  data-locked="<?= $isLocked ? '1' : '0' ?>"
   data-csrf="<?= $h((string) $App->Session->get('csrf')) ?>"
 >
   <div id="bar">

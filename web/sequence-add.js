@@ -59,6 +59,21 @@
     return Number((response.headers.get('Location') || '').split('/').pop());
   }
 
+  // An entry that entered the lab Database is locked when its file, its details and its primers are done: it is not edited until the owner
+  // (or an admin) unlocks it by hand. The sequence of a locked plasmid is guarded by the server too.
+  async function lockEntry(entryId) {
+    try {
+      await fetch('registry-lock.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() },
+        body: JSON.stringify({ id: entryId }),
+      });
+    } catch (error) {
+      // the entry stays unlocked: it can be locked by hand
+    }
+  }
+
   async function uploadFile(entryId, file) {
     const form = new FormData();
     form.append('file', file);
@@ -657,7 +672,9 @@
         if (sequenceFile) {
           await offerPrimers([{ entry: id, title: title, file: sequenceFile }]);
         }
-        window.location.href = 'registry.php?mode=edit&id=' + id;
+        // the entry is in the lab Database: it is locked (a locked entry is looked at; it is unlocked by hand to edit it)
+        await lockEntry(id);
+        window.location.href = 'registry.php?mode=view&id=' + id;
       } catch (error) {
         message.textContent = error.message || String(error);
         message.className = 'sa-message error';
@@ -827,9 +844,15 @@
     if (withPrimers.length > 0) {
       await offerPrimers(withPrimers);
     }
+    // the new entries of the lab Database are locked
+    if (entry === 0 && (where === 'both' || where === 'lab')) {
+      for (const id of made) {
+        await lockEntry(id);
+      }
+    }
     // a new entry that is one, with nothing that failed, is opened (like the dialog of a new entry does)
     if (entry === 0 && made.length === 1 && done === 1 && failed.length === 0) {
-      window.location.href = 'registry.php?mode=edit&id=' + made[0];
+      window.location.href = 'registry.php?mode=' + (where === 'both' || where === 'lab' ? 'view' : 'edit') + '&id=' + made[0];
       return;
     }
     const placed = where === 'both' || where === 'lab' ? 'in the lab database' : where === 'none' ? 'in My entries, without a number yet' : 'in My entries, in your own database (private)';

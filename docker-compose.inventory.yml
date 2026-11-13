@@ -23,6 +23,8 @@ services:
       - ./web/planned.css:/elabftw/web/planned.css:ro
       - ./web/order-sheets:/elabftw/web/order-sheets:ro
       - ./src/Models/Inventory.php:/elabftw/src/Models/Inventory.php:ro
+      - ./src/Models/Uploads.php:/elabftw/src/Models/Uploads.php:ro
+      - ./web/registry-lock.php:/elabftw/web/registry-lock.php:ro
       - ./src/Elabftw/Permissions.php:/elabftw/src/Elabftw/Permissions.php:ro
       - ./src/Models/TeamGroups.php:/elabftw/src/Models/TeamGroups.php:ro
       - ./src/Models/AbstractEntity.php:/elabftw/src/Models/AbstractEntity.php:ro

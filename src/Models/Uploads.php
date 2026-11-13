@@ -353,6 +353,26 @@ final class Uploads extends AbstractRest
         }
     }
 
+    /**
+     * Fork-only. The sequence of a plasmid that is locked (it entered the Database) is not changed: not by a new file, not by the sequence
+     * editor (a new version of the file), not by removing the file. It can be changed when the plasmid is unlocked by hand (the owner and the
+     * admins do that). The lock of an entry lets the person who locked it go on editing, so the sequence is guarded here.
+     */
+    private function assertPlasmidSequenceNotLocked(string $realName): void
+    {
+        if (!($this->Entity instanceof Inventory) || $this->Entity->id === null || preg_match('/\.(gb|gbk|gbff|genbank|fasta|fa|fna|dna)$/i', $realName) !== 1
+            || preg_match('/\.read\.(fasta|fa)$/i', $realName) === 1) {
+            return;
+        }
+        $req = $this->Db->prepare('SELECT i.locked, c.title FROM inventory AS i JOIN inventory_categories AS c ON c.id = i.category WHERE i.id = :id');
+        $req->bindValue(':id', $this->Entity->id, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $row = $req->fetch();
+        if (is_array($row) && (int) $row['locked'] === 1 && stripos((string) $row['title'], 'plasmid') !== false) {
+            throw new ImproperActionException('This plasmid is locked: its sequence cannot be changed until it is unlocked.');
+        }
+    }
+
     #[Override]
     public function postAction(Action $action, array $reqBody): int
     {
@@ -361,6 +381,7 @@ final class Uploads extends AbstractRest
             ? Guard::getNonEmptyStringValueOfRequiredParam('real_name', $reqBody)
             : ($this->uploadData['real_name']
                 ?? Guard::getNonEmptyStringValueOfRequiredParam('real_name', $reqBody));
+        $this->assertPlasmidSequenceNotLocked($realName);
         if ($action === Action::Create || $action === Action::CreateFromString) {
             $this->assertSinglePrimarySequence($realName);
         }
@@ -399,6 +420,7 @@ final class Uploads extends AbstractRest
     public function destroy(): bool
     {
         $this->canWriteOrExplode();
+        $this->assertPlasmidSequenceNotLocked((string) ($this->uploadData['real_name'] ?? ''));
         $this->Entity->touch();
         $this->checkUploadIsNotReferenced();
         return $this->nuke();

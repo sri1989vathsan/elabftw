@@ -1059,6 +1059,16 @@ $fillBackbone = static function (int $entryId, string $fileName, string $content
 };
 
 // one row of a file becomes an entry of the module; returns the id, or the reason it was not made
+// The entries that went into the lab Database are locked when everything of the request is done (their files and their place were added
+// first): the owner and the admins can unlock them by hand. An entry that is only in My entries is not locked.
+$lockCreated = static function (array $ids, string $register) use ($pdo, $teamId): void {
+    if ($ids === array() || !in_array($register, array('both', 'lab'), true)) {
+        return;
+    }
+    $lock = $pdo->prepare('UPDATE inventory SET locked = 1, lockedby = userid, locked_at = CURRENT_TIMESTAMP WHERE id IN (' . implode(',', array_map('intval', $ids)) . ') AND team = :team AND locked = 0 AND custom_id IS NOT NULL');
+    $lock->bindValue(':team', $teamId, PDO::PARAM_INT);
+    $pdo->execute($lock);
+};
 $makeEntry = static function (array $row, int $categoryId, array $definitions, string $register, ?Users $Owner = null, bool $keepNumber = false) use ($App, $pdo, $teamId, &$openKeys, $nameTokens): array {
     // 'lab' (the lab Database only) and 'both' (the lab Database and the own database of the user) give the number of the lab
     $inLab = $register === 'lab' || $register === 'both';
@@ -1418,7 +1428,8 @@ try {
         }
         $zip->close();
         $primerReport = $primerMode !== '' ? $linkFilePrimers($genbankFiles, $primerMode) : null;
-        respond(200, array('created' => count($created), 'files' => $filesAttached, 'skipped' => $skipped, 'owners_not_found' => array_keys($notFound), 'primers' => $primerReport, 'backbones' => $backbones));
+        $lockCreated($created, $register);
+    respond(200, array('created' => count($created), 'files' => $filesAttached, 'skipped' => $skipped, 'owners_not_found' => array_keys($notFound), 'primers' => $primerReport, 'backbones' => $backbones));
     }
 
     foreach (array_slice(is_array($payload['rows'] ?? null) ? $payload['rows'] : array(), 0, 200) as $index => $row) {
@@ -1482,6 +1493,7 @@ try {
             // cleaned later with the exports
         }
     }
+    $lockCreated($created, $register);
     respond(200, array('created' => count($created), 'skipped' => $skipped, 'owners_not_found' => array_keys($notFound), 'backbones' => $backbones));
 } catch (Throwable $e) {
     respond(400, array('error' => $e->getMessage()));

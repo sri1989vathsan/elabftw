@@ -1398,6 +1398,13 @@
     }
     section.dataset.otdMoved = '1';
     section.classList.add('otd-ownership');
+    // "Started on" is not shown (view: the line; edit: the date field of the row, the other fields of the row stay)
+    const dateInput = section.querySelector('#date_input');
+    if (dateInput) {
+      (dateInput.closest('.form-inline') || dateInput.parentElement).style.setProperty('display', 'none', 'important');
+    } else {
+      started.style.setProperty('display', 'none', 'important');
+    }
     anchor.after(section);
     return true;
   };
@@ -1411,4 +1418,36 @@
       }
     }, 300);
   }
+})();
+
+/**
+ * The edit page of an entry of the Database: when it is left, the entry is locked again (it was unlocked by hand to be edited; an entry that is in
+ * the lab Database is locked unless someone is editing it). registry-lock.php only locks, and only for an entry that has a number.
+ */
+(function () {
+  'use strict';
+  const params = new URLSearchParams(window.location.search);
+  const id = parseInt(params.get('id'), 10);
+  if (!/registry\.php$/.test(window.location.pathname) || params.get('mode') !== 'edit' || !(id > 0)) {
+    return;
+  }
+  let sent = false;
+  window.addEventListener('pagehide', function () {
+    if (sent) {
+      return;
+    }
+    sent = true;
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    try {
+      fetch('registry-lock.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': meta ? meta.content : '' },
+        body: JSON.stringify({ id: id }),
+      });
+    } catch (error) {
+      // it stays as it is: it can be locked by hand
+    }
+  });
 })();

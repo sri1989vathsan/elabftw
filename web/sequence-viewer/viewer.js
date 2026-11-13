@@ -266,7 +266,42 @@
     }
     setupPrimers(editor);
 
+    // An entry of the Database that was unlocked by hand to change its sequence goes back to locked: 30 seconds after the last save, and when the
+    // page is left. Then the sequence is looked at until the entry is unlocked by hand again.
+    let relockTimer = 0;
+    let savedSomething = false;
+    let relocked = false;
+    const relock = function (leaving) {
+      if (!savedSomething || relocked) {
+        return;
+      }
+      window.clearTimeout(relockTimer);
+      fetch('../registry-lock.php', {
+        method: 'POST',
+        credentials: 'same-origin',
+        keepalive: Boolean(leaving),
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': body.csrf },
+        body: JSON.stringify({ id: entryId }),
+      }).then(function (response) {
+        return response.json();
+      }).then(function (answer) {
+        if (answer && answer.locked) {
+          relocked = true;
+          setSaveState('Saved. Locked again: unlock this entry to edit its sequence', 'saved');
+        }
+      }).catch(function () {
+        // it stays unlocked: it can be locked by hand
+      });
+    };
+    window.addEventListener('pagehide', function () {
+      relock(true);
+    });
+
     async function saveNow(sequenceData) {
+      if (relocked) {
+        setSaveState('Locked: unlock this entry to edit its sequence', 'failed');
+        return;
+      }
       if (saving) {
         return;
       }
@@ -280,6 +315,11 @@
         const now = new Date();
         const saved = isSnapgene ? 'Saved as ' + saveName : 'Saved';
         setSaveState(saved + ' ' + now.toLocaleTimeString(), 'saved');
+        savedSomething = true;
+        window.clearTimeout(relockTimer);
+        relockTimer = window.setTimeout(function () {
+          relock(false);
+        }, 30000);
       } catch (error) {
         setSaveState(error.message || String(error), 'failed');
       } finally {
@@ -288,7 +328,7 @@
     }
 
     if (!canWrite) {
-      setSaveState(isTrace ? 'Sanger trace: read only' : 'Read only: you cannot edit this entry', '');
+      setSaveState(isTrace ? 'Sanger trace: read only' : (body.locked === '1' ? 'Locked: unlock this entry to edit its sequence' : 'Read only: you cannot edit this entry'), '');
       return;
     }
     setSaveState('No changes yet', '');
