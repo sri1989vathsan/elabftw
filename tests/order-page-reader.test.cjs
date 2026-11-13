@@ -184,3 +184,11 @@ test('the target of "Vimentin antibody" is its first word; "Monoclonal antibody"
   assert.strictEqual(read('Product name Vimentin antibody\nHost species Rabbit', 'https://x.example/p', 'Vimentin antibody').target, 'Vimentin');
   assert.strictEqual(read('Product name Antibody\nHost species Rabbit', 'https://x.example/p', 'Monoclonal antibody').target || '', '');
 });
+
+test('Conjugated is "No" when no conjugate is found, "Yes" for a dye, "No" for an unconjugated one', () => {
+  const module = { fields: [{ name: 'Conjugated', type: 'select', options: ['Yes', 'No'] }, { name: 'Conjugate', type: 'text' }] };
+  assert.strictEqual(O.defaultsFor(module, { name: 'Vimentin antibody', conjugate: '' }).Conjugated, 'No');
+  assert.strictEqual(O.defaultsFor(module, { name: 'CD45', conjugate: 'Spark Blue 574' }).Conjugated, 'Yes');
+  assert.strictEqual(O.defaultsFor(module, { name: 'CD45', conjugate: 'Unconjugated' }).Conjugated, 'No');
+  assert.strictEqual(O.defaultsFor(module, { name: 'Vimentin antibody', conjugate: '' }).Conjugate, '');
+});

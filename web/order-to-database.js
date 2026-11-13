@@ -355,7 +355,8 @@
       } else if (/^resistance/i.test(f.name)) {
         value = row.resistance || '';
       } else if (/^conjugated$/i.test(f.name)) {
-        value = row.conjugate ? (/^(un|none|no\b)/i.test(row.conjugate) ? 'No' : 'Yes') : '';
+        // no conjugate found (not in the order, not on the page): the antibody is not conjugated
+        value = row.conjugate ? (/^(un|none|no\b)/i.test(row.conjugate) ? 'No' : 'Yes') : 'No';
       }
       if (f.type === 'select' && value !== '') {
         const match = (f.options || []).find(function (o) {
@@ -1807,7 +1808,7 @@
     });
   }
 
-  window.OrderToDatabase = { open: open, parse: parseOrder, applyPage: applyPage, readPageText: readPageText, cleanPageName: cleanPageName, nameFromLink: nameFromLink };
+  window.OrderToDatabase = { open: open, parse: parseOrder, applyPage: applyPage, readPageText: readPageText, cleanPageName: cleanPageName, nameFromLink: nameFromLink, defaultsFor: defaultsFor };
 
   // on the orders page: a button under the title; an order opened there (?order=) is the one that is read
   if (/orders\.php$/.test(window.location.pathname)) {
