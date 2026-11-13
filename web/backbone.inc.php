@@ -222,7 +222,7 @@ final class Backbone
             $field = is_array($meta) && is_array($meta['extra_fields']['Backbone'] ?? null) ? $meta['extra_fields']['Backbone'] : array();
             $value = trim((string) ($field['value'] ?? ''));
             // a Backbone that the computer filled in (fill()) is a guess: it is not a reference for the next ones
-            if ($value !== '' && empty($field['auto'])) {
+            if ($value !== '' && (string) ($field['auto'] ?? '') !== $value) {
                 $out[(int) $row['id']] = $value;
             }
         }
@@ -404,7 +404,8 @@ final class Backbone
         }
         $fields[$key]['value'] = $found['backbone'];
         // marked as made by the computer: such a Backbone is not used as a reference later (a wrong guess would teach the next ones)
-        $fields[$key]['auto'] = 'sequence';
+        // (the marker is the guess itself: a person who changes the value makes it a reference again)
+        $fields[$key]['auto'] = $found['backbone'];
         $meta['extra_fields'] = $fields;
         $json = json_encode($meta, JSON_UNESCAPED_UNICODE);
         if ($Entry !== null) {
