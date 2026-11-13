@@ -371,6 +371,9 @@ RUN mkdir /elabftw
 WORKDIR /elabftw
 # we only copy the strict necessary
 COPY ./bin /elabftw/bin
+# the Open Vector Editor files of the sequence viewer are not kept in git (web/sequence-viewer/vendor/ is ignored): fetched here, so a fresh clone builds with them.
+# Before the copy of ./web so that this step stays in the cache when the web files change.
+RUN sh /elabftw/bin/fetch-ove.sh
 COPY ./.babelrc /elabftw
 COPY ./builder.js /elabftw
 COPY ./composer.json /elabftw
