@@ -12,6 +12,7 @@
 <script src="../../web/sequence-viewer/enzymes-library.js"></script>
 <script src="../../web/sequence-viewer/tools-gibson.js"></script>
 <script src="../../web/sequence-viewer/tools-restriction.js"></script>
+<script src="../../web/sequence-viewer/tools-goldengate.js"></script>
 <script>
 function rnd(n,s){var o='';for(var i=0;i<n;i++){s=(s*1103515245+12345)&0x7fffffff;o+='ACGT'[(s>>16)&3]}return o}
 window.vec={sequence:rnd(3000,7),circular:true,features:{f1:{id:'f1',name:'marker',type:'CDS',start:100,end:400,strand:1}}};
@@ -69,4 +70,28 @@ out.push([...b.querySelectorAll('.tool-card .tool-muted')].map(function(x){retur
 [...b.querySelectorAll('.tool-message')].forEach(function(m){out.push('MSG '+m.textContent)});
 var pre=document.createElement('pre');pre.id='result2';pre.textContent=out.join(' // ');document.body.append(pre);
 },100);},600);
+</script><script>
+setTimeout(function(){
+var out=[];
+function clean(t){return t.replace(/GGTCTC|GAGACC/g,'AAAAAA')}
+var pre=clean(rnd(900,21)),post=clean(rnd(900,22)),drop=clean(rnd(300,23));
+var b1=clean(rnd(400,24)),b2=clean(rnd(250,25));
+var dest=pre+'ACCT'+'A'+'GAGACC'+drop+'GGTCTC'+'A'+'GGCT'+post;
+var mk=function(f,b,t){return 'CCCCCC'+'GGTCTC'+'A'+f+b+t+'T'+'GAGACC'+'CCCCCC'};
+window.vec.sequence=dest;window.vec.features={};
+var g=[...document.querySelectorAll('details.tools-part')].find(function(d){return /Golden Gate/.test(d.querySelector('summary').textContent)});
+g.open=true;g.dispatchEvent(new Event('toggle'));
+setTimeout(function(){
+var b=g.querySelector('.tools-block');
+var areas=b.querySelectorAll('textarea');
+out.push('part boxes: '+areas.length+', enzyme: '+b.querySelector('select').value);
+areas[0].value=mk('TGCC',b2,'GGCT');areas[0].dispatchEvent(new Event('input'));
+areas[1].value=mk('ACCT',b1,'TGCC');areas[1].dispatchEvent(new Event('input'));
+[...b.querySelectorAll('button')].find(function(x){return /Find the assembly/.test(x.textContent)}).click();
+out.push([...b.querySelectorAll('.tool-card > strong')].map(function(x){return x.textContent}).join(' | '));
+out.push([...b.querySelectorAll('.tools-out')].filter(function(x){return /^→/.test(x.textContent)}).map(function(x){return x.textContent}).join(' '));
+out.push('expected length '+(pre.length+4+b1.length+4+b2.length+4+post.length));
+[...b.querySelectorAll('.tool-message')].forEach(function(m){out.push('MSG '+m.textContent)});
+var pre2=document.createElement('pre');pre2.id='result3';pre2.textContent=out.join(' // ');document.body.append(pre2);
+},100);},1200);
 </script></body></html>
