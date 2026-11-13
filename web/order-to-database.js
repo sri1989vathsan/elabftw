@@ -259,6 +259,14 @@
         value = row.pack || '';
       } else if (/^lot/i.test(f.name)) {
         value = row.lot || '';
+      } else if (/^isotype/i.test(f.name)) {
+        value = row.isotype || '';
+      } else if (/^(species )?reactivity/i.test(f.name)) {
+        value = row.reactivity || '';
+      } else if (/^applications?/i.test(f.name)) {
+        value = row.applications || '';
+      } else if (/^(conjugate|dye)/i.test(f.name)) {
+        value = row.conjugate || '';
       }
       if (f.type === 'select' && value !== '') {
         const match = (f.options || []).find(function (o) {
@@ -287,6 +295,140 @@
         row.orientation = 'Reverse';
       }
     }
+  }
+
+  // ---- the details of a vendor page. The server has no internet and a page cannot read a page of another site, so a script is run in a
+  // tab of the vendor (where the browser may read its pages), saves a file, and the file is chosen in the window (like the Addgene sequences).
+  // This function is sent as text to the console of the vendor: it has to stay self-contained (nothing of this file can be used in it).
+  function pageReader(pairs) {
+    const text = function (node) {
+      return node ? node.textContent.replace(/\s+/g, ' ').trim() : '';
+    };
+    (async function () {
+      const out = {};
+      for (const pair of pairs) {
+        const d = { url: pair[1], name: '', brand: '', sku: '', mpn: '', description: '', props: {} };
+        try {
+          const html = await (await fetch(pair[1], { credentials: 'include' })).text();
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+          // the data of the product that the page gives to the search engines
+          const walk = function (value) {
+            if (Array.isArray(value)) {
+              value.forEach(walk);
+            } else if (value && typeof value === 'object') {
+              if (/Product/.test([].concat(value['@type'] || []).join(','))) {
+                d.name = d.name || value.name || '';
+                d.brand = d.brand || (value.brand && (value.brand.name || value.brand)) || '';
+                d.sku = d.sku || value.sku || '';
+                d.mpn = d.mpn || value.mpn || '';
+                d.description = d.description || value.description || '';
+              }
+              Object.keys(value).forEach(function (key) {
+                walk(value[key]);
+              });
+            }
+          };
+          doc.querySelectorAll('script[type="application/ld+json"]').forEach(function (node) {
+            try {
+              walk(JSON.parse(node.textContent));
+            } catch (error) {
+              // not a product
+            }
+          });
+          const meta = function (name) {
+            const node = doc.querySelector('meta[property="' + name + '"],meta[name="' + name + '"]');
+            return node ? node.getAttribute('content') || '' : '';
+          };
+          d.name = d.name || meta('og:title') || text(doc.querySelector('h1'));
+          d.description = d.description || meta('og:description') || meta('description');
+          // the "label: value" lines of the specification tables and lists
+          const add = function (key, value) {
+            key = key.replace(/[:：]\s*$/, '').trim();
+            value = value.trim();
+            if (key && value && key.length < 60 && value.length < 300 && !(key in d.props) && Object.keys(d.props).length < 120) {
+              d.props[key] = value;
+            }
+          };
+          doc.querySelectorAll('tr').forEach(function (row) {
+            if (row.children.length === 2) {
+              add(text(row.children[0]), text(row.children[1]));
+            }
+          });
+          doc.querySelectorAll('dl').forEach(function (list) {
+            let key = '';
+            Array.from(list.children).forEach(function (node) {
+              if (node.tagName === 'DT') {
+                key = text(node);
+              } else if (node.tagName === 'DD' && key) {
+                add(key, text(node));
+                key = '';
+              }
+            });
+          });
+        } catch (error) {
+          d.error = String(error);
+        }
+        out[pair[0]] = d;
+        await new Promise(function (resolve) {
+          setTimeout(resolve, 1200);
+        });
+      }
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(new Blob([JSON.stringify(out)], { type: 'application/json' }));
+      link.download = 'vendor-details.json';
+      link.click();
+      console.log('done', Object.keys(out).length);
+    })();
+  }
+
+  // what a label of a page means for a line of the order
+  const PAGE_LABELS = [
+    ['catalog', /^(catalog(ue)?( (number|no\.?|#))?|cat\.? ?(no\.?|#)|product (code|number|id)|item (number|no\.?)|sku|mpn|part (number|no\.?))$/i],
+    ['clone', /^clone( (number|name|id))?$/i],
+    ['host', /^host( species)?$/i],
+    ['target', /^(target|gene( name)?|antigen|immunogen name)$/i],
+    ['isotype', /^isotype$/i],
+    ['reactivity', /^(reacts with|species reactivity|reactivity|tested reactivity)$/i],
+    ['applications', /^(applications?|tested applications?|suitable for)$/i],
+    ['conjugate', /^(conjugate|conjugation|label|dye)$/i],
+    ['concentration', /^(concentration|conc\.?)$/i],
+    ['pack', /^(pack size|unit size|size|amount)$/i],
+  ];
+
+  // the details read from a page are put in the line: what the line has already is kept
+  function applyPage(row, page) {
+    if (!page || page.error) {
+      return false;
+    }
+    const props = page.props || {};
+    row.props = props;
+    Object.keys(props).forEach(function (label) {
+      const entry = PAGE_LABELS.find(function (item) {
+        return item[1].test(label.trim());
+      });
+      if (entry && !row[entry[0]]) {
+        row[entry[0]] = props[label];
+      }
+    });
+    row.catalog = row.catalog || page.sku || page.mpn || '';
+    row.vendor = row.vendor || String(page.brand || '');
+    // the name of the page is used for a line that has no name of its own
+    if (row.name.trim() === '' && page.name) {
+      row.name = String(page.name).trim();
+    }
+    const said = [page.name, page.description].join(' ');
+    row.clone = row.clone || ((/\bclone\s*(?:no\.?\s*)?[:#]?\s*([A-Za-z0-9-]{2,})/i.exec(said) || [])[1] || '');
+    if (row.host) {
+      const known = HOSTS.find(function (name) {
+        return new RegExp('\\b' + name + '\\b', 'i').test(row.host);
+      });
+      row.host = known || row.host;
+    } else {
+      const found = new RegExp('\\b(' + HOSTS.join('|') + ')\\b(?=[^.]{0,40}\\b(?:monoclonal|polyclonal|antibody|IgG)\\b)', 'i').exec(said);
+      row.host = found ? found[1][0].toUpperCase() + found[1].slice(1).toLowerCase() : '';
+    }
+    row.fields = null;
+    return true;
   }
 
   // ---- the window
@@ -629,6 +771,69 @@
         helper.append(copy, load);
         tableBox.append(helper);
       }
+      // the lines with a link of a vendor: their details (catalog number, clone, host, target...) are read from the pages of the vendor
+      const hostOf = function (link) {
+        try {
+          return new URL(link).hostname.replace(/^www\./, '');
+        } catch (error) {
+          return '';
+        }
+      };
+      const byHost = new Map();
+      rows.forEach(function (r, index) {
+        const host = hostOf(r.link);
+        if (r.ticked && host !== '' && !/addgene\.org$/i.test(host) && !r.pageRead) {
+          byHost.set(host, (byHost.get(host) || []).concat([[index, r.link]]));
+        }
+      });
+      byHost.forEach(function (pairs, host) {
+        const helper = element('div', 'small border rounded p-2 mt-2');
+        helper.append(element('div', 'font-weight-bold', 'Details from ' + host + ' (' + pairs.length + (pairs.length === 1 ? ' line' : ' lines') + ')'));
+        helper.append(element('div', 'text-muted mb-1', 'The server cannot reach the internet, so your browser reads the pages: open ' + host + ' in a tab, press F12, open the console, paste the script and press Enter. It saves a file; choose it here and the catalog number, clone, host, target and the other columns are filled in.'));
+        const open = element('a', 'btn btn-secondary btn-sm mr-2', 'Open ' + host);
+        open.href = pairs[0][1];
+        open.target = '_blank';
+        open.rel = 'noopener';
+        const copy = element('button', 'btn btn-secondary btn-sm mr-2', 'Copy the script');
+        copy.type = 'button';
+        copy.addEventListener('click', async function () {
+          const script = '(' + pageReader.toString() + ')(' + JSON.stringify(pairs) + ');';
+          try {
+            await navigator.clipboard.writeText(script);
+            copy.textContent = 'Copied';
+          } catch (error) {
+            window.prompt('Copy this script', script);
+          }
+        });
+        const load = element('input', 'form-control-file d-inline-block', '', 'width:auto');
+        load.type = 'file';
+        load.accept = '.json';
+        load.setAttribute('aria-label', 'The file the script saved');
+        load.addEventListener('change', async function () {
+          if (!load.files || !load.files[0]) {
+            return;
+          }
+          try {
+            const found = JSON.parse(await load.files[0].text());
+            let filled = 0;
+            Object.keys(found).forEach(function (key) {
+              const r = rows[Number(key)];
+              if (r && applyPage(r, found[key])) {
+                r.pageRead = true;
+                filled += 1;
+              }
+            });
+            draw();
+            message.className = 'small mb-2';
+            message.textContent = filled + (filled === 1 ? ' line' : ' lines') + ' filled in from the pages of ' + host + '. Details... shows the columns.';
+          } catch (error) {
+            message.className = 'small mb-2 text-danger';
+            message.textContent = 'This is not the file of the script.';
+          }
+        });
+        helper.append(open, copy, load);
+        tableBox.append(helper);
+      });
       const ticked = rows.filter(function (r) {
         return r.ticked && r.name.trim() !== '';
       });
@@ -944,7 +1149,7 @@
     });
   }
 
-  window.OrderToDatabase = { open: open, parse: parseOrder };
+  window.OrderToDatabase = { open: open, parse: parseOrder, applyPage: applyPage, pageReader: pageReader };
 
   // on the orders page: a button under the title; an order opened there (?order=) is the one that is read
   if (/orders\.php$/.test(window.location.pathname)) {
@@ -978,6 +1183,88 @@
       const rows = parseOrder({ title: title, notes: description ? description.innerHTML : '' });
       return rows.length > 0 && rows[0].moduleTitle ? rows[0].moduleTitle : 'Reagents';
     };
+    // is the order in the Database already? The lines of the order are looked for by name (and catalog number) in the entries; the oligos
+    // of a sheet by their letters in the primers. Gives {total, inDb}, or null when nothing can be told.
+    const normal = function (text) {
+      return String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    };
+    const checked = new Map();
+    const inDatabase = function (card, kind, orderId) {
+      if (checked.has(orderId)) {
+        return checked.get(orderId);
+      }
+      const work = (async function () {
+        const title = ((card.querySelector('.orders-item-title') || {}).textContent || '').trim();
+        const description = card.querySelector('.orders-item-description');
+        const rows = parseOrder({ title: title, notes: description ? description.innerHTML : '' });
+        if (kind === 'Primers') {
+          await loadPrimerTools();
+          const tools = window.PrimerTools;
+          if (!tools) {
+            return null;
+          }
+          const sequences = rows.map(function (row) {
+            return row.sequence;
+          }).filter(Boolean);
+          for (const link of Array.from(card.querySelectorAll('li.orders-upload a[href*="download.php"]'))) {
+            const url = new URL(link.href, window.location.href);
+            if (!/\.xlsx$/i.test(url.searchParams.get('name') || '')) {
+              continue;
+            }
+            const response = await fetch('primers.php?order_sheet=1&order=' + orderId + '&f=' + encodeURIComponent(url.searchParams.get('f') || ''), { credentials: 'same-origin' });
+            const answer = response.ok ? await response.json().catch(function () {
+              return {};
+            }) : {};
+            (answer.oligos || []).forEach(function (oligo) {
+              sequences.push(oligo.sequence);
+            });
+          }
+          if (sequences.length === 0) {
+            return null;
+          }
+          const database = await tools.allPrimers();
+          // the same oligo in the notes and in the sheet is one
+          const distinct = Array.from(new Set(sequences.map(function (sequence) {
+            return tools.clean(sequence);
+          })));
+          const inDb = distinct.filter(function (sequence) {
+            const forward = tools.clean(sequence);
+            const reverse = tools.reverseComplement(forward);
+            return database.some(function (primer) {
+              return primer.sequence === forward || primer.sequence === reverse;
+            });
+          }).length;
+          return { total: distinct.length, inDb: inDb };
+        }
+        const named = rows.filter(function (row) {
+          return row.name.trim() !== '';
+        });
+        if (named.length === 0) {
+          return null;
+        }
+        let inDb = 0;
+        for (const row of named) {
+          const term = row.name.trim();
+          const response = await fetch('api/v2/inventory?limit=20&q=' + encodeURIComponent(term), { credentials: 'same-origin' });
+          const entries = response.ok ? await response.json().catch(function () {
+            return [];
+          }) : [];
+          const wanted = normal(term);
+          const catalog = String(row.catalog || '').toLowerCase();
+          const same = (Array.isArray(entries) ? entries : []).some(function (entry) {
+            const have = normal(entry.title);
+            // the same name, or the same catalog number: a similar name (another product of the vendor) is not the same entry
+            return have === wanted || (catalog.length >= 4 && String(entry.metadata || '').toLowerCase().indexOf(catalog) !== -1);
+          });
+          inDb += same ? 1 : 0;
+        }
+        return { total: named.length, inDb: inDb };
+      }()).catch(function () {
+        return null;
+      });
+      checked.set(orderId, work);
+      return work;
+    };
     const enhanceCards = function () {
       document.querySelectorAll('li.orders-card').forEach(function (card) {
         if (card.querySelector('.otd-add')) {
@@ -1005,6 +1292,20 @@
           open({ orderId: orderId });
         });
         meta.append(add);
+        // when the lines of the order are in the Database already, the button says so
+        inDatabase(card, kind, orderId).then(function (state) {
+          if (!state || state.total === 0 || state.inDb === 0) {
+            return;
+          }
+          if (state.inDb >= state.total) {
+            add.replaceChildren(element('i', 'fas fa-check fa-fw'), document.createTextNode('In the database'));
+            add.style.color = '#1d8348';
+            add.style.borderColor = '#1d8348';
+            add.title = 'All ' + state.total + (state.total === 1 ? ' line of this order is' : ' lines of this order are') + ' in the Database already. Click to look at them.';
+          } else {
+            add.title = state.inDb + ' of ' + state.total + ' lines are in the Database already. ' + add.title;
+          }
+        });
       });
     };
     let cardsPending = 0;

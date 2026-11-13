@@ -287,3 +287,16 @@ test('the window of the primers of an order sheet says what it does, and links n
   assert.doesNotMatch(js, /action: 'order'/);
   assert.match(js, /tools\.destinationControl\(\)/);
 });
+
+test('the details of a vendor page are read by a script that the browser runs in a tab of the vendor, and an order that is in the database says so', () => {
+  const js = read('web/order-to-database.js');
+  // the script is sent as text, so it is a function of its own; its file is chosen in the window (the server has no internet)
+  assert.match(js, /function pageReader\(pairs\) \{/);
+  assert.match(js, /'\(' \+ pageReader\.toString\(\) \+ '\)\(' \+ JSON\.stringify\(pairs\) \+ '\);'/);
+  assert.match(js, /function applyPage\(row, page\)/);
+  assert.match(js, /'Details from ' \+ host/);
+  assert.match(js, /applyPage: applyPage, pageReader: pageReader/);
+  // the button of an order whose lines are in the database already says so; only the same name or the same catalog number counts
+  assert.match(js, /document\.createTextNode\('In the database'\)/);
+  assert.match(js, /return have === wanted \|\| \(catalog\.length >= 4/);
+});
