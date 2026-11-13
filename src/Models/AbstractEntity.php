@@ -1755,12 +1755,14 @@ abstract class AbstractEntity extends AbstractRest
         }
         // the sequence files of the entries (GenBank, FASTA, SnapGene), to open them in the sequence editor from the list
         $req = $this->Db->prepare(sprintf(
-            'SELECT item_id, id, long_name, real_name, storage FROM uploads WHERE type = :type AND state = :state AND item_id IN (%s) AND real_name REGEXP :pattern ORDER BY id',
+            'SELECT item_id, id, long_name, real_name, storage FROM uploads WHERE type = :type AND state = :state AND item_id IN (%s) AND real_name REGEXP :pattern AND real_name NOT REGEXP :reads ORDER BY id',
             implode(',', $ids),
         ));
         $req->bindValue(':type', $this->entityType->value);
         $req->bindValue(':state', State::Normal->value, PDO::PARAM_INT);
         $req->bindValue(':pattern', '\\.(gb|gbk|gbff|genbank|fasta|fa|fna|dna)$');
+        // the sequencing reads kept with the entry (x.read.fasta) belong to the alignment, not to the list of sequences
+        $req->bindValue(':reads', '\\.read\\.(fasta|fa)$');
         $this->Db->execute($req);
         $sequenceFilesById = array();
         foreach ($req->fetchAll() as $file) {
