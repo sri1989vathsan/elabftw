@@ -123,10 +123,28 @@
       // that has that end
       const from = Math.max(first, info.boundStart);
       const to = Math.min(last, info.boundEnd);
-      let d = 'M0,0';
-      if (to >= from) {
-        const barb = forward ? to === primer.end : from === primer.start;
-        d = shape((from - first) * charWidth - PAD, (to - first + 1) * charWidth + PAD, forward, barb);
+      // a base of the window that does not match the sequence is outside the box (the box is drawn in pieces of matching bases)
+      const wrongAt = function (position) {
+        const letter = info.at(position);
+        const under = forward ? letter : COMPLEMENT[letter];
+        return letter !== '' && position < sequence.length && under !== sequence[position];
+      };
+      let d = '';
+      for (let p = from; p <= to; p++) {
+        if (wrongAt(p)) {
+          continue;
+        }
+        let end = p;
+        while (end + 1 <= to && !wrongAt(end + 1)) {
+          end++;
+        }
+        const barb = forward ? end === primer.end : p === primer.start;
+        d += (d ? ' ' : '') + shape((p - first) * charWidth - PAD, (end - first + 1) * charWidth + PAD, forward, barb);
+        p = end;
+      }
+      const drawn = d !== '';
+      if (!drawn) {
+        d = 'M0,0';
       }
       // the editor mirrors the box of a reverse oligo with a transform: the box is drawn here on its own columns
       if (path.hasAttribute('transform')) {
@@ -135,8 +153,8 @@
       if (path.getAttribute('d') !== d) {
         path.setAttribute('d', d);
       }
-      path.setAttribute('fill', to >= from ? '#fde8e2' : 'none');
-      path.setAttribute('stroke', to >= from ? '#e0806a' : 'none');
+      path.setAttribute('fill', drawn ? '#fde8e2' : 'none');
+      path.setAttribute('stroke', drawn ? '#e0806a' : 'none');
       path.setAttribute('stroke-width', '1');
       path.removeAttribute('stroke-dasharray');
       // the letters of the whole piece, the overhang ones in red
@@ -151,7 +169,11 @@
       for (let p = first; p <= last; p++) {
         letters += info.at(p) || ' ';
       }
-      const key = letters + '|' + info.boundStart + '|' + info.boundEnd + '|' + first;
+      let mask = '';
+      for (let p = first; p <= last; p++) {
+        mask += wrongAt(p) ? '1' : '0';
+      }
+      const key = letters + '|' + info.boundStart + '|' + info.boundEnd + '|' + first + '|' + mask;
       if (text.dataset.key !== key) {
         text.dataset.key = key;
         text.textContent = '';
@@ -169,7 +191,7 @@
           run = '';
         };
         for (let p = first; p <= last; p++) {
-          const outside = p < info.boundStart || p > info.boundEnd;
+          const outside = p < info.boundStart || p > info.boundEnd || wrongAt(p);
           if (outside !== over) {
             flush();
             over = outside;

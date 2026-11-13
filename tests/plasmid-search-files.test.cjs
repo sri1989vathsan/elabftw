@@ -531,6 +531,10 @@ test('the oligo of a primer of the file: "Edit oligo" is in the menu of the edit
   const style = read('web/sequence-viewer/oligo-style.js');
   assert.match(style, /rowText\.getBoundingClientRect\(\)\.left\) \/ charWidth\);/);
   assert.doesNotMatch(style, /rowEl\.getBoundingClientRect\(\)\.left\) \/ charWidth\);/);
+  // the cream box is only the bases that match the sequence: a mismatch stands outside it, in the panel and on the map
+  assert.match(read('web/sequence-viewer/oligo-editor.js'), /wrong \? 'oligo-mismatch-text' : 'oligo-binding-text'/);
+  assert.match(style, /const outside = p < info\.boundStart \|\| p > info\.boundEnd \|\| wrongAt\(p\);/);
+  assert.match(style, /if \(wrongAt\(p\)\) \{\s*continue;/);
   // a locked primer of its owner: "Unlock and update primer", locked again after the update (also when it failed)
   const oligo = read('web/sequence-viewer/oligo-editor.js');
   assert.match(oligo, /save\.textContent = 'Unlock and update primer';/);

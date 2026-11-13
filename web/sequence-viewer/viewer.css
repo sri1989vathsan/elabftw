@@ -2104,6 +2104,13 @@ body.hide-seq-orfs .veRowView .veRowViewOrfsContainer {
   border-radius: 3px;
 }
 
+/* a base of the binding part that does not match the sequence: outside the box, in red */
+#tool-sidebar .oligo-mismatch-text {
+  color: #d73a1f;
+  font-weight: 700;
+  text-decoration: underline wavy;
+}
+
 #tool-sidebar .oligo-strand {
   display: flex;
   gap: 1rem;

@@ -123,7 +123,7 @@
           mismatches++;
         }
       }
-      return { sequence: sequence, start: start, end: start + bound - 1, forward: forward, bound: bound, tail: tail, mismatches: mismatches };
+      return { sequence: sequence, start: start, end: start + bound - 1, forward: forward, bound: bound, tail: tail, mismatches: mismatches, binding: binding, wanted: wanted };
     };
 
     const update = function () {
@@ -134,7 +134,24 @@
       if (now.tail > 0) {
         shown.append(element('span', 'oligo-overhang-text', now.sequence.slice(0, now.tail)));
       }
-      shown.append(element('span', 'oligo-binding-text', now.sequence.slice(now.tail)));
+      // the cream box is only the bases that match the sequence: a base that does not match stands outside it (red)
+      let run = '';
+      let wrong = false;
+      const flushRun = function () {
+        if (run) {
+          shown.append(element('span', wrong ? 'oligo-mismatch-text' : 'oligo-binding-text', run));
+        }
+        run = '';
+      };
+      for (let i = 0; i < now.binding.length; i++) {
+        const bad = i < now.wanted.length && now.binding[i] !== now.wanted[i];
+        if (bad !== wrong) {
+          flushRun();
+          wrong = bad;
+        }
+        run += now.binding[i];
+      }
+      flushRun();
       shown.append(element('span', 'oligo-shown-label', "3′"));
       facts.textContent = '';
       const add = function (label, value) {
