@@ -535,6 +535,10 @@ test('the oligo of a primer of the file: "Edit oligo" is in the menu of the edit
   const oligo = read('web/sequence-viewer/oligo-editor.js');
   assert.match(oligo, /save\.textContent = 'Unlock and update primer';/);
   assert.match(oligo, /fetch\('\.\.\/registry-lock\.php'/);
+  // the unlock asks first: the first click shows "Yes, unlock and update" and Cancel, only the second click unlocks
+  assert.match(oligo, /if \(entry\.locked && !asking\) \{/);
+  assert.match(oligo, /save\.textContent = 'Yes, unlock and update';/);
+  assert.match(oligo, /append\(save, cancelUpdate, copy, fit, open\)/);
   // the lock call also locks an entry of My database
   assert.match(read('web/registry-lock.php'), /\(\$Entry->entityData\['personal_id'\] \?\? null\) === null/);
 });

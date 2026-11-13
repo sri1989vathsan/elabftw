@@ -211,6 +211,23 @@
       message.textContent = 'This primer belongs to ' + (entry.owner || 'someone else') + ': only the owner can update it in the Database. You can still move the binding window here to look at it.';
       message.className = 'tool-message';
     }
+    // a locked primer is only unlocked after a second click (a confirmation in the panel: the first click asks, "Cancel" leaves it locked)
+    const cancelUpdate = element('button', 'tool-btn', 'Cancel');
+    cancelUpdate.type = 'button';
+    cancelUpdate.hidden = true;
+    let asking = false;
+    const stopAsking = function () {
+      asking = false;
+      cancelUpdate.hidden = true;
+      if (owner && entry.locked) {
+        save.textContent = 'Unlock and update primer';
+      }
+    };
+    cancelUpdate.addEventListener('click', function () {
+      stopAsking();
+      message.textContent = 'Not updated: the primer stays locked.';
+      message.className = 'tool-message';
+    });
     save.addEventListener('click', async function () {
       const now = state();
       if (!name.value.trim() || now.sequence.length === 0) {
@@ -218,6 +235,16 @@
         message.className = 'tool-message error';
         return;
       }
+      if (entry.locked && !asking) {
+        asking = true;
+        save.textContent = 'Yes, unlock and update';
+        cancelUpdate.hidden = false;
+        message.textContent = 'This primer is locked in the Database. Unlock it, change its name and bases to what is here, and lock it again? Every sequence that uses it shows the change.';
+        message.className = 'tool-message';
+        return;
+      }
+      cancelUpdate.hidden = true;
+      asking = false;
       save.disabled = true;
       message.textContent = 'Saving...';
       message.className = 'tool-message';
@@ -253,6 +280,7 @@
         }
       }
       save.disabled = !owner;
+      stopAsking();
     });
 
     // a copy in the Database: a new primer with these bases, attached to this plasmid; the old one can leave the plasmid
@@ -326,7 +354,7 @@
       element('div', 'tool-actions'),
       message
     );
-    host.querySelector('.tool-actions').append(save, copy, fit, open);
+    host.querySelector('.tool-actions').append(save, cancelUpdate, copy, fit, open);
     host.append(replaceLabel);
   }
 
