@@ -312,10 +312,50 @@
     ['Pack size', 'pack size|unit size|size'],
   ];
 
+  // the text of an image (a screenshot of a page: a table does not paste well, an image keeps it). The reading is done in the browser with
+  // the files of web/ocr (tesseract.js, English): nothing is sent anywhere and the server needs no internet.
+  let ocrLoading = null;
+  function readImage(file, onProgress) {
+    const here = function (name) {
+      return new URL('ocr/' + name, window.location.href).href;
+    };
+    if (!ocrLoading) {
+      ocrLoading = new Promise(function (resolve, reject) {
+        const script = document.createElement('script');
+        script.src = here('tesseract.min.js');
+        script.onload = resolve;
+        script.onerror = function () {
+          ocrLoading = null;
+          reject(new Error('The reader of images could not be loaded.'));
+        };
+        document.head.append(script);
+      });
+    }
+    return ocrLoading.then(function () {
+      return window.Tesseract.createWorker('eng', 1, {
+        workerPath: here('worker-wrapper.js'),
+        corePath: here('tesseract-core-simd-lstm.wasm.js'),
+        langPath: new URL('ocr', window.location.href).href,
+        workerBlobURL: false,
+        logger: function (m) {
+          if (onProgress && m.status === 'recognizing text') {
+            onProgress(Math.round(m.progress * 100));
+          }
+        },
+      });
+    }).then(function (worker) {
+      return worker.recognize(file).then(function (result) {
+        return worker.terminate().then(function () {
+          return result.data.text;
+        });
+      });
+    });
+  }
+
   // {name, sku, brand, description, props} from the text of a product page
   function readPageText(text, link) {
     const lines = String(text || '').split(/\r\n|\r|\n/).map(function (line) {
-      return line.replace(/\s+/g, ' ').trim();
+      return line.replace(/\s*[|\u2502]\s*/g, ' ').replace(/\s+/g, ' ').trim();
     }).filter(Boolean);
     const page = { name: '', sku: '', brand: vendorOfLink(link || ''), description: '', props: {} };
     // the name is the first line that looks like the title of a product
@@ -791,8 +831,55 @@
           message.className = 'small mb-2';
           message.textContent = 'Filled in from the page: ' + [target.catalog ? 'catalog ' + target.catalog : '', target.clone ? 'clone ' + target.clone : '', target.host ? 'host ' + target.host : '', target.target ? 'target ' + target.target : ''].filter(Boolean).join(', ') + '. Details... shows all the columns.';
         });
+        // an image (a screenshot of the page) pasted in the box, dropped on it or chosen is read by the browser, and its text is filled in
+        const image = element('input', 'form-control-file d-inline-block ml-2 mb-1', '', 'width:auto');
+        image.type = 'file';
+        image.accept = 'image/*';
+        image.setAttribute('aria-label', 'A screenshot of the page');
+        const fromImage = async function (file) {
+          message.className = 'small mb-2';
+          message.textContent = 'Reading the image... (the first time it takes a little longer)';
+          try {
+            const text = await readImage(file, function (percent) {
+              message.textContent = 'Reading the image... ' + percent + '%';
+            });
+            paste.value = (paste.value.trim() === '' ? '' : paste.value + '\n') + text;
+            fill.click();
+          } catch (error) {
+            message.className = 'small mb-2 text-danger';
+            message.textContent = 'The image could not be read: ' + (error.message || error);
+          }
+        };
+        const imageOf = function (list) {
+          return Array.from(list || []).find(function (file) {
+            return /^image\//.test(file.type);
+          });
+        };
+        paste.addEventListener('paste', function (event) {
+          const file = imageOf(event.clipboardData && event.clipboardData.files);
+          if (file) {
+            event.preventDefault();
+            fromImage(file);
+          }
+        });
+        paste.addEventListener('dragover', function (event) {
+          event.preventDefault();
+        });
+        paste.addEventListener('drop', function (event) {
+          const file = imageOf(event.dataTransfer && event.dataTransfer.files);
+          if (file) {
+            event.preventDefault();
+            fromImage(file);
+          }
+        });
+        image.addEventListener('change', function () {
+          if (image.files && image.files[0]) {
+            fromImage(image.files[0]);
+          }
+        });
+        paste.placeholder = 'Paste the text of the page here, or paste a screenshot (an image) of it';
         const pick = element('div', 'd-flex flex-wrap align-items-center');
-        pick.append(open, which);
+        pick.append(open, which, image);
         helper.append(pick, paste, fill);
         tableBox.append(helper);
       }
@@ -900,20 +987,43 @@
       }
     };
 
+    const previewDown = function () {
+      try {
+        return Date.now() - Number(window.localStorage.getItem('otd-preview-down') || 0) < 30 * 60 * 1000;
+      } catch (error) {
+        return false;
+      }
+    };
+    const markPreviewDown = function () {
+      try {
+        window.localStorage.setItem('otd-preview-down', String(Date.now()));
+      } catch (error) {
+        // asked again next time
+      }
+    };
     // what the order holds besides its text: the Excel sheets of oligos, the resources of its lines, and the pages the links lead to
     const enrich = async function (order, found) {
       const result = found.slice();
       const orderRef = '#' + order.id + ' ' + order.title;
       const when = String(order.order_date || order.created_at || '').slice(0, 10);
       // the sheets (IDT, Microsynth...) attached to the order: one primer for each line
-      for (const upload of (order.uploads || [])) {
-        if (!/\.xlsx$/i.test(upload.real_name || '')) {
-          continue;
-        }
+      const sheets = (order.uploads || []).filter(function (upload) {
+        return /\.xlsx$/i.test(upload.real_name || '');
+      });
+      // all the sheets are asked at once
+      const answers = await Promise.all(sheets.map(function (upload) {
+        return fetch('primers.php?order_sheet=1&order=' + order.id + '&f=' + encodeURIComponent(upload.long_name), { credentials: 'same-origin' }).then(function (response) {
+          return response.json().then(function (answer) {
+            return response.ok ? answer : null;
+          });
+        }).catch(function () {
+          return null;
+        });
+      }));
+      for (const [position, upload] of sheets.entries()) {
         try {
-          const response = await fetch('primers.php?order_sheet=1&order=' + order.id + '&f=' + encodeURIComponent(upload.long_name), { credentials: 'same-origin' });
-          const answer = await response.json();
-          if (!response.ok) {
+          const answer = answers[position];
+          if (!answer) {
             continue;
           }
           const vendor = /idt/i.test(upload.real_name) ? 'IDT' : (/microsynth/i.test(upload.real_name) ? 'Microsynth' : ((result[0] && result[0].vendor) || ''));
@@ -934,13 +1044,19 @@
         return !(withSheets && !r.sheet && !r.link && !r.sequence && /^oligos?\b/i.test(r.name));
       });
       // the resources that are the lines of the order: their own columns give the vendor, the catalog number and the link
-      for (const item of (order.items || [])) {
+      const resources = await Promise.all((order.items || []).map(function (item) {
+        const id = item.id || item.item_id || item.entity_id;
+        return id ? fetch('api/v2/items/' + id, { credentials: 'same-origin' }).then(function (response) {
+          return response.json();
+        }).catch(function () {
+          return null;
+        }) : Promise.resolve(null);
+      }));
+      for (const resource of resources) {
         try {
-          const id = item.id || item.item_id || item.entity_id;
-          if (!id) {
+          if (!resource) {
             continue;
           }
-          const resource = await (await fetch('api/v2/items/' + id, { credentials: 'same-origin' })).json();
           const extra = (resource.metadata_decoded && resource.metadata_decoded.extra_fields) || {};
           const pick = function (pattern) {
             const key = Object.keys(extra).find(function (k) {
@@ -961,9 +1077,25 @@
         return /^https?:\/\//i.test(r.link || '');
       }).map(async function (r) {
         try {
-          const preview = await (await fetch('api/v2/link_preview?url=' + encodeURIComponent(r.link), { credentials: 'same-origin' })).json();
+          if (previewDown()) {
+            return;
+          }
+          // the server asks the page itself: without internet it waits for its own timeout (about 5 seconds), so it is given little time and,
+          // when it gets nothing, it is not asked again for half an hour
+          const stop = new AbortController();
+          const timer = window.setTimeout(function () {
+            stop.abort();
+          }, 1500);
+          let preview = {};
+          try {
+            preview = await (await fetch('api/v2/link_preview?url=' + encodeURIComponent(r.link), { credentials: 'same-origin', signal: stop.signal })).json();
+          } catch (error) {
+            preview = {};
+          }
+          window.clearTimeout(timer);
           const title = String(preview.title || '');
           if (title === '') {
+            markPreviewDown();
             return;
           }
           r.pageTitle = title;
@@ -1151,11 +1283,61 @@
       return String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
     };
     const checked = new Map();
+    // the primers of the database are asked once for all the cards, and the checks go one after the other (not all at once)
+    let primerList = null;
+    const allPrimersOnce = function () {
+      if (!primerList) {
+        primerList = window.PrimerTools.allPrimers().catch(function () {
+          primerList = null;
+          return [];
+        });
+      }
+      return primerList;
+    };
+    let line = Promise.resolve();
     const inDatabase = function (card, kind, orderId) {
       if (checked.has(orderId)) {
         return checked.get(orderId);
       }
-      const work = (async function () {
+      const work = new Promise(function (resolve) {
+        line = line.then(function () {
+          return check(card, kind, orderId);
+        }).then(resolve, function () {
+          resolve(null);
+        });
+      });
+      checked.set(orderId, work);
+      return work;
+    };
+    // the oligos of a sheet never change: they are kept by the browser
+    const sheetOligos = async function (orderId, longName) {
+      const key = 'otd-sheet-' + longName;
+      try {
+        const saved = window.localStorage.getItem(key);
+        if (saved) {
+          return JSON.parse(saved);
+        }
+      } catch (error) {
+        // read again
+      }
+      const response = await fetch('primers.php?order_sheet=1&order=' + orderId + '&f=' + encodeURIComponent(longName), { credentials: 'same-origin' });
+      const answer = response.ok ? await response.json().catch(function () {
+        return {};
+      }) : {};
+      const sequences = (answer.oligos || []).map(function (oligo) {
+        return oligo.sequence;
+      });
+      if (response.ok) {
+        try {
+          window.localStorage.setItem(key, JSON.stringify(sequences));
+        } catch (error) {
+          // not kept
+        }
+      }
+      return sequences;
+    };
+    const check = function (card, kind, orderId) {
+      return (async function () {
         const title = ((card.querySelector('.orders-item-title') || {}).textContent || '').trim();
         const description = card.querySelector('.orders-item-description');
         const rows = parseOrder({ title: title, notes: description ? description.innerHTML : '' });
@@ -1173,18 +1355,14 @@
             if (!/\.xlsx$/i.test(url.searchParams.get('name') || '')) {
               continue;
             }
-            const response = await fetch('primers.php?order_sheet=1&order=' + orderId + '&f=' + encodeURIComponent(url.searchParams.get('f') || ''), { credentials: 'same-origin' });
-            const answer = response.ok ? await response.json().catch(function () {
-              return {};
-            }) : {};
-            (answer.oligos || []).forEach(function (oligo) {
-              sequences.push(oligo.sequence);
+            (await sheetOligos(orderId, url.searchParams.get('f') || '')).forEach(function (sequence) {
+              sequences.push(sequence);
             });
           }
           if (sequences.length === 0) {
             return null;
           }
-          const database = await tools.allPrimers();
+          const database = await allPrimersOnce();
           // the same oligo in the notes and in the sheet is one
           const distinct = Array.from(new Set(sequences.map(function (sequence) {
             return tools.clean(sequence);
@@ -1221,11 +1399,24 @@
           inDb += same ? 1 : 0;
         }
         return { total: named.length, inDb: inDb };
-      }()).catch(function () {
-        return null;
+      }());
+    };
+    const whenSeen = function (card, ask) {
+      return new Promise(function (resolve) {
+        if (!('IntersectionObserver' in window)) {
+          resolve(ask());
+          return;
+        }
+        const watcher = new IntersectionObserver(function (entries) {
+          if (entries.some(function (entry) {
+            return entry.isIntersecting;
+          })) {
+            watcher.disconnect();
+            resolve(ask());
+          }
+        }, { rootMargin: '300px' });
+        watcher.observe(card);
       });
-      checked.set(orderId, work);
-      return work;
     };
     const enhanceCards = function () {
       document.querySelectorAll('li.orders-card').forEach(function (card) {
@@ -1254,8 +1445,10 @@
           open({ orderId: orderId });
         });
         meta.append(add);
-        // when the lines of the order are in the Database already, the button says so
-        inDatabase(card, kind, orderId).then(function (state) {
+        // when the lines of the order are in the Database already, the button says so; asked when the card is seen, not for all the cards at once
+        whenSeen(card, function () {
+          return inDatabase(card, kind, orderId);
+        }).then(function (state) {
           if (!state || state.total === 0 || state.inDb === 0) {
             return;
           }

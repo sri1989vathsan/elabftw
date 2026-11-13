@@ -34,6 +34,7 @@ services:
       - ./src/Models/StorageUnits.php:/elabftw/src/Models/StorageUnits.php:ro
       - ./src/Elabftw/EntitySqlBuilder.php:/elabftw/src/Elabftw/EntitySqlBuilder.php:ro
       - ./web/order-primers.js:/elabftw/web/order-primers.js:ro
+      - ./web/ocr:/elabftw/web/ocr:ro
       - ./web/registry-folders.php:/elabftw/web/registry-folders.php:ro
       - ./web/registry-folders.js:/elabftw/web/registry-folders.js:ro
       - ./src/templates/orders.html:/elabftw/src/templates/orders.html:ro
@@ -53,6 +54,8 @@ services:
       - ./web/registry-defaults.inc.php:/elabftw/web/registry-defaults.inc.php:ro
       - ./web/default-modules.json:/elabftw/web/default-modules.json:ro
       - ./web/registry-transfer.php:/elabftw/web/registry-transfer.php:ro
+      - ./web/backbone.php:/elabftw/web/backbone.php:ro
+      - ./web/backbone.inc.php:/elabftw/web/backbone.inc.php:ro
       - ./web/registry-links.php:/elabftw/web/registry-links.php:ro
       - ./web/registry-links.js:/elabftw/web/registry-links.js:ro
       - ./web/registry-dashboard.php:/elabftw/web/registry-dashboard.php:ro

@@ -303,3 +303,26 @@ test('the details of a vendor page are read from the pasted text of the page, an
   assert.match(js, /document\.createTextNode\('In the database'\)/);
   assert.match(js, /return have === wanted \|\| \(catalog\.length >= 4/);
 });
+
+test('a screenshot of a vendor page is read in the browser (OCR files kept in the repo), and the order window is not slowed by a server without internet', () => {
+  const js = read('web/order-to-database.js');
+  // the image is pasted, dropped or chosen; its text goes through the same reading as a pasted text
+  assert.match(js, /function readImage\(file, onProgress\)/);
+  assert.match(js, /workerPath: here\('worker-wrapper\.js'\)/);
+  assert.match(js, /paste\.addEventListener\('paste'/);
+  assert.match(js, /image\.accept = 'image\/\*'/);
+  const wrapper = read('web/ocr/worker-wrapper.js');
+  assert.match(wrapper, /\.traineddata\.gz\.js/);
+  assert.match(wrapper, /importScripts\('worker\.min\.js'\)/);
+  for (const name of ['tesseract.min.js', 'worker.min.js', 'tesseract-core-simd-lstm.wasm.js', 'eng.traineddata.gz.js']) {
+    assert.ok(require('node:fs').existsSync(require('node:path').join(__dirname, '..', 'web', 'ocr', name)), name);
+  }
+  assert.match(read('docker-compose.inventory.yml'), /\.\/web\/ocr:\/elabftw\/web\/ocr:ro/);
+  // the server asks the page of a link itself: without internet that is a wait of about 5 seconds for each link
+  assert.match(js, /stop\.abort\(\);\s*\}, 1500\)/);
+  assert.match(js, /markPreviewDown\(\);/);
+  // the cards: one list of primers, one check at a time, only the cards that are seen, the oligos of a sheet remembered
+  assert.match(js, /const allPrimersOnce = function/);
+  assert.match(js, /new IntersectionObserver/);
+  assert.match(js, /'otd-sheet-' \+ longName/);
+});
