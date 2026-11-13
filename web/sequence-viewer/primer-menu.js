@@ -53,7 +53,7 @@
         editor.updateEditor({ selectionLayer: { start: drawn.start, end: drawn.end } });
       }));
     }
-    menu.append(item('Edit primer (properties, name, bases)', function () {
+    menu.append(item('Edit primer', function () {
       window.OligoEditor.open(id);
     }));
     menu.append(item('Detach from this plasmid', function () {
@@ -138,8 +138,15 @@
           link.tabIndex = 0;
           const label = document.createElement('div');
           label.className = 'bp3-fill bp3-text-overflow-ellipsis';
-          label.textContent = 'Edit oligo in the Database';
-          label.title = found.title;
+          // one entry for the primer, as in the menu of a primer drawn from the Database: the dialog of the editor (it changes the annotation of the
+          // file only) is not offered next to it, the panel shows the place and changes the primer of the Database
+          label.textContent = 'Edit primer';
+          label.title = found.title + ' in the Database';
+          Array.from(list.querySelectorAll('li')).forEach(function (row) {
+            if (/^(Edit Primer|View Primer Details)$/.test(row.textContent.trim())) {
+              row.style.display = 'none';
+            }
+          });
           link.append(label);
           // the menu of the editor closes when the mouse goes down on it (before a click comes): the panel opens on the mouse down, or on Enter
           let done = false;
@@ -165,6 +172,18 @@
           });
           li.append(link);
           list.prepend(li);
+          // the text starts where the text of the other items starts (they have a column for an icon, this one has none)
+          const others = Array.from(list.querySelectorAll('a.bp3-menu-item')).filter(function (node) {
+            return node !== link && node.offsetParent !== null && node.querySelector('div');
+          });
+          if (others.length > 0) {
+            const ref = others[0];
+            const refLabel = ref.querySelector('div');
+            const shift = (refLabel.getBoundingClientRect().left - ref.getBoundingClientRect().left) - (label.getBoundingClientRect().left - link.getBoundingClientRect().left);
+            if (shift > 0) {
+              label.style.paddingLeft = shift + 'px';
+            }
+          }
         }).catch(function () {
           // the menu stays as the editor made it
         });

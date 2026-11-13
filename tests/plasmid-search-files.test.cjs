@@ -522,7 +522,9 @@ test('the oligo of a primer of the file: "Edit oligo" is in the menu of the edit
   // the menu of the editor on a primer of the file gets "Edit oligo in the Database" (opened on the mouse down: the menu closes before a click)
   const menu = read('web/sequence-viewer/primer-menu.js');
   assert.match(menu, /async function databasePrimerFor\(id\)/);
-  assert.match(menu, /label\.textContent = 'Edit oligo in the Database';/);
+  // one entry: the dialog of the editor (Edit Primer / View Primer Details) is hidden for a primer that is in the Database
+  assert.match(menu, /label\.textContent = 'Edit primer';/);
+  assert.match(menu, /\^\(Edit Primer\|View Primer Details\)\$/);
   assert.match(menu, /link\.addEventListener\('mousedown', open\);/);
   assert.match(menu, /window\.OligoEditor\.open\(found\.id\);/);
   // the column of an oligo is counted from the first letter of the sequence of the row (a wide window has a margin on the left of the row)
