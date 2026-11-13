@@ -85,6 +85,175 @@
     });
   }
 
+  // ---- the primers written in a GenBank file: after a plasmid got its sequence from one, the user is asked whether to attach the
+  // primers that are in the database and to add the ones that are missing (genbank-primers.js reads the file, primer-tools.js talks
+  // to the database; both are loaded when they are needed)
+  const GENBANK_FILE = /\.(gb|gbk|gbff|genbank)$/i;
+
+  function loadScript(src) {
+    return new Promise(function (resolve, reject) {
+      const tag = document.createElement('script');
+      tag.src = src + '?v=' + Math.floor(Date.now() / 60000);
+      tag.onload = resolve;
+      tag.onerror = function () {
+        reject(new Error(src + ' could not be loaded.'));
+      };
+      document.head.append(tag);
+    });
+  }
+
+  // items: [{ entry: id of the plasmid, title, file: the sequence file that was attached }]. Resolves when the user is done.
+  async function offerPrimers(items) {
+    let rows = [];
+    let tools = null;
+    try {
+      if (!window.GenbankPrimers) {
+        await loadScript('genbank-primers.js');
+      }
+      if (!window.PrimerTools) {
+        await loadScript('primer-tools.js');
+      }
+      tools = window.PrimerTools;
+      const reader = window.GenbankPrimers;
+      const found = [];
+      for (const item of items) {
+        if (!GENBANK_FILE.test(item.file.name || '')) {
+          continue;
+        }
+        const seen = new Set();
+        reader.read(await item.file.text()).forEach(function (primer) {
+          const key = reader.key(primer.bases);
+          if (primer.bases.length >= reader.minLength && !seen.has(key)) {
+            seen.add(key);
+            found.push(Object.assign({ entry: item.entry, plasmid: item.title, key: key }, primer));
+          }
+        });
+      }
+      if (found.length === 0) {
+        return;
+      }
+      // the primers and probes of the database, by their letters (either strand)
+      const known = new Map();
+      (await tools.allPrimers()).forEach(function (primer) {
+        const letters = reader.clean(primer.sequence);
+        if (letters.length >= reader.minLength) {
+          const key = reader.key(letters);
+          known.set(key, (known.get(key) || []).concat(primer.id));
+        }
+      });
+      rows = found.map(function (primer) {
+        const ids = Array.from(new Set(known.get(primer.key) || []));
+        return Object.assign(primer, { id: ids.length === 1 ? ids[0] : null, several: ids.length > 1 });
+      });
+    } catch (error) {
+      // the sequence is attached: the question about the primers is not worth stopping for
+      console.warn('The primers of the file could not be read:', error);
+      return;
+    }
+
+    const inDatabase = rows.filter(function (row) {
+      return row.id !== null;
+    });
+    const missing = rows.filter(function (row) {
+      return row.id === null && !row.several;
+    });
+    await new Promise(function (resolve) {
+      const backdrop = element('div', 'sa-backdrop');
+      const dialog = element('div', 'sa-dialog');
+      dialog.setAttribute('role', 'dialog');
+      dialog.setAttribute('aria-modal', 'true');
+      const plasmids = new Set(rows.map(function (row) {
+        return row.entry;
+      }));
+      dialog.append(element('h4', '', 'Primers in the GenBank file' + (plasmids.size > 1 ? 's' : '')));
+      dialog.append(element('p', '', rows.length + (rows.length === 1 ? ' primer is' : ' primers are') + ' written in the file' + (plasmids.size > 1 ? 's' : '') + ': '
+        + inDatabase.length + ' already in the database' + (missing.length > 0 ? ', ' + missing.length + ' not in the database yet' : '') + '.'));
+      const list = element('ul', 'small');
+      list.style.maxHeight = '14rem';
+      list.style.overflow = 'auto';
+      rows.forEach(function (row) {
+        const state = row.id !== null ? 'in the database' : row.several ? 'several in the database have these letters: left alone' : 'not in the database';
+        list.append(element('li', '', row.name + (plasmids.size > 1 ? ' (' + row.plasmid + ')' : '') + ' - ' + state));
+      });
+      dialog.append(list);
+      const message = element('p', 'sa-message');
+      const actions = element('div', 'sa-actions');
+      dialog.append(message, actions);
+      backdrop.append(dialog);
+      document.body.append(backdrop);
+
+      const close = function () {
+        backdrop.remove();
+        document.removeEventListener('keydown', onKey);
+        resolve();
+      };
+      const onKey = function (event) {
+        if (event.key === 'Escape') {
+          close();
+        }
+      };
+      document.addEventListener('keydown', onKey);
+      const button = function (text, className, onClick) {
+        const node = element('button', 'btn ' + className, text);
+        node.type = 'button';
+        node.addEventListener('click', onClick);
+        actions.append(node);
+        return node;
+      };
+      const run = async function (create) {
+        actions.querySelectorAll('button').forEach(function (node) {
+          node.disabled = true;
+        });
+        message.className = 'sa-message';
+        message.textContent = 'Working...';
+        const made = new Map();
+        const titles = new Map();
+        let attached = 0;
+        let created = 0;
+        try {
+          for (const row of rows) {
+            let id = row.id;
+            if (id === null && create && !row.several) {
+              id = made.get(row.key) || null;
+              if (id === null) {
+                // two different primers with one name are told apart by the plasmid and the place
+                let title = row.name;
+                if (titles.has(title.toLowerCase()) && titles.get(title.toLowerCase()) !== row.key) {
+                  title += ' (' + row.plasmid + ' ' + row.start + '-' + row.end + ')';
+                }
+                id = await tools.createPrimer(title, row.bases, row.forward, row.plasmid, row.entry);
+                titles.set(title.toLowerCase(), row.key);
+                made.set(row.key, id);
+                created += 1;
+              }
+            }
+            if (id !== null) {
+              await tools.attach(row.entry, id);
+              attached += 1;
+            }
+          }
+          message.textContent = attached + (attached === 1 ? ' primer' : ' primers') + ' attached' + (created > 0 ? ', ' + created + ' of them added to the database' : '') + '.';
+        } catch (error) {
+          message.textContent = (error.message || String(error)) + (attached > 0 ? ' (' + attached + ' attached before that.)' : '');
+          message.className = 'sa-message error';
+        }
+        actions.textContent = '';
+        button('Close', 'btn-primary', close);
+      };
+      button('Not now', 'btn-secondary', close);
+      if (inDatabase.length > 0) {
+        button('Attach the ' + inDatabase.length + ' in the database', missing.length > 0 ? 'btn-secondary' : 'btn-primary', function () {
+          run(false);
+        });
+      }
+      if (missing.length > 0) {
+        button((inDatabase.length > 0 ? 'Attach them all, and add the ' : 'Add the ') + missing.length + ' missing to the database' + (inDatabase.length > 0 ? '' : ' and attach them'), 'btn-primary', function () {
+          run(true);
+        });
+      }
+    });
+  }
+
   // a search of the entries of the database, to pick the parents of a plasmid
   function parentPicker(onChange) {
     const wrap = element('div', 'sa-parents');
@@ -254,6 +423,10 @@
         for (const parentId of parents.ids()) {
           await addParent(id, parentId);
         }
+        // a GenBank file can carry primers: ask whether to attach them and add the missing ones to the database
+        if (sequenceFile) {
+          await offerPrimers([{ entry: id, title: title, file: sequenceFile }]);
+        }
         window.location.href = 'registry.php?mode=edit&id=' + id;
       } catch (error) {
         message.textContent = error.message || String(error);
@@ -301,6 +474,8 @@
       message.className = 'sa-message';
       try {
         await uploadFile(entryId, file);
+        message.textContent = '';
+        await offerPrimers([{ entry: entryId, title: title, file: file }]);
         window.location.reload();
       } catch (error) {
         message.textContent = error.message || String(error);
@@ -442,14 +617,22 @@
       toast('Adding ' + files.length + (files.length === 1 ? ' file' : ' files') + '...');
       let done = 0;
       const failed = [];
+      const withPrimers = [];
       for (const file of files) {
         try {
           const target = entry > 0 ? entry : await createEntry(category, file.name.replace(/\.[^.]+$/, ''), 'personal');
           await uploadFile(target, file);
           done += 1;
+          if (GENBANK_FILE.test(file.name)) {
+            withPrimers.push({ entry: target, title: file.name.replace(/\.[^.]+$/, ''), file: file });
+          }
         } catch (error) {
           failed.push(file.name + ': ' + (error.message || error));
         }
+      }
+      // the GenBank files dropped can carry primers: one question for all of them
+      if (withPrimers.length > 0) {
+        await offerPrimers(withPrimers);
       }
       toast((entry > 0 ? done + ' attached to the entry.' : done + ' new in your database, one entry per file.') + (failed.length ? ' Not added: ' + failed.join('; ') : ''), failed.length > 0);
       if (done > 0) {

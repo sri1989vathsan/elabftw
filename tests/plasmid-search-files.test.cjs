@@ -58,3 +58,52 @@ test('the import of a zip has a selectable primers option, off unless chosen, an
   assert.match(php, /if \(\$mode !== 'create' \|\| \$module === null\) \{\s*\$report\['missing'\]\+\+;/);
 });
 
+
+test('the JavaScript reader of the primers of a GenBank file reads what the PHP one reads', () => {
+  const window = {};
+  new Function('window', read('web/genbank-primers.js'))(window);
+  const reader = window.GenbankPrimers;
+  const sequence = 'ACGTTGCAAGGCTTAACCGGTTAAGCTTGGATCCAATTCGGCCATATGCGCGTAATACGA';
+  const block = (i) => sequence.slice(i, i + 10).toLowerCase();
+  const genbank = 'LOCUS       demo 60 bp DNA circular\nFEATURES             Location/Qualifiers\n'
+    + '     source          1..60\n                     /organism="synthetic"\n'
+    + '     primer_bind     5..20\n                     /label="fwd demo"\n                     /note="not used, label wins"\n'
+    + '     primer_bind     complement(31..48)\n                     /note="rev demo"\n'
+    + '     primer_bind     join(1..5,55..60)\n                     /label="split"\n'
+    + '     primer_bind     <50..>58\n                     /standard_name="long\n                     name"\n'
+    + '     primer_bind     complement(\n                     10..22)\n'
+    + '     CDS             1..30\n                     /label="not a primer"\n'
+    + 'ORIGIN\n        1 ' + [0, 10, 20, 30, 40, 50].map(block).join(' ') + '\n//\n';
+  const primers = reader.read(genbank);
+  assert.equal(primers.length, 4);
+  assert.equal(primers[0].bases, sequence.slice(4, 20));
+  assert.equal(primers[0].name, 'fwd demo');
+  assert.equal(primers[1].bases, reader.reverseComplement(sequence.slice(30, 48)));
+  assert.equal(primers[1].forward, false);
+  assert.equal(primers[1].name, 'rev demo');
+  assert.deepEqual([primers[2].start, primers[2].end, primers[2].name], [50, 58, 'long name']);
+  assert.deepEqual([primers[3].start, primers[3].end, primers[3].forward], [10, 22, false]);
+  assert.equal(reader.key(sequence.slice(4, 20)), reader.key(reader.reverseComplement(sequence.slice(4, 20))));
+  assert.notEqual(reader.key(sequence.slice(4, 20)), reader.key(sequence.slice(30, 48)));
+  assert.deepEqual(reader.read('LOCUS x\nORIGIN\n        1 acgt\n//\n'), []);
+  assert.equal(reader.reverseComplement('ACGTRYKM'), 'KMRYACGT');
+});
+
+test('a plasmid that gets its sequence from a GenBank file is offered its primers: new entry, edit page, drop on the list', () => {
+  const js = read('web/sequence-add.js');
+  assert.match(js, /async function offerPrimers\(items\)/);
+  assert.match(js, /const GENBANK_FILE = \/\\\.\(gb\|gbk\|gbff\|genbank\)\$\/i;/);
+  // the new-entry dialog and the edit page ask after the upload, before they leave the page
+  assert.match(js, /await offerPrimers\(\[\{ entry: id, title: title, file: sequenceFile \}\]\);/);
+  assert.match(js, /await offerPrimers\(\[\{ entry: entryId, title: title, file: file \}\]\);/);
+  // files dropped on the list: one question for all the GenBank files
+  assert.match(js, /if \(withPrimers\.length > 0\) \{\s*await offerPrimers\(withPrimers\);/);
+  // nothing is made unless the user picks the button that says so; "Not now" is there
+  assert.match(js, /button\('Not now', 'btn-secondary', close\)/);
+  assert.match(js, /run\(true\)/);
+  assert.match(js, /tools\.createPrimer\(title, row\.bases, row\.forward, row\.plasmid, row\.entry\)/);
+  // a failure to read the file never stops the upload
+  assert.match(js, /The primers of the file could not be read/);
+  const compose = read('docker-compose.inventory.yml');
+  assert.match(compose, /\.\/web\/genbank-primers\.js:\/elabftw\/web\/genbank-primers\.js:ro/);
+});
