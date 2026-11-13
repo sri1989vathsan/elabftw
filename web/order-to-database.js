@@ -232,6 +232,15 @@
     if (/antibod|\banti[- ]|\bmAb\b|monoclonal|polyclonal|\bIgG\b|streptavidin/i.test(row.name)) {
       return 'Antibodies';
     }
+    // a marker (CD45) or a dye of an antibody (Spark Blue, Alexa Fluor 488, FITC, Brilliant Violet 421) in the name
+    if (/\bCD\d{1,3}[a-z]?\b|\b(spark blue|alexa ?fluor|brilliant violet|pacific blue|percp|fitc|dylight)\b|\bBV\d{3}\b/i.test(row.name)) {
+      return 'Antibodies';
+    }
+    // the vendors that sell antibodies (proteins, cytokines and kits of the same vendors are reagents)
+    if (!/recombinant|protein|cytokine|elisa|\bkit\b|medium|buffer/i.test(row.name)
+      && /biolegend|cellsignal|cell signaling|novusbio|novus biologicals|proteintech|ptglab|genetex|jacksonimmuno|jackson immunoresearch|scbt\.com|santa cruz|rndsystems|r&d systems|(abcam\.com|thermofisher\.com)\/[^?#]*antibod/i.test(String(row.vendor || '') + ' ' + String(row.link || ''))) {
+      return 'Antibodies';
+    }
     if (/\b(tubes?|tips?|plates?|flasks?|dish(es)?|pipettes?|gloves?|filters?|falcon|eppendorf|syringes?|needles?|slides?|coverslips?)\b/i.test(row.name)) {
       return 'Consumables';
     }
@@ -332,8 +341,13 @@
         value = row.reactivity || '';
       } else if (/^applications?/i.test(f.name)) {
         value = row.applications || '';
-      } else if (/^(conjugate|dye)/i.test(f.name)) {
+      } else if (/^(conjugate(?!d)|dye)/i.test(f.name)) {
         value = row.conjugate || '';
+      } else if (/^clonality/i.test(f.name)) {
+        value = row.clonality || '';
+      } else if (/^antibody type/i.test(f.name)) {
+        // an antibody of an order is a primary one, unless it is an antibody against an antibody (anti-mouse IgG, anti-rabbit IgG (H+L))
+        value = row.antibodyType || (/secondary|\banti-?(mouse|rabbit|goat|rat|donkey|chicken|human|sheep) ?ig[gm]|\(h\+l\)/i.test(row.name) ? 'Secondary' : 'Primary');
       } else if (/^cas\b/i.test(f.name)) {
         value = row.cas || '';
       } else if (/^backbone/i.test(f.name)) {
@@ -347,7 +361,8 @@
         const match = (f.options || []).find(function (o) {
           return String(o).toLowerCase() === String(value).toLowerCase() || String(value).toLowerCase().indexOf(String(o).toLowerCase()) === 0;
         });
-        value = match || '';
+        // a host that is not in the list is "Other"
+        value = match || ((f.options || []).indexOf('Other') !== -1 ? 'Other' : '');
       }
       values[f.name] = value;
     });
@@ -363,6 +378,12 @@
     row.pack = row.pack || (pack ? pack[1] : '');
     const target = /\banti[- ]\s*(?:mouse|rabbit|rat|goat|human)?\s*([A-Za-z0-9-]{2,})/i.exec(name) || /^([A-Za-z0-9-]{2,})\s*\(/.exec(name);
     row.target = row.target || (target && /antibod/i.test(row.moduleTitle || '') ? target[1] : '');
+    if (/antibod/i.test(row.moduleTitle || '')) {
+      const marker = /\b(CD\d{1,3}[a-z]?)\b/i.exec(name);
+      row.target = row.target || (marker ? marker[1].toUpperCase() : '');
+      const dye = /\b(spark blue(?: ?\d{3})?|alexa ?fluor ?\d{3}|AF ?\d{3}|FITC|PerCP(?:-Cy5\.5)?|APC(?:-Cy7)?|PE(?:-Cy\d)?|brilliant violet ?\d{3}|BV ?\d{3}|pacific blue|dylight ?\d{3}|biotin|HRP)\b/i.exec(name);
+      row.conjugate = row.conjugate || (dye ? dye[1] : '');
+    }
     if (!row.orientation) {
       if (/(^|[\s_-])(fwd|forward|for|f)$|\b(fwd|forward)\b/i.test(name)) {
         row.orientation = 'Forward';
@@ -379,6 +400,8 @@
     ['CAS number', 'cas (?:number|no\\.?|#)|cas'],
     ['Clone number', 'clone (?:number|name|id|no\\.?|#)|clone'],
     ['Host / Isotype', 'host ?/ ?isotype'],
+    ['Clonality', 'clonality|clonal type|class'],
+    ['Antibody type', 'antibody type'],
     ['Antibody source', 'antibody source|source'],
     ['Host species', 'host species|host'],
     ['Isotype', 'isotype'],
@@ -504,6 +527,19 @@
       props['Pack size'] = props['Pack size'] || parts[0] || '';
       props.Concentration = props.Concentration || parts[1] || '';
     }
+    // the clonality: a label of its own (Abcam: "Clonality", Thermo: "Class"), the "Antibody Type" of BioLegend, the antibody source of R&D, the
+    // title ("... Polyclonal Antibody") or a sentence ("mouse monoclonal IgG2a")
+    const clonal = function (text) {
+      return /mono/i.test(text || '') ? 'Monoclonal' : (/poly/i.test(text || '') ? 'Polyclonal' : '');
+    };
+    props.Clonality = clonal(props.Clonality) || clonal(props['Antibody type']) || clonal(props['Antibody source']) || clonal(lines.slice(0, 40).join(' '));
+    if (props.Clonality === '') {
+      delete props.Clonality;
+    }
+    // "Antibody Type  Monoclonal" is the clonality: only "Primary" or "Secondary" stays as the type of the antibody
+    if (props['Antibody type'] && !/^(primary|secondary)/i.test(props['Antibody type'])) {
+      delete props['Antibody type'];
+    }
     // "Label  Unconjugated" (Novus) is the conjugate when it says so
     if (!props.Conjugate && props.Label && /^(un)?conjugated|alexa|fitc|biotin|hrp|dylight|\bcy\d|\bapc\b|\bpe\b|[A-Za-z]+ ?\d{3}$/i.test(props.Label)) {
       props.Conjugate = props.Label;
@@ -608,6 +644,8 @@
     ['concentration', /^(concentration|conc\.?)$/i],
     ['pack', /^(pack(age|ing)?( size)?|packaging unit|unit size|size|amount|content|quantity)$/i],
     ['cas', /^cas( (number|no\.?|#))?$/i],
+    ['clonality', /^clonality$/i],
+    ['antibodyType', /^antibody type$/i],
     ['vendor', /^(supplier|brand|manufacturer)$/i],
     ['backbone', /^vector backbone$/i],
     ['resistance', /^bacterial resistance$/i],
@@ -624,7 +662,9 @@
       const entry = PAGE_LABELS.find(function (item) {
         return item[1].test(label.trim());
       });
-      if (entry && !row[entry[0]]) {
+      // what the line has already is kept, but a conjugate that the page gives in full ("Spark Blue 574") replaces the one of the name ("spark blue")
+      const longer = entry && entry[0] === 'conjugate' && row.conjugate && props[label].toLowerCase().indexOf(String(row.conjugate).toLowerCase()) === 0 && props[label].length > String(row.conjugate).length;
+      if (entry && (!row[entry[0]] || longer)) {
         row[entry[0]] = props[label];
       }
     });
@@ -654,6 +694,8 @@
       const found = new RegExp('\\b(' + HOSTS.join('|') + ')\\b(?=[^.]{0,40}\\b(?:monoclonal|polyclonal|antibody|IgG)\\b)', 'i').exec(said);
       row.host = found ? found[1][0].toUpperCase() + found[1].slice(1).toLowerCase() : '';
     }
+    // the name of the line can say it too ("polyclonal anti-GFP")
+    row.clonality = row.clonality || (/monoclonal/i.test(row.name) ? 'Monoclonal' : (/polyclonal/i.test(row.name) ? 'Polyclonal' : ''));
     row.fields = null;
     return true;
   }

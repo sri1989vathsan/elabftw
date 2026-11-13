@@ -114,3 +114,36 @@ test('vendors of the lab: a slip in the name is put right, also without a link; 
   assert.strictEqual(vendorOf('Pipette tips 200 ul; Starlab').moduleTitle, 'Consumables');
   assert.strictEqual(vendorOf('Something; Unknown Vendor GmbH').vendor, 'Unknown Vendor GmbH');
 });
+
+test('the type of an order is told by a marker, a dye or the vendor: "cd45 spark blue; biolegend" is an antibody, a kit of the same vendor is not', () => {
+  const kind = (title, link) => O.parse({ title, notes: link ? 'Link: ' + link : '' })[0];
+  const cd45 = kind('cd45 spark blue; biolegend', 'https://www.biolegend.com/en-us/products/spark-blue-574-anti-mouse-cd45-antibody-21160');
+  assert.strictEqual(cd45.moduleTitle, 'Antibodies');
+  assert.strictEqual(cd45.target, 'CD45');
+  assert.strictEqual(cd45.conjugate.toLowerCase(), 'spark blue');
+  assert.strictEqual(kind('FITC anti-CD3; BioLegend').moduleTitle, 'Antibodies');
+  assert.strictEqual(kind('Anti-Nestin; Cell Signaling').moduleTitle, 'Antibodies');
+  assert.strictEqual(kind('Recombinant mouse IL-2; BioLegend').moduleTitle, 'Reagents');
+  assert.strictEqual(kind('ELISA kit; R&D Systems').moduleTitle, 'Reagents');
+  assert.strictEqual(kind('Ampicillin; Sigma').moduleTitle, 'Reagents');
+});
+
+test('clonality is read from the page: its own label, "Antibody Type", "Class", the antibody source, the title or a sentence', () => {
+  assert.strictEqual(read('Product Details\nAntibody Type Monoclonal\nHost Species Rat', 'https://www.biolegend.com/x', 'CD45').clonality, 'Monoclonal');
+  assert.strictEqual(read('Key facts\nHost species\nRabbit\nClonality\nMonoclonal', 'https://www.abcam.com/x', 'Actin').clonality, 'Monoclonal');
+  assert.strictEqual(read('Invitrogen GFP Polyclonal Antibody (A-11122)\nClass\nPolyclonal', 'https://www.thermofisher.com/x', 'GFP').clonality, 'Polyclonal');
+  assert.strictEqual(read('Antibody Source:\nPolyclonal Goat IgG', 'https://www.rndsystems.com/x', 'Nestin').clonality, 'Polyclonal');
+  assert.strictEqual(read('GFP Antibody (B-2) is a mouse monoclonal IgG2a kappa provided at 200 ug/ml', 'https://www.scbt.com/x', 'GFP').clonality, 'Monoclonal');
+  assert.strictEqual(read('Recombinant Monoclonal Nestin antibody', 'https://www.abcam.com/x', 'Nestin').clonality, 'Monoclonal');
+  // a name that says it, and a page that does not
+  assert.strictEqual(read('Host species\nRabbit', 'https://www.abcam.com/x', 'polyclonal anti-GFP').clonality, 'Polyclonal');
+  assert.ok(!read('Host species\nRabbit', 'https://www.abcam.com/x', 'anti-GFP').clonality);
+});
+
+test('the conjugate of the page replaces a shorter one of the name, and "Conjugated" is not the field of the conjugate', () => {
+  const row = O.parse({ title: 'cd45 spark blue; biolegend', notes: '' })[0];
+  assert.strictEqual(row.conjugate.toLowerCase(), 'spark blue');
+  O.applyPage(row, O.readPageText('Preparation The antibody was conjugated with Spark Blue™ 574 under optimal conditions.', 'https://www.biolegend.com/x'));
+  assert.strictEqual(row.conjugate, 'Spark Blue 574');
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'web', 'order-to-database.js'), 'utf8'), /\/\^\(conjugate\(\?!d\)\|dye\)\/i/);
+});
