@@ -45,3 +45,16 @@ test('the Primers tab offers to attach the primers of the file that are in the d
   assert.match(js, /action\('Attach all ' \+ matchedOnly\.length/);
   assert.match(js, /tools\.attach\(entryId, item\.primer\.id\)/);
 });
+
+test('the import of a zip has a selectable primers option, off unless chosen, and the server reads it', () => {
+  const js = read('web/planned.js');
+  assert.match(js, /\['', 'Do nothing'\]/);
+  assert.match(js, /form\.append\('primers', primersChoice\.value\);/);
+  assert.match(js, /primersLabel\.hidden = !zipMode;/);
+  const php = read('web/registry-transfer.php');
+  assert.match(php, /in_array\(\(string\) \(\$source\['primers'\] \?\? ''\), array\('attach', 'create'\), true\)/);
+  assert.match(php, /\$primerMode !== '' \? \$linkFilePrimers\(\$genbankFiles, \$primerMode\) : null/);
+  // making missing primers happens only with the choice "create"
+  assert.match(php, /if \(\$mode !== 'create' \|\| \$module === null\) \{\s*\$report\['missing'\]\+\+;/);
+});
+
