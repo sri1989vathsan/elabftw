@@ -119,6 +119,30 @@
       return [r.origin, r.resistance, r.count, links(r.examples)];
     })));
   });
+  // the Backbone of plasmids that have none: shown first (nothing changes), then filled in on a second click
+  const backboneRows = function (rows, all) {
+    const shown = rows.filter(function (r) {
+      return all || r.clear;
+    });
+    return table(['Plasmid', 'Backbone', 'Match'], shown.slice(0, 300).map(function (r) {
+      return [link(r), r.backbone || '-', Math.round(r.score * 100) + '%' + (r.clear ? '' : ' (not clear enough)')];
+    }));
+  };
+  add('Fill the empty Backbones', { action: 'backbones' }, function (data) {
+    out.append(make('p', {}, data.empty + ' plasmids with a sequence file have no Backbone. For ' + data.clear + ' of them the sequence is clear about it (compared with the plasmids of the lab that have one); the others stay empty. Nothing is changed yet.'));
+    if (data.clear > 0) {
+      const apply = make('button', { type: 'button', class: 'btn btn-primary mb-3' }, 'Fill in the ' + data.clear + ' Backbones now');
+      apply.addEventListener('click', function () {
+        run(apply, { action: 'backbones_apply' }, function (done) {
+          out.append(make('div', { class: 'alert alert-success' }, done.filled + ' Backbones were filled in. Check them: they come from the sequence, not from a person.'));
+          out.append(backboneRows(done.rows, false));
+        });
+      });
+      out.append(apply);
+    }
+    out.append(backboneRows(data.rows, false));
+    out.append(make('p', { class: 'text-muted' }, 'Only the clear ones are listed (and only the first 300). A Backbone that is written is never changed.'));
+  });
   box.append(buttons);
 
   // restriction sites

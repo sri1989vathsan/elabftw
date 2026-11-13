@@ -61,7 +61,7 @@ use function unserialize;
 
 /**
  * Finds the backbone of a plasmid from its sequence alone, by what the lab already knows: the plasmids of the Plasmids module that have a
- * sequence file AND a Backbone written in.
+ * sequence file AND a Backbone written in by a person (one that fill() made is marked and not used).
  *
  * The backbone is the Backbone name whose plasmids share most with the new sequence AMONG THEMSELVES: what only one plasmid of a name has
  * is its insert, and is not counted. (Comparing with the single closest plasmid goes wrong: two plasmids with the same insert in two
@@ -219,8 +219,10 @@ final class Backbone
         $out = array();
         foreach ($req->fetchAll() as $row) {
             $meta = json_decode((string) $row['metadata'], true);
-            $value = is_array($meta) && is_array($meta['extra_fields']['Backbone'] ?? null) ? trim((string) ($meta['extra_fields']['Backbone']['value'] ?? '')) : '';
-            if ($value !== '') {
+            $field = is_array($meta) && is_array($meta['extra_fields']['Backbone'] ?? null) ? $meta['extra_fields']['Backbone'] : array();
+            $value = trim((string) ($field['value'] ?? ''));
+            // a Backbone that the computer filled in (fill()) is a guess: it is not a reference for the next ones
+            if ($value !== '' && empty($field['auto'])) {
                 $out[(int) $row['id']] = $value;
             }
         }
@@ -361,10 +363,10 @@ final class Backbone
     }
 
     /**
-     * Fills the Backbone field of a plasmid when it is empty and the sequence is clear enough about it. Never changes a Backbone that is there.
+     * Fills the Backbone field of a plasmid when it is empty and the sequence is clear enough about it ($Entry null: written straight to the database, for an admin). Never changes a Backbone that is there.
      * Returns ['filled' => bool, 'backbone' => name found (also when not filled: the best guess), 'score', 'reason' => why not, '' when filled].
      */
-    public function fill(Inventory $Entry, int $entryId, string $sequenceFile): array
+    public function fill(?Inventory $Entry, int $entryId, string $sequenceFile): array
     {
         $out = array('filled' => false, 'backbone' => '', 'score' => 0.0, 'reason' => '');
         $req = $this->pdo->prepare('SELECT i.metadata, c.title FROM inventory AS i INNER JOIN inventory_categories AS c ON c.id = i.category WHERE i.id = :id AND i.team = :team');
@@ -401,8 +403,20 @@ final class Backbone
             return $out;
         }
         $fields[$key]['value'] = $found['backbone'];
+        // marked as made by the computer: such a Backbone is not used as a reference later (a wrong guess would teach the next ones)
+        $fields[$key]['auto'] = 'sequence';
         $meta['extra_fields'] = $fields;
-        $Entry->patch(Action::Update, array('metadata' => json_encode($meta, JSON_UNESCAPED_UNICODE)));
+        $json = json_encode($meta, JSON_UNESCAPED_UNICODE);
+        if ($Entry !== null) {
+            $Entry->patch(Action::Update, array('metadata' => $json));
+        } else {
+            // for the admin who fills many plasmids of other people at once (the entry model only lets owners and the entry's editors write)
+            $set = $this->pdo->prepare('UPDATE inventory SET metadata = :metadata WHERE id = :id AND team = :team');
+            $set->bindValue(':metadata', $json);
+            $set->bindValue(':id', $entryId, PDO::PARAM_INT);
+            $set->bindValue(':team', $this->team, PDO::PARAM_INT);
+            $set->execute();
+        }
         $out['filled'] = true;
         return $out;
     }

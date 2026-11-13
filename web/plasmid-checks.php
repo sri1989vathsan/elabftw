@@ -21,9 +21,12 @@ use Throwable;
  * POST {action: duplicates}                        plasmids whose sequence is identical but whose names differ
  * POST {action: origins}                           origin of replication x bacterial resistance; plasmids that share both cannot be kept together in one cell
  * POST {action: sites, insert, enzymes[]}          backbones that cut once with every listed enzyme, and the enzymes that also cut inside the insert
+ * POST {action: backbones}                         the plasmids with a sequence file and an empty Backbone field, and the Backbone each would get (nothing is changed)
+ * POST {action: backbones_apply}                   fills the empty Backbone fields that the sequence is clear about (backbone.inc.php); the rest stay empty
  */
 require_once __DIR__ . '/app/init.inc.php';
 require_once __DIR__ . '/ai-features.inc.php';
+require_once __DIR__ . '/backbone.inc.php';
 
 function reply(int $status, array $body): never
 {
@@ -224,6 +227,40 @@ try {
             }
         }
         reply(200, array('checked' => $total, 'enzymes' => $enzymes, 'inside' => $inside, 'count' => count($backbones), 'backbones' => array_slice($backbones, 0, 200)));
+    }
+
+    if ($action === 'backbones' || $action === 'backbones_apply') {
+        // the plasmids that have a sequence file and an empty Backbone field (a module without a Backbone field is not touched)
+        $dir = rtrim((string) (getenv('ELAB_UPLOADS_DIR') ?: '/var/lib/elabftw/uploads'), '/');
+        $req = $pdo->prepare("SELECT i.id, i.title, i.metadata, MIN(u.long_name) AS file
+            FROM inventory AS i INNER JOIN inventory_categories AS c ON c.id = i.category AND c.title = 'Plasmids'
+            INNER JOIN uploads AS u ON u.item_id = i.id AND u.type = 'inventory' AND u.state = 1 AND (u.real_name LIKE '%.gb' OR u.real_name LIKE '%.gbk' OR u.real_name LIKE '%.ape')
+            WHERE i.team = :team AND i.state = 1 GROUP BY i.id, i.title, i.metadata ORDER BY i.id");
+        $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+        $pdo->execute($req);
+        // one object for the whole run: what the lab knows is worked out once, and what is filled now does not teach the next ones
+        $finder = new Backbone($pdo, $teamId);
+        $rows = array();
+        $filled = 0;
+        foreach ($req->fetchAll() as $row) {
+            $meta = json_decode((string) $row['metadata'], true);
+            $field = is_array($meta) && is_array($meta['extra_fields']['Backbone'] ?? null) ? $meta['extra_fields']['Backbone'] : null;
+            $name = (string) $row['file'];
+            $path = $dir . '/' . $name;
+            if ($field === null || trim((string) ($field['value'] ?? '')) !== '' || str_contains($name, '..') || !is_file($path) || filesize($path) > 8000000) {
+                continue;
+            }
+            $text = (string) file_get_contents($path);
+            if ($action === 'backbones_apply') {
+                $done = $finder->fill(null, (int) $row['id'], $text);
+                $filled += $done['filled'] ? 1 : 0;
+                $rows[] = array('id' => (int) $row['id'], 'title' => (string) $row['title'], 'backbone' => $done['backbone'], 'score' => $done['score'], 'clear' => $done['filled']);
+                continue;
+            }
+            $found = $finder->find(Backbone::sequenceOf($text));
+            $rows[] = array('id' => (int) $row['id'], 'title' => (string) $row['title'], 'backbone' => (string) ($found['chosen'] ?? ''), 'score' => $found['score'], 'clear' => $found['backbone'] !== '');
+        }
+        reply(200, array('empty' => count($rows), 'clear' => count(array_filter($rows, static fn(array $r): bool => $r['clear'])), 'filled' => $filled, 'rows' => $rows));
     }
 
     reply(400, array('error' => 'Unknown action.'));
