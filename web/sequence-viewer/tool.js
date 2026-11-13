@@ -31,15 +31,15 @@
       results.append(none);
     }
     withSequence.forEach(function (entry) {
-      entry.sequence_files.forEach(function (file) {
-        const a = document.createElement('a');
-        a.className = 'plasmid-result';
-        a.href = link(entry, file);
-        const title = document.createElement('strong');
-        title.textContent = (entry.custom_id ? '#' + entry.custom_id + ' ' : '') + entry.title;
-        a.append(title, document.createTextNode(' ' + file.real_name));
-        results.append(a);
-      });
+      // only the main sequence of the plasmid (its oldest sequence file, the list is oldest first); the other files are for the alignment
+      const file = entry.sequence_files[0];
+      const a = document.createElement('a');
+      a.className = 'plasmid-result';
+      a.href = link(entry, file);
+      const title = document.createElement('strong');
+      title.textContent = (entry.custom_id ? '#' + entry.custom_id + ' ' : '') + entry.title;
+      a.append(title, document.createTextNode(' ' + file.real_name));
+      results.append(a);
     });
     results.hidden = false;
   }
