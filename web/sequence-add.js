@@ -169,7 +169,7 @@
       const response = await fetch('backbone.php', {
         method: 'POST',
         credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() },
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() },
         body: JSON.stringify({ entry: entryId }),
       });
       return response.ok ? await response.json() : null;
