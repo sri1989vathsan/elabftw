@@ -6,12 +6,11 @@
  */
 (function () {
   'use strict';
-  if (!window.ToolsTab || !window.PrimerTools || !window.CloningEngine || !window.ToolsPcr) {
+  if (!window.ToolsTab || !window.PrimerTools || !window.CloningEngine || !window.CloningInsert || !window.ToolsPcr) {
     return;
   }
   const tools = window.PrimerTools;
   const engine = window.CloningEngine;
-  const SEQUENCE_FILE = /\.(gb|gbk|gbff|genbank|fasta|fa|fna|dna)$/i;
 
   function element(tag, className, text) {
     const node = document.createElement(tag);
@@ -24,29 +23,6 @@
     return node;
   }
 
-  // the sequence of a Database entry (its oldest sequence file) as editor data, with its features
-  async function entrySequence(entry) {
-    const response = await fetch('../api/v2/inventory/' + entry.id + '/uploads', { credentials: 'same-origin' });
-    const files = (response.ok ? await response.json() : []).filter(function (file) {
-      return Number(file.state) === 1 && SEQUENCE_FILE.test(file.real_name || '') && !/\.read\.(fasta|fa)$/i.test(file.real_name);
-    });
-    if (files.length === 0) {
-      throw new Error('This entry has no sequence file.');
-    }
-    const file = files[0];
-    const params = new URLSearchParams({ f: file.long_name, name: file.real_name, storage: String(file.storage) });
-    const download = await fetch('../app/download.php?' + params.toString(), { credentials: 'same-origin' });
-    if (!download.ok) {
-      throw new Error('The sequence file could not be read (' + download.status + ').');
-    }
-    const parsed = await window.bioParsers.anyToJson(await download.text(), { fileName: file.real_name });
-    const data = parsed && parsed[0] && parsed[0].parsedSequence;
-    if (!data || !data.sequence) {
-      throw new Error('The sequence file could not be understood.');
-    }
-    return data;
-  }
-
   function build(editor, context) {
     const box = element('div', 'tools-block');
     box.append(element('p', 'tool-muted', 'Puts an insert into this plasmid by overlaps (Gibson, In-Fusion, NEBuilder HiFi). Select the bases of the vector that are replaced, or click where the insert goes. The vector is opened there (cut it with enzymes or amplify it by PCR), and each primer of the insert gets a tail equal to the vector next to the place.'));
@@ -57,62 +33,8 @@
     });
     method.value = 'infusion';
 
-    // the insert: from the Database or typed
-    let insert = null; // {sequence, features, ...} editor data
-    let insertEntry = null; // the entry it comes from
-    const chosen = element('div', 'tool-muted', 'No insert chosen yet.');
-    const search = element('input');
-    search.type = 'text';
-    search.placeholder = 'Insert: search the Database by name or number';
-    const found = element('div');
-    const paste = element('textarea');
-    paste.rows = 2;
-    paste.placeholder = 'or the bases of the insert, 5′ to 3′';
-    paste.style.cssText = 'font-family:ui-monospace,Menlo,monospace;font-size:0.78rem';
-    let timer = 0;
-    search.addEventListener('input', function () {
-      window.clearTimeout(timer);
-      const term = search.value.trim();
-      found.textContent = '';
-      if (term === '') {
-        return;
-      }
-      timer = window.setTimeout(async function () {
-        let entries = [];
-        try {
-          const response = await fetch('../api/v2/inventory?limit=8&q=' + encodeURIComponent(term), { credentials: 'same-origin' });
-          entries = response.ok ? await response.json() : [];
-        } catch (error) {
-          entries = [];
-        }
-        found.textContent = '';
-        entries.forEach(function (entry) {
-          const pick = element('button', 'tool-btn', (entry.custom_id ? '#' + entry.custom_id + ' ' : '') + entry.title);
-          pick.type = 'button';
-          pick.addEventListener('click', async function () {
-            chosen.textContent = 'Reading ' + entry.title + '...';
-            try {
-              insert = await entrySequence(entry);
-              insertEntry = entry;
-              paste.value = '';
-              found.textContent = '';
-              chosen.textContent = 'Insert: ' + entry.title + ', ' + insert.sequence.length + ' bases.';
-            } catch (error) {
-              chosen.textContent = error.message || String(error);
-            }
-          });
-          found.append(pick);
-        });
-        if (entries.length === 0) {
-          found.append(element('div', 'tool-muted', 'Nothing found.'));
-        }
-      }, 250);
-    });
-    paste.addEventListener('input', function () {
-      insert = null;
-      insertEntry = null;
-      chosen.textContent = paste.value.trim() === '' ? 'No insert chosen yet.' : 'Insert: typed, ' + tools.clean(paste.value).length + ' bases.';
-    });
+    const picker = window.CloningInsert.create();
+    let insertEntry = null;
 
     const result = element('div');
     const go = element('button', 'tool-btn tool-btn-primary', 'Design the primers');
@@ -130,11 +52,13 @@
         fail('Select the bases that are replaced, or click where the insert goes.');
         return;
       }
-      const insertData = insert || { sequence: tools.clean(paste.value) };
-      if (!insertData.sequence) {
+      const chosenInsert = picker.get();
+      if (!chosenInsert) {
         fail('Choose the insert: search the Database or type its bases.');
         return;
       }
+      const insertData = chosenInsert.data;
+      insertEntry = chosenInsert.entry;
       const from = hasSelection ? selection.start : state.caretPosition;
       const to = hasSelection ? selection.end + 1 : state.caretPosition;
       let design;
@@ -226,7 +150,7 @@
       result.append(actions);
     });
 
-    box.append(method, search, found, paste, chosen, go, result);
+    box.append(method, picker.node, go, result);
     return box;
   }
 

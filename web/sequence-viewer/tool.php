@@ -74,6 +74,7 @@ $v = static fn(string $file): int => (int) filemtime(__DIR__ . '/' . $file);
   <script src="tools-basic.js?v=<?= (int) filemtime(__DIR__ . '/tools-basic.js') ?>"></script>
   <script src="tools-pcr.js?v=<?= (int) filemtime(__DIR__ . '/tools-pcr.js') ?>"></script>
   <script src="cloning-engine.js?v=<?= (int) filemtime(__DIR__ . '/cloning-engine.js') ?>"></script>
+  <script src="cloning-insert.js?v=<?= (int) filemtime(__DIR__ . '/cloning-insert.js') ?>"></script>
   <script src="tools-gibson.js?v=<?= (int) filemtime(__DIR__ . '/tools-gibson.js') ?>"></script>
   <script src="primers-panel.js?v=<?= (int) filemtime(__DIR__ . '/primers-panel.js') ?>"></script>
   <script src="circular-map.js?v=<?= (int) filemtime(__DIR__ . '/circular-map.js') ?>"></script>
