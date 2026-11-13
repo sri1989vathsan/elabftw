@@ -326,3 +326,7 @@ test('a screenshot of a vendor page is read in the browser (OCR files kept in th
   assert.match(js, /new IntersectionObserver/);
   assert.match(js, /'otd-sheet-' \+ longName/);
 });
+
+test('the filter buttons of the orders page keep a space between their lines when they wrap', () => {
+  assert.match(read('web/order-primers.js'), /\.orders-toolbar-row \.btn-group \{ row-gap: 0\.4rem; \}/);
+});

@@ -204,6 +204,8 @@
     style.id = 'op-row-styles';
     style.textContent = [
       'li.orders-upload.op-row { align-items: center; background: rgba(127, 127, 127, 0.07); border: 1px solid rgba(127, 127, 127, 0.22); border-radius: 8px; column-gap: 0.15rem; padding: 0.3rem 0.4rem 0.3rem 0.6rem; }',
+      // the rows of the filters (All, Requested, ... Archived) when they wrap onto a second line: a space between the lines, so the buttons do not touch
+      '.orders-toolbar-row .btn-group { row-gap: 0.4rem; }',
       'li.orders-upload.op-row:hover { background: rgba(127, 127, 127, 0.12); }',
       'li.orders-upload.op-row > a:first-of-type { font-weight: 600; text-decoration: none; }',
       'li.orders-upload.op-row > a:first-of-type:hover { text-decoration: underline; }',
