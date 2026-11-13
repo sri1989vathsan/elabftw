@@ -310,7 +310,13 @@ test('a screenshot of a vendor page is read in the browser (OCR files kept in th
   assert.match(js, /function readImage\(file, onProgress\)/);
   assert.match(js, /workerPath: here\('worker-wrapper\.js'\)/);
   assert.match(js, /paste\.addEventListener\('paste'/);
-  assert.match(js, /image\.accept = 'image\/\*'/);
+  assert.match(js, /image\.accept = 'image\/\*,application\/pdf,\.pdf'/);
+  // a PDF is read too: its text by the places of the words (a scan is drawn and read like an image)
+  assert.match(js, /async function readPdf\(file, onProgress\)/);
+  assert.match(js, /await \(isPdf \? readPdf : readImage\)\(file/);
+  for (const name of ['pdf.min.js', 'pdf.worker.min.js']) {
+    assert.ok(require('node:fs').existsSync(require('node:path').join(__dirname, '..', 'web', 'ocr', name)), name);
+  }
   const wrapper = read('web/ocr/worker-wrapper.js');
   assert.match(wrapper, /\.traineddata\.gz\.js/);
   assert.match(wrapper, /importScripts\('worker\.min\.js'\)/);

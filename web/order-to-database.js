@@ -458,6 +458,85 @@
     });
   }
 
+  // the text of a PDF (a datasheet saved as PDF): the lines of each page are rebuilt from the places of the words, so that a label and its
+  // value that are side by side stay on one line. A page that has no text (a scan) is drawn and read like an image. The files are those of
+  // web/ocr (pdf.js); nothing is sent anywhere.
+  let pdfLoading = null;
+  function loadPdfjs() {
+    if (!pdfLoading) {
+      pdfLoading = new Promise(function (resolve, reject) {
+        const script = document.createElement('script');
+        script.src = new URL('ocr/pdf.min.js', window.location.href).href;
+        script.onload = function () {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('ocr/pdf.worker.min.js', window.location.href).href;
+          resolve(window.pdfjsLib);
+        };
+        script.onerror = function () {
+          pdfLoading = null;
+          reject(new Error('The reader of PDF files could not be loaded.'));
+        };
+        document.head.append(script);
+      });
+    }
+    return pdfLoading;
+  }
+
+  async function readPdf(file, onProgress) {
+    const pdfjs = await loadPdfjs();
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false }).promise;
+    const pages = Math.min(doc.numPages, 8);
+    const texts = [];
+    let scans = 0;
+    for (let number = 1; number <= pages; number++) {
+      const page = await doc.getPage(number);
+      const content = await page.getTextContent();
+      const rows = [];
+      content.items.forEach(function (item) {
+        if (String(item.str || '').trim() === '') {
+          return;
+        }
+        const y = Math.round(item.transform[5]);
+        let row = rows.find(function (candidate) {
+          return Math.abs(candidate.y - y) <= 3;
+        });
+        if (!row) {
+          row = { y: y, parts: [] };
+          rows.push(row);
+        }
+        row.parts.push({ x: item.transform[4], text: item.str });
+      });
+      rows.sort(function (a, b) {
+        return b.y - a.y;
+      });
+      const text = rows.map(function (row) {
+        return row.parts.sort(function (a, b) {
+          return a.x - b.x;
+        }).map(function (part) {
+          return part.text;
+        }).join(' ');
+      }).join('\n');
+      if (text.replace(/\s+/g, '').length >= 40) {
+        texts.push(text);
+      } else if (scans < 3) {
+        // a page that is a picture: it is drawn and read like an image (the first three of them)
+        scans += 1;
+        const viewport = page.getViewport({ scale: 2 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
+        const blob = await new Promise(function (resolve) {
+          canvas.toBlob(resolve, 'image/png');
+        });
+        texts.push(await readImage(blob, null));
+      }
+      if (onProgress) {
+        onProgress(Math.round(number / pages * 100));
+      }
+    }
+    return texts.join('\n');
+  }
+
   // {name, sku, brand, description, props} from the text of a product page
   function readPageText(text, link) {
     const lines = String(text || '').split(/\r\n|\r|\n/).map(function (line) {
@@ -1050,7 +1129,7 @@
       if (withLink.length > 0) {
         const helper = element('div', 'small border rounded p-2 mt-2');
         helper.append(element('div', 'font-weight-bold', 'Fill in from the page of the vendor'));
-        helper.append(element('div', 'text-muted mb-1', 'Open the page, select everything (Ctrl+A), copy it (Ctrl+C) and paste it in the box. The catalog number, clone, host, target and the other columns are read from it, here in your browser.'));
+        helper.append(element('div', 'text-muted mb-1', 'Open the page, select everything (Ctrl+A), copy it (Ctrl+C) and paste it in the box. The catalog number, clone, host, target and the other columns are read from it, here in your browser. A screenshot or a PDF of the page (a datasheet) can be pasted, dropped or chosen instead.'));
         const which = element('select', 'form-control form-control-sm mb-1', '', 'width:auto;max-width:100%');
         withLink.forEach(function (item) {
           const option = element('option', '', (item.row.name || 'line ' + (item.index + 1)) + ' (' + item.row.link.replace(/^https?:\/\/(www\.)?/, '').slice(0, 40) + ')');
@@ -1086,25 +1165,26 @@
         // an image (a screenshot of the page) pasted in the box, dropped on it or chosen is read by the browser, and its text is filled in
         const image = element('input', 'form-control-file d-inline-block ml-2 mb-1', '', 'width:auto');
         image.type = 'file';
-        image.accept = 'image/*';
-        image.setAttribute('aria-label', 'A screenshot of the page');
+        image.accept = 'image/*,application/pdf,.pdf';
+        image.setAttribute('aria-label', 'A screenshot or a PDF of the page');
         const fromImage = async function (file) {
           message.className = 'small mb-2';
-          message.textContent = 'Reading the image... (the first time it takes a little longer)';
+          const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+          message.textContent = 'Reading the ' + (isPdf ? 'PDF' : 'image') + '... (the first time it takes a little longer)';
           try {
-            const text = await readImage(file, function (percent) {
-              message.textContent = 'Reading the image... ' + percent + '%';
+            const text = await (isPdf ? readPdf : readImage)(file, function (percent) {
+              message.textContent = 'Reading the ' + (isPdf ? 'PDF' : 'image') + '... ' + percent + '%';
             });
             paste.value = (paste.value.trim() === '' ? '' : paste.value + '\n') + text;
             fill.click();
           } catch (error) {
             message.className = 'small mb-2 text-danger';
-            message.textContent = 'The image could not be read: ' + (error.message || error);
+            message.textContent = 'The file could not be read: ' + (error.message || error);
           }
         };
         const imageOf = function (list) {
           return Array.from(list || []).find(function (file) {
-            return /^image\//.test(file.type);
+            return /^image\//.test(file.type) || file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
           });
         };
         paste.addEventListener('paste', function (event) {
@@ -1129,7 +1209,7 @@
             fromImage(image.files[0]);
           }
         });
-        paste.placeholder = 'Paste the text of the page here, or paste a screenshot (an image) of it';
+        paste.placeholder = 'Paste the text of the page here, or paste or drop a screenshot (an image) or a PDF of it';
         const pick = element('div', 'd-flex flex-wrap align-items-center');
         pick.append(open, which, image);
         helper.append(pick, paste, fill);
