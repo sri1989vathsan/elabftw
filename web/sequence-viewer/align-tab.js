@@ -332,11 +332,56 @@
       });
 
       const nameBox = element('div', 'tool-tags');
+      // takes one saved sequencing file out of the entry (it is moved to the deleted files, as with any file of an entry)
+      const removeSaved = async function (upload) {
+        if (!window.confirm('Remove ' + upload.real_name + ' from this entry?')) {
+          return;
+        }
+        try {
+          const response = await fetch('../api/v2/inventory/' + entryId + '/uploads/' + upload.id, {
+            method: 'DELETE',
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': body.csrf },
+          });
+          if (!response.ok) {
+            throw new Error('refused');
+          }
+        } catch (error) {
+          message.textContent = upload.real_name + ' could not be removed (you may not be allowed to change this entry).';
+          message.className = 'tool-message error';
+          return;
+        }
+        list = list.filter(function (u) {
+          return u.id !== upload.id;
+        });
+        names();
+        keptChanged();
+        const items = everything();
+        if (items.length > 0) {
+          run(items, results, message);
+        } else {
+          results.textContent = '';
+          message.textContent = '';
+          message.className = 'tool-message';
+        }
+      };
+      // what depends on there being saved files: the heading, the zip link and the Align button (set once they exist)
+      let keptChanged = function () {};
       const names = function () {
         nameBox.textContent = '';
         list.forEach(function (upload) {
           const chip = element('span', 'tool-chip', upload.real_name);
           chip.title = /\.ab1$/i.test(upload.real_name) ? 'A trace file from the sequencer (the peaks and the bases)' : 'A read as text only (the bases, no peaks)';
+          // a file kept in the entry is removed from the entry (after asking), like a dropped one is taken out of the tool
+          const removeKept = element('button', '', '\u00d7');
+          removeKept.type = 'button';
+          removeKept.title = 'Remove ' + upload.real_name + ' from this entry';
+          removeKept.setAttribute('aria-label', 'Remove ' + upload.real_name + ' from this entry');
+          removeKept.style.cssText = 'border:0;background:none;cursor:pointer;font:inherit;padding:0 0 0 4px;color:inherit';
+          removeKept.addEventListener('click', function () {
+            void removeSaved(upload);
+          });
+          chip.append(' ', removeKept);
           nameBox.append(chip);
         });
         dropped.forEach(function (file) {
@@ -364,22 +409,22 @@
         });
       };
       names();
-      const have = list.length > 0 ? element('p', 'tool-muted', 'Reads kept in this entry (ab1: trace from the sequencer, FASTA: bases only):') : null;
-      host.append(zone, chooser);
-      if (have) {
-        host.append(have);
-      }
-      host.append(nameBox);
-      if (list.length > 0) {
-        const zip = element('a', 'tool-muted', 'Download the reads (zip)');
-        zip.href = 'download-reads.php?entry=' + entryId;
-        zip.title = 'All the sequencing files of this plasmid in one zip file';
-        host.append(zip);
-      }
+      const have = element('p', 'tool-muted', 'Sequencing files saved with this plasmid (hover a name to see what it is):');
+      const zip = element('a', 'tool-muted', 'Download the reads (zip)');
+      zip.href = 'download-reads.php?entry=' + entryId;
+      zip.title = 'All the sequencing files of this plasmid in one zip file';
+      have.hidden = list.length === 0;
+      zip.hidden = list.length === 0;
+      host.append(zone, chooser, have, nameBox, zip);
       const actions = element('div', 'tool-actions');
       const align = element('button', 'tool-btn tool-btn-primary', 'Align the reads');
       align.type = 'button';
       align.disabled = list.length === 0;
+      keptChanged = function () {
+        have.hidden = list.length === 0;
+        zip.hidden = list.length === 0;
+        align.disabled = list.length === 0 && dropped.length === 0;
+      };
       align.addEventListener('click', function () {
         run(everything(), results, message);
       });
