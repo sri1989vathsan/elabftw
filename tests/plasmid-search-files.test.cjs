@@ -645,3 +645,19 @@ test('placing an order: the button "Add a new entry of the database instead" of 
   assert.match(order, /const hideAddNewButton = function \(\) \{\s*document\.querySelectorAll\('\.orders-new-card button'\)/);
   assert.match(order, /enhanceCards\(\);\n        hideAddNewButton\(\);/);
 });
+
+test('placing an order with several links: a line for each item (a known one linked, a new one with a box), "Add all", and the editing of a new entry under its own line', () => {
+  const order = read('web/order-to-database.js');
+  assert.match(order, /const checkRows = async function \(form, rows\)/);
+  assert.match(order, /'Add all ' \+ ticks\.length \+ ' new items'/);
+  // each new row of the form knows its link, and is given it before anything is written in it
+  assert.match(order, /fresh\.dataset\.otdLink = form\.card\.dataset\.otdAssigning;/);
+  assert.match(order, /const rowForPending = function \(rowEl, rows\)/);
+  // the rows of the form are hidden; the name, the module and the columns are edited in the slot under the item
+  assert.match(order, /const syncEditors = function \(\)/);
+  assert.match(order, /element\('div', 'otd-slot'\)/);
+  assert.match(order, /rowEl\.style\.setProperty\('display', 'none', 'important'\);/);
+  // the same items are checked once at a time; a title is made for an order of links that has none
+  assert.match(order, /the check of these items is still running/);
+  assert.match(order, / more items'/);
+});

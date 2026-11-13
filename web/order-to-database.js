@@ -129,10 +129,12 @@
 
   // ---- reading an order
   function linesOf(html) {
-    const prepared = String(html || '').replace(/<\/(p|div|li|h\d)>|<br\s*\/?>/gi, '\n');
+    // a block starts a new line as well as ends one (two links pasted one after the other are two lines)
+    const prepared = String(html || '').replace(/<\/(p|div|li|h\d)>|<(p|div|li|h\d)\b[^>]*>|<br\s*\/?>/gi, '\n');
     const doc = new DOMParser().parseFromString(prepared, 'text/html');
     doc.querySelectorAll('a[href]').forEach(function (a) {
-      a.replaceWith(doc.createTextNode(a.getAttribute('href')));
+      // spaces around the address: a link next to another one is not one address
+      a.replaceWith(doc.createTextNode(' ' + a.getAttribute('href') + ' '));
     });
     return (doc.body.textContent || '').split(/\n+/).map(function (l) {
       return l.trim();
@@ -288,9 +290,27 @@
       row.ticked = row.name.trim() !== '';
       rows.push(row);
     };
+    // the distinct links of the notes (a link is in the text of the notes once, whatever the page makes of it): an order with several of them is several items
+    const links = [];
+    linesOf(order.notes).forEach(function (line) {
+      (line.match(/https?:\/\/[^\s"'<>)]+/g) || []).forEach(function (found) {
+        const url = found.replace(/[.,;]+$/, '');
+        if (!links.some(function (known) {
+          return known.link === url;
+        })) {
+          // the words before the link on its line name the item ("Ampicillin: https://...")
+          const label = line.replace(/https?:\/\/\S+/g, '').replace(/^\s*(link|url|website|page|product)\s*[:\-]?/i, '').replace(/[:\-\s]+$/, '').trim();
+          links.push({ link: url, label: /^(link|url)$/i.test(label) ? '' : label });
+        }
+      });
+    });
     if (primers.length > 0) {
       primers.forEach(function (p) {
         make({ name: p.name, sequence: p.sequence });
+      });
+    } else if (links.length >= 2) {
+      links.forEach(function (item) {
+        make({ name: item.label || linkName(item.link), link: item.link, catalog: catalogOfLink(item.link), vendor: '' });
       });
     } else {
       make({});
@@ -555,6 +575,9 @@
     }) || named.find(function (line) {
       return line.length >= 6 && line.length <= 200;
     }) || '').replace(/^product name\s+/i, '');
+    if (BLOCKED_PAGE.test(page.name)) {
+      page.name = '';
+    }
     TEXT_LABELS.forEach(function (entry) {
       const label = entry[1];
       const same = new RegExp('^(?:' + label + ')\\s*[:\\-]\\s*(.+)$|^(?:' + label + ')\\s+(.+)$', 'i');
@@ -850,7 +873,16 @@
 
   // the name of an item from its link alone: from the title of the page ("Anti-vimentin antibody - rabbit polyclonal (ab137321) | Abcam"), or
   // when the page cannot be read from the end of the address ("vimentin-antibody-ab137321" gives "Vimentin antibody")
+  // the title of a page that a shop gives to a robot (Sigma-Aldrich: "Powered and protected by Privacy") is not the name of a product
+  const BLOCKED_PAGE = /^(powered and protected by|access denied|just a moment|attention required|pardon our interruption|are you a (robot|human)|robot or human|verify you are|checking your browser|please enable (javascript|cookies)|security check|request blocked|forbidden|403\b|404\b|page not found|error\b)/i;
   function cleanPageName(name) {
+    if (BLOCKED_PAGE.test(String(name || '').trim())) {
+      return '';
+    }
+    // a bare product code ("AB155120") is not a name
+    if (/^[A-Za-z]{0,5}\d{3,}[A-Za-z0-9-]*$/.test(String(name || '').replace(/\s*[|\u2013\u2014].*$/, '').trim())) {
+      return '';
+    }
     return String(name || '').replace(/\s*[|–—]\s*[^|–—]+$/, '').replace(/\s*\((?:ab|[A-Z]{1,4})?-?\d[A-Za-z0-9-]*\)\s*$/, '').replace(/\s+/g, ' ').trim();
   }
   function nameFromLink(link) {
@@ -868,6 +900,17 @@
     // the catalog number at the end ("ab137321", "MAB1259", "12345")
     segment = segment.replace(/\s+(?:ab|mab|sc|nb|gtx)?\d{3,}[a-z0-9]*$/i, '').trim();
     return segment === '' ? '' : segment.charAt(0).toUpperCase() + segment.slice(1);
+  }
+
+  // the name of an item that is only a link: from the address; when that says nothing (the vendor's own name, a bare code), the vendor and the catalog number
+  function linkName(link) {
+    const typed = nameFromLink(link);
+    const vendor = vendorOfLink(link);
+    const catalog = catalogOfLink(link);
+    if (typed === '' || typed.length < 4 || (vendor !== '' && normalName(typed) !== '' && normalName(vendor).indexOf(normalName(typed)) !== -1)) {
+      return [vendor, catalog].filter(Boolean).join(' ');
+    }
+    return typed;
   }
 
   // ---- an item is added once. The lines of an order that are in the Database already are found (a primer by its letters, on either strand;
@@ -2132,6 +2175,15 @@
     // link. They are in a window (like Details... of the window of an order) that opens when "Add a new entry of the database instead" is
     // clicked, and again with "Columns..." on the row; the person can change them, and what is there is what the entry gets when it is made.
     const panels = new WeakMap();
+    // the name of an item that is only a link, read from the page of the link (when the server can read it): link -> name
+    const pageNames = new Map();
+    // an order with several links is several items: the row of a new entry that was added for one of them knows its link
+    const rowForPending = function (rowEl, rows) {
+      const link = rowEl.dataset.otdLink || '';
+      return (link && rows.find(function (candidate) {
+        return candidate.link === link;
+      })) || rows[0];
+    };
     let moduleListPromise = null;
     const moduleList = function () {
       if (!moduleListPromise) {
@@ -2171,7 +2223,12 @@
         panels.set(rowEl, panel);
       }
       const vendorPart = form.title.indexOf(';') !== -1 ? form.title.slice(form.title.indexOf(';')) : '';
-      const row = parseOrder({ title: input.value.trim() + vendorPart, notes: form.notes })[0];
+      const parsed = parseOrder({ title: input.value.trim() + vendorPart, notes: form.notes });
+      const row = rowForPending(rowEl, parsed);
+      if (rowEl.dataset.otdLink) {
+        // the name of the row is what the person sees in its title field
+        row.name = input.value.trim();
+      }
       row.moduleTitle = module.title;
       // the page behind the link: asked once for a link, and the values are computed again when it has come
       if (row.link && panel.link !== row.link) {
@@ -2302,7 +2359,18 @@
       if (!form || form.title === '') {
         return;
       }
-      const row = parseOrder({ title: form.title, notes: form.notes })[0];
+      window.setTimeout(syncEditors, 60);
+      const rows = parseOrder({ title: form.title, notes: form.notes });
+      // a row that was just added for an item of an order with several links is given its link before anything is written in it
+      if (form.card.dataset.otdAssigning) {
+        const fresh = Array.from(form.card.querySelectorAll('.orders-pending-resource')).find(function (rowEl) {
+          return !rowEl.dataset.otdLink;
+        });
+        if (fresh) {
+          fresh.dataset.otdLink = form.card.dataset.otdAssigning;
+          delete form.card.dataset.otdAssigning;
+        }
+      }
       form.card.querySelectorAll('.orders-pending-resource').forEach(function (rowEl) {
         refreshPanel(rowEl);
       });
@@ -2311,8 +2379,9 @@
           return;
         }
         input.dataset.otdPrefilled = '1';
+        const row = rowForPending(input.closest('.orders-pending-resource'), rows);
         // the title and the module of Svelte are set the way a person sets them (the input and change events)
-        input.value = row.name;
+        input.value = (row.link && pageNames.get(row.link)) || row.name;
         input.dispatchEvent(new Event('input', { bubbles: true }));
         const select = input.parentElement.querySelector('select.orders-category-select');
         const option = select && Array.from(select.options).find(function (candidate) {
@@ -2346,7 +2415,7 @@
     // an order that is only a link (the title is empty): the title is made from the link, from its page when the server can read it
     const titleFromLink = async function (form, link) {
       const read = await pageFromLink(link);
-      const name = cleanPageName(read ? read.name : '') || nameFromLink(link);
+      const name = cleanPageName(read ? read.name : '') || linkName(link);
       if (name === '') {
         return;
       }
@@ -2395,7 +2464,11 @@
     // the item is linked to the order through the field "Link an entry of the database": its name is searched and the result with that name is pressed,
     // the way a person does it (once for each name: a link that was taken away by hand is not put back)
     const linkToOrder = async function (form, existing) {
-      if (form.card.querySelector('.orders-resource-badge')) {
+      // already linked (an order can have several links: only a link of this entry counts)
+      const linked = Array.from(form.card.querySelectorAll('.orders-resource-badge')).some(function (badge) {
+        return normalName(badge.textContent).indexOf(normalName(existing.title)) !== -1;
+      });
+      if (linked) {
         return true;
       }
       const input = form.card.querySelector('input[placeholder^="Link an entry of the database"]');
@@ -2412,11 +2485,12 @@
         if (hit) {
           hit.click();
           // the link that was made here is remembered: it is taken away again when the order is changed to another item
+          const before = form.card.querySelectorAll('.orders-resource-badge a').length;
           for (let wait = 0; wait < 10; wait++) {
             await orderPause(250);
             const badges = form.card.querySelectorAll('.orders-resource-badge a');
-            if (badges.length > 0) {
-              form.card.dataset.otdAutoBadge = badges[badges.length - 1].getAttribute('href') || '';
+            if (badges.length > before) {
+              rememberAutoLink(form, badges[badges.length - 1].getAttribute('href') || '');
               break;
             }
           }
@@ -2428,19 +2502,33 @@
       return false;
     };
     // the link that was made by the form itself is taken away again (when the order is changed to another item or its title is cleared)
+    const autoLinks = function (form) {
+      try {
+        return JSON.parse(form.card.dataset.otdAutoBadges || '[]');
+      } catch (error) {
+        return [];
+      }
+    };
+    const rememberAutoLink = function (form, href) {
+      const list = autoLinks(form);
+      if (href && list.indexOf(href) === -1) {
+        list.push(href);
+        form.card.dataset.otdAutoBadges = JSON.stringify(list);
+      }
+    };
     const dropAutoLink = function (form) {
-      const old = form.card.dataset.otdAutoBadge;
-      if (!old) {
+      const old = autoLinks(form);
+      if (old.length === 0) {
         return;
       }
       form.card.querySelectorAll('.orders-resource-badge').forEach(function (badge) {
         const anchor = badge.querySelector('a');
         const remove = badge.querySelector('button[title="Remove"]');
-        if (anchor && remove && anchor.getAttribute('href') === old) {
+        if (anchor && remove && old.indexOf(anchor.getAttribute('href')) !== -1) {
           remove.click();
         }
       });
-      delete form.card.dataset.otdAutoBadge;
+      delete form.card.dataset.otdAutoBadges;
       delete form.card.dataset.otdLinked;
     };
     // "Add a new entry of the database instead" of the form of a new order is not shown: the box "Add it to the Database too" does its work (it presses the
@@ -2451,6 +2539,73 @@
         if (/Add a new entry of the database instead/.test(button.textContent)) {
           button.style.setProperty('display', 'none', 'important');
         }
+      });
+      // the rows of the new entries stay in the page (the form keeps its state in them) but are not shown: the name, the module and the columns
+      // of each are edited under the item they belong to (syncEditors)
+      document.querySelectorAll('.orders-new-card .orders-pending-resource').forEach(function (rowEl) {
+        rowEl.style.setProperty('display', 'none', 'important');
+      });
+    };
+    // the editing of a new entry, under its line: the name, the module and the columns. It writes into the (hidden) row of the form.
+    const buildEditor = function (rowEl) {
+      const wrap = element('div', '', '', 'align-items:center;display:flex;flex-wrap:wrap;gap:0.4rem;margin:0.2rem 0 0.5rem 1.5rem;width:100%');
+      const sourceInput = rowEl.querySelector('input[placeholder^="New entry title"]');
+      const sourceSelect = rowEl.querySelector('select.orders-category-select');
+      if (!sourceInput || !sourceSelect) {
+        return wrap;
+      }
+      const name = element('input', 'form-control form-control-sm', '', 'flex:1 1 12rem;min-width:10rem;width:auto');
+      name.type = 'text';
+      name.value = sourceInput.value;
+      name.setAttribute('aria-label', 'Name of the new entry');
+      name.addEventListener('input', function () {
+        sourceInput.value = name.value;
+        sourceInput.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      const module = element('select', 'form-control form-control-sm', '', 'flex:0 1 11rem;width:auto');
+      module.setAttribute('aria-label', 'Module of the new entry');
+      Array.from(sourceSelect.options).forEach(function (option) {
+        const copy = element('option', '', option.textContent);
+        copy.value = option.value;
+        module.append(copy);
+      });
+      module.value = sourceSelect.value;
+      module.addEventListener('change', function () {
+        sourceSelect.value = module.value;
+        sourceSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        window.setTimeout(prefillNewEntries, 80);
+      });
+      const source = rowEl.querySelector('.otd-columns-button');
+      const columns = element('button', 'btn btn-ghost btn-sm', source ? source.textContent : 'Columns…');
+      columns.type = 'button';
+      columns.addEventListener('click', async function () {
+        await refreshPanel(rowEl);
+        openColumns(rowEl);
+      });
+      wrap.append(name, module, columns);
+      return wrap;
+    };
+    // every place under an item ("slot") shows the editing of its row; what is being typed in is left alone
+    const syncEditors = function () {
+      const form = orderForm();
+      if (!form) {
+        return;
+      }
+      const rows = Array.from(form.card.querySelectorAll('.orders-pending-resource'));
+      form.card.querySelectorAll('.otd-slot').forEach(function (slot) {
+        const link = slot.dataset.link || '';
+        const rowEl = link ? rows.find(function (candidate) {
+          return candidate.dataset.otdLink === link;
+        }) : rows[0];
+        if (!rowEl) {
+          slot.textContent = '';
+          return;
+        }
+        if (slot.contains(document.activeElement)) {
+          return;
+        }
+        slot.textContent = '';
+        slot.append(buildEditor(rowEl));
       });
     };
     const drawState = function (form, state) {
@@ -2502,9 +2657,172 @@
             remove.click();
           });
         }
+        window.setTimeout(syncEditors, 400);
       });
       label.append(tick, document.createTextNode('Add it to the Database too'));
-      box.append(label, element('span', 'text-muted', 'The columns are filled in from the order and its link (Columns… on the new row).'));
+      box.append(label, element('span', 'text-muted', 'The columns are filled in from the order and its link.'));
+      box.append(element('div', 'otd-slot', '', 'flex:1 1 100%'));
+      window.setTimeout(syncEditors, 50);
+    };
+    // An order with several links: every item has a line. An item that is in the Database is linked to the order, a new one has a box "Add it to the Database"
+    // (not ticked) and "Add all" ticks every box. The pages of the links give the names when the person wrote none.
+    const addRowFor = function (form, item) {
+      const button = Array.from(form.card.querySelectorAll('button')).find(function (candidate) {
+        return /Add a new entry of the database instead/.test(candidate.textContent);
+      });
+      if (!button) {
+        return;
+      }
+      // the row that is added now is the one without a link yet: prefillNewEntries gives it this item's link first
+      form.card.dataset.otdAssigning = item.row.link;
+      autoClicking = true;
+      button.click();
+      autoClicking = false;
+      window.setTimeout(prefillNewEntries, 80);
+    };
+    const removeRowFor = function (form, item) {
+      form.card.querySelectorAll('.orders-pending-resource').forEach(function (rowEl) {
+        const remove = rowEl.querySelector('button[title="Remove"]');
+        if (rowEl.dataset.otdLink === item.row.link && remove) {
+          remove.click();
+        }
+      });
+    };
+    const hasRowFor = function (form, item) {
+      return Array.from(form.card.querySelectorAll('.orders-pending-resource')).some(function (rowEl) {
+        return rowEl.dataset.otdLink === item.row.link;
+      });
+    };
+    const drawRows = function (form, items) {
+      const box = stateBox(form);
+      if (!box) {
+        return;
+      }
+      box.style.display = 'flex';
+      box.style.flexDirection = 'column';
+      box.style.alignItems = 'flex-start';
+      box.textContent = '';
+      const ticks = [];
+      items.forEach(function (item) {
+        const block = element('div', '', '', 'width:100%');
+        const line = element('div', '', '', 'align-items:baseline;display:flex;flex-wrap:wrap;gap:0.15rem 0.6rem');
+        if (item.existing) {
+          const mark = element('span', '', '', 'color:#1d8348;font-weight:600');
+          mark.append(element('i', 'fas fa-database fa-fw'), document.createTextNode(' In the database: '));
+          const link = element('a', '', item.existing.title);
+          link.href = 'registry.php?mode=view&id=' + item.existing.id;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          line.append(mark, link, element('span', 'text-muted', item.linked ? 'linked to this order' : 'not linked'));
+        } else {
+          const label = element('label', 'mb-0', '', 'align-items:baseline;cursor:pointer;display:inline-flex;gap:0.35rem');
+          const tick = element('input');
+          tick.type = 'checkbox';
+          tick.checked = hasRowFor(form, item);
+          tick.addEventListener('change', function () {
+            if (tick.checked) {
+              addRowFor(form, item);
+            } else {
+              removeRowFor(form, item);
+            }
+            window.setTimeout(syncEditors, 400);
+          });
+          ticks.push(tick);
+          label.append(tick, document.createTextNode('Add "' + item.name + '" to the Database'));
+          line.append(label, element('span', 'text-muted', 'not in the database yet'));
+          block.append(line);
+          // the editing of this item comes under its line when it is ticked
+          const slot = element('div', 'otd-slot');
+          slot.dataset.link = item.row.link;
+          block.append(slot);
+        }
+        if (item.existing) {
+          block.append(line);
+        }
+        box.append(block);
+      });
+      if (ticks.length > 1) {
+        const all = element('button', 'btn btn-ghost btn-sm', 'Add all ' + ticks.length + ' new items');
+        all.type = 'button';
+        all.addEventListener('click', function () {
+          ticks.forEach(function (tick) {
+            if (!tick.checked) {
+              tick.click();
+            }
+          });
+        });
+        box.append(all);
+      }
+      if (ticks.length > 0) {
+        box.append(element('span', 'text-muted', 'The columns are filled in from the order and the links.'));
+      }
+      window.setTimeout(syncEditors, 50);
+    };
+    const checkRows = async function (form, rows) {
+      const key = rows.map(function (item) {
+        return item.link;
+      }).join(' ');
+      const box = form.card.querySelector('.otd-order-state');
+      if (form.card.dataset.otdRows === key) {
+        if (!box) {
+          // the check of these items is still running: it draws the lines when it is done
+          return;
+        }
+        // the same items: the boxes follow the rows of the form
+        const items = form.card._otdItems || [];
+        box.querySelectorAll('input[type="checkbox"]').forEach(function (tick, index) {
+          const pending = items.filter(function (item) {
+            return !item.existing;
+          })[index];
+          if (pending) {
+            tick.checked = hasRowFor(form, pending);
+          }
+        });
+        return;
+      }
+      form.card.dataset.otdRows = key;
+      delete form.card.dataset.otdState;
+      dropAutoLink(form);
+      const items = [];
+      for (const item of rows) {
+        const entry = { row: item, name: item.name, existing: null, linked: false };
+        // an item that was named by its link is named by its page when the server can read it (not by the page that a shop gives to a robot)
+        if (!pageNames.has(item.link)) {
+          const read = await pageFromLink(item.link).catch(function () {
+            return null;
+          });
+          const named = cleanPageName(read ? read.name : '');
+          if (named !== '') {
+            pageNames.set(item.link, named);
+          }
+        }
+        if (pageNames.get(item.link) && item.name === linkName(item.link)) {
+          entry.name = pageNames.get(item.link);
+        }
+        items.push(entry);
+        const now = orderForm();
+        if (!now || now.card.dataset.otdRows !== key) {
+          return;
+        }
+      }
+      for (const entry of items) {
+        entry.existing = await findExisting({ name: entry.name, catalog: entry.row.catalog, sequence: '' }).catch(function () {
+          return null;
+        });
+        const now = orderForm();
+        if (!now || now.card.dataset.otdRows !== key) {
+          return;
+        }
+        if (entry.existing) {
+          entry.linked = await linkToOrder(now, entry.existing);
+        }
+      }
+      const now = orderForm();
+      if (!now || now.card.dataset.otdRows !== key) {
+        return;
+      }
+      now.card._otdItems = items;
+      drawRows(now, items);
     };
     const checkOrder = function () {
       const form = orderForm();
@@ -2513,6 +2831,28 @@
       }
       const linkFound = /https?:\/\/[^\s"'<>)]+/.exec(form.notes.replace(/&amp;/g, '&'));
       if (form.title === '') {
+        // several links (and no title): the title is the first item and the number of the others
+        const guess = parseOrder({ title: '', notes: form.notes });
+        if (guess.length >= 2 && guess.every(function (item) {
+          return item.link !== '' && item.name.trim() !== '';
+        })) {
+          const titling = guess.map(function (item) {
+            return item.link;
+          }).join(' ');
+          if (form.card.dataset.otdTitling !== titling) {
+            form.card.dataset.otdTitling = titling;
+            const vendors = Array.from(new Set(guess.map(function (item) {
+              return item.vendor;
+            })));
+            const input = form.card.querySelector('input[placeholder="What do you need ordered?"]');
+            if (input && input.value.trim() === '') {
+              input.value = guess[0].name + ' + ' + (guess.length - 1) + (guess.length === 2 ? ' more item' : ' more items') + (vendors.length === 1 && vendors[0] !== '' ? '; ' + vendors[0] : '');
+              input.dispatchEvent(new Event('input', { bubbles: true }));
+              input.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          }
+          return;
+        }
         // an order that is only a link: its title is made from the link first
         if (linkFound && form.card.dataset.otdTitling !== linkFound[0]) {
           form.card.dataset.otdTitling = linkFound[0];
@@ -2523,7 +2863,21 @@
         delete form.card.dataset.otdState;
         return;
       }
-      const row = parseOrder({ title: form.title, notes: form.notes })[0];
+      const parsed = parseOrder({ title: form.title, notes: form.notes });
+      // several links: several items, each with its own line
+      if (parsed.length >= 2 && parsed.every(function (item) {
+        return item.link !== '' && item.name.trim() !== '';
+      })) {
+        checkRows(form, parsed);
+        return;
+      }
+      if (form.card.dataset.otdRows) {
+        // back to one item: the lines of the items are not needed
+        dropAutoLink(form);
+        delete form.card.dataset.otdRows;
+        delete form.card.dataset.otdState;
+      }
+      const row = parsed[0];
       if (!row || row.name.trim() === '') {
         hideState(form);
         return;
@@ -2556,7 +2910,9 @@
             now.card.dataset.otdLinked = key;
             state.linked = await linkToOrder(now, existing);
           } else {
-            state.linked = now.card.querySelector('.orders-resource-badge') !== null;
+            state.linked = Array.from(now.card.querySelectorAll('.orders-resource-badge')).some(function (badge) {
+              return normalName(badge.textContent).indexOf(normalName(existing.title)) !== -1;
+            });
           }
           drawState(now, state);
           return;
@@ -2587,7 +2943,10 @@
       let values = made.values;
       if (!values) {
         const vendorPart = made.orderTitle.indexOf(';') !== -1 ? made.orderTitle.slice(made.orderTitle.indexOf(';')) : '';
-        const row = parseOrder({ title: made.title + vendorPart, notes: made.notes })[0];
+        const parsedRows = parseOrder({ title: made.title + vendorPart, notes: made.notes });
+        const row = parsedRows.find(function (candidate) {
+          return normalName(candidate.name) === normalName(made.title);
+        }) || parsedRows[0];
         row.moduleTitle = module.title;
         row.fields = null;
         values = defaultsFor(module, row);

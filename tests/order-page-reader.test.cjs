@@ -192,3 +192,26 @@ test('Conjugated is "No" when no conjugate is found, "Yes" for a dye, "No" for a
   assert.strictEqual(O.defaultsFor(module, { name: 'CD45', conjugate: 'Unconjugated' }).Conjugated, 'No');
   assert.strictEqual(O.defaultsFor(module, { name: 'Vimentin antibody', conjugate: '' }).Conjugate, '');
 });
+
+test('an order with several links is several items, one for each link; one link is one item', () => {
+  const two = O.parse({ title: 'Reagents', notes: '<p>Ampicillin: https://www.sigmaaldrich.com/CH/fr/product/sial/59349</p><p>Kanamycin: https://www.sigmaaldrich.com/CH/fr/product/sigma/k1377</p>' });
+  assert.deepStrictEqual(two.map((row) => row.name), ['Ampicillin', 'Kanamycin']);
+  assert.deepStrictEqual(two.map((row) => row.catalog), ['59349', 'k1377']);
+  // the same link twice (an address and the text of the link) is one item
+  const same = O.parse({ title: 'Ampicillin 100 mg/ml; Sigma', notes: '<p>https://www.sigmaaldrich.com/CH/fr/product/sial/59349 https://www.sigmaaldrich.com/CH/fr/product/sial/59349</p>' });
+  assert.strictEqual(same.length, 1);
+  assert.strictEqual(same[0].name, 'Ampicillin 100 mg/ml');
+  // two links on one line, side by side, are two
+  const side = O.parse({ title: '', notes: '<p>https://www.abcam.com/en-us/products/primary-antibodies/vinculin-antibody-loading-control-ab155120 https://www.abcam.com/en-us/products/primary-antibodies/desmin-antibody-cytoskeleton-marker-ab15200</p>' });
+  assert.strictEqual(side.length, 2);
+  assert.deepStrictEqual(side.map((row) => row.module || row.moduleTitle), ['Antibodies', 'Antibodies']);
+});
+
+test('the page that a shop gives to a robot, and a bare product code, are not names', () => {
+  assert.strictEqual(O.cleanPageName('Powered and protected by Privacy'), '');
+  assert.strictEqual(O.cleanPageName('Access denied'), '');
+  assert.strictEqual(O.cleanPageName('AB155120'), '');
+  assert.strictEqual(O.cleanPageName('Vimentin antibody | Abcam'), 'Vimentin antibody');
+  // the name of an item that is only a link: not the vendor's own name ("sigma")
+  assert.match(O.parse({ title: '', notes: '<p>https://www.sigmaaldrich.com/CH/it/product/sigma/a5354</p><p>https://www.abcam.com/en-us/products/primary-antibodies/vimentin-antibody-ab92547</p>' })[0].name, /^Sigma-Aldrich a5354$/);
+});
