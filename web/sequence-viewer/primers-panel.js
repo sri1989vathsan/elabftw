@@ -464,6 +464,17 @@
           await loadAttached();
           await render();
         }, 'quiet');
+        // two primers ticked: the PCR product they make on this sequence (the PCR section of the Tools panel, with the two in it)
+        const pcrTicked = action('PCR product of the 2', function () {
+          const picked = attachedPrimers.filter(function (primer) {
+            return tickedDb.has(primer.id);
+          });
+          if (picked.length === 2 && window.ToolsPcr && window.ToolsPcr.show) {
+            window.ToolsPcr.show(picked[0].sequence, picked[1].sequence);
+          }
+        }, 'quiet');
+        pcrTicked.title = 'The product of these two primers on this sequence; it can be saved as a new entry';
+        pcrTicked.hidden = true;
         const refreshTicked = function () {
           const total = tickedDb.size + tickedFile.size;
           orderTicked.textContent = 'Order ' + total;
@@ -476,6 +487,7 @@
           addTicked.hidden = fileOnly.length === 0;
           detachTicked.disabled = tickedDb.size === 0 || !entryId;
           detachTicked.hidden = attachedPrimers.length === 0;
+          pcrTicked.hidden = tickedDb.size !== 2;
           everything.checked = total === Math.min(attachedPrimers.length, drawLimit) + fileOnly.length && total > 0;
         };
         // open or close all the rows
@@ -500,7 +512,7 @@
           render();
         }, 'quiet');
         fold.title = 'Show or hide the sequence and the details of every primer';
-        bar.append(everything, element('span', 'primers-muted', 'All'), orderTicked, addTicked, folderTicked, detachTicked, fold);
+        bar.append(everything, element('span', 'primers-muted', 'All'), orderTicked, pcrTicked, addTicked, folderTicked, detachTicked, fold);
         bar.classList.add('primers-pickbar-compact');
         sectionAttached.append(bar);
         const pick = function (box, set, value) {

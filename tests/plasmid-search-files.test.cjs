@@ -498,3 +498,22 @@ test('the oligo drawing does not delete nodes that the editor draws: "Edit Prime
   // the buttons of the maps wrap in a narrow panel instead of leaving it
   assert.match(read('web/sequence-viewer/viewer.css'), /\.view-toggles \{\s*display: flex;\s*flex-wrap: wrap;\s*max-width: 100%;/);
 });
+
+test('two primers ticked in the Primers tab give their PCR product, which can be saved as a new entry (a linear sequence made from the plasmid, with the two primers on it and attached)', () => {
+  const panel = read('web/sequence-viewer/primers-panel.js');
+  assert.match(panel, /action\('PCR product of the 2'/);
+  assert.match(panel, /window\.ToolsPcr\.show\(picked\[0\]\.sequence, picked\[1\]\.sequence\);/);
+  assert.match(panel, /pcrTicked\.hidden = tickedDb\.size !== 2;/);
+  assert.match(panel, /orderTicked, pcrTicked, addTicked/);
+  const pcr = read('web/sequence-viewer/tools-pcr.js');
+  // the Tools panel opens with the two primers in it and the products are looked for
+  assert.match(pcr, /window\.ToolsPcr\.fill = function \(a, b\)/);
+  assert.match(pcr, /show: function \(a, b\)/);
+  // the product is saved: the entry, the file (jsonToGenbank, linear, features of the template that it holds, the two primers), the parent, the primers
+  assert.match(pcr, /function genbankOf\(item, template, name, names\)/);
+  assert.match(pcr, /circular: false, sequence: item\.sequence/);
+  assert.match(pcr, /type: 'primer_bind', start: 0/);
+  assert.match(pcr, /action: 'add', entry: id, parent: context\.entryId/);
+  assert.match(pcr, /await tools\.attach\(id, entry\.id\);/);
+  assert.match(pcr, /\['lab', 'The lab database \(it is locked\)'\]/);
+});

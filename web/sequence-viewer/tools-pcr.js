@@ -94,7 +94,129 @@
     box.append(select, input);
     return { box: box, value: function () {
       return select.value || input.value;
+    }, set: function (sequence) {
+      // a primer of the list is chosen; any other bases are typed
+      const known = Array.from(select.options).some(function (option) {
+        return option.value === sequence;
+      });
+      select.value = known ? sequence : '';
+      input.value = known ? '' : sequence;
     } };
+  }
+
+  // ---- a product is made an entry of the Database: a linear sequence (the features of the template that it holds and the two primers
+  // drawn on it) in the module of the plasmids, made from the plasmid it was amplified from, with the two primers attached to it
+  function genbankOf(item, template, name, names) {
+    const features = {};
+    const tailF = item.forward.site.tail || 0;
+    const wraps = item.start > item.end;
+    let counter = 0;
+    if (!wraps) {
+      Object.keys(template.features || {}).forEach(function (key) {
+        const f = template.features[key];
+        if (!f || f.start > f.end || f.end < item.start || f.start > item.end) {
+          return;
+        }
+        counter += 1;
+        features['f' + counter] = Object.assign({}, f, { id: 'f' + counter, start: Math.max(f.start, item.start) - item.start + tailF, end: Math.min(f.end, item.end) - item.start + tailF });
+      });
+    }
+    // the oligos, whole (the tail included), on the product
+    const lengthF = item.forward.primer.length;
+    const lengthR = item.reverse.primer.length;
+    features.pf = { id: 'pf', name: names.forward, type: 'primer_bind', start: 0, end: Math.min(item.size, lengthF) - 1, strand: 1 };
+    features.pr = { id: 'pr', name: names.reverse, type: 'primer_bind', start: Math.max(0, item.size - lengthR), end: item.size - 1, strand: -1 };
+    return window.bioParsers.jsonToGenbank({ name: name, circular: false, sequence: item.sequence, features: features, primers: {}, parts: {}, translations: {} });
+  }
+
+  function saveProduct(item, card, context, editor, byBases) {
+    const csrf = document.body.dataset.csrf || '';
+    const form = element('div', 'tool-card');
+    const names = {
+      forward: (byBases[item.forward.primer] || {}).title || 'Primer 1',
+      reverse: (byBases[item.reverse.primer] || {}).title || 'Primer 2',
+    };
+    const template = String(context.name || 'plasmid').replace(/\.[^.]+$/, '');
+    const name = element('input', 'tools-select');
+    name.type = 'text';
+    name.value = template + ' PCR ' + names.forward + ' + ' + names.reverse + ' (' + item.size + ' bp)';
+    const where = element('select', 'tools-select');
+    [['none', 'My entries (private, no number yet)'], ['lab', 'The lab database (it is locked)']].forEach(function (choice) {
+      where.append(Object.assign(element('option', '', choice[1]), { value: choice[0] }));
+    });
+    const parent = element('label', 'tool-muted');
+    const parentBox = element('input');
+    parentBox.type = 'checkbox';
+    parentBox.checked = Boolean(context.entryId);
+    parentBox.disabled = !context.entryId;
+    parent.append(parentBox, document.createTextNode(' Made from this plasmid'));
+    const primersLabel = element('label', 'tool-muted');
+    const primersBox = element('input');
+    primersBox.type = 'checkbox';
+    const ids = [byBases[item.forward.primer], byBases[item.reverse.primer]].filter(function (entry) {
+      return entry && entry.id;
+    });
+    primersBox.checked = ids.length > 0;
+    primersBox.disabled = ids.length === 0;
+    primersLabel.append(primersBox, document.createTextNode(' Attach the two primers to it'));
+    const message = element('div', 'tool-muted');
+    const save = element('button', 'tool-btn tool-btn-primary', 'Save the product');
+    save.type = 'button';
+    save.addEventListener('click', async function () {
+      if (name.value.trim() === '') {
+        message.textContent = 'A name is needed.';
+        return;
+      }
+      save.disabled = true;
+      message.textContent = 'Saving...';
+      const headers = { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': csrf };
+      try {
+        // the module of the plasmids: the one that needs a sequence file
+        const modules = (await (await fetch('../registry-modules.php', { credentials: 'same-origin' })).json()).modules || [];
+        const module = modules.find(function (m) {
+          return m.settings && m.settings.requires_sequence_file;
+        }) || modules.find(function (m) {
+          return /plasmid/i.test(m.title);
+        });
+        if (!module) {
+          throw new Error('There is no module of plasmids to put it in.');
+        }
+        const made = await fetch('../api/v2/inventory', { method: 'POST', credentials: 'same-origin', headers: headers, body: JSON.stringify({ category: module.id, title: name.value.trim(), register: where.value }) });
+        if (!made.ok) {
+          throw new Error('The entry could not be made (' + made.status + ').');
+        }
+        const id = Number((made.headers.get('Location') || '').split('/').pop());
+        const text = genbankOf(item, editor.getState().sequenceData, name.value.trim().replace(/[^A-Za-z0-9_.-]+/g, '_').slice(0, 40), names);
+        const data = new FormData();
+        data.append('file', new File([text], name.value.trim().replace(/[^A-Za-z0-9_.-]+/g, '_') + '.gb', { type: 'text/plain' }));
+        const uploaded = await fetch('../api/v2/inventory/' + id + '/uploads', { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': csrf, 'X-Requested-With': 'XMLHttpRequest' }, body: data });
+        if (!uploaded.ok) {
+          throw new Error('The sequence could not be saved (' + uploaded.status + ').');
+        }
+        if (parentBox.checked && context.entryId) {
+          await fetch('../lineage.php', { method: 'POST', credentials: 'same-origin', headers: headers, body: JSON.stringify({ action: 'add', entry: id, parent: context.entryId }) });
+        }
+        if (primersBox.checked) {
+          for (const entry of ids) {
+            await tools.attach(id, entry.id);
+          }
+        }
+        if (where.value === 'lab') {
+          await fetch('../registry-lock.php', { method: 'POST', credentials: 'same-origin', headers: headers, body: JSON.stringify({ id: id }) });
+        }
+        message.textContent = '';
+        const open = element('a', 'tool-btn', 'Open the new entry');
+        open.href = '../registry.php?mode=view&id=' + id;
+        open.target = '_blank';
+        open.rel = 'noopener';
+        message.append(document.createTextNode('Saved. '), open);
+      } catch (error) {
+        message.textContent = error.message || String(error);
+        save.disabled = false;
+      }
+    });
+    form.append(element('div', 'tool-muted', 'Name'), name, element('div', 'tool-muted', 'Where it goes'), where, parent, primersLabel, save, message);
+    card.append(form);
   }
 
   async function pcr(editor, context) {
@@ -112,6 +234,11 @@
     }
     const one = primerChooser('Primer 1', list);
     const two = primerChooser('Primer 2', list);
+    // the primers of the list by their bases (the products name them and attach them)
+    const byBases = {};
+    list.forEach(function (primer) {
+      byBases[tools.clean(primer.sequence)] = primer;
+    });
     const result = element('div');
     const go = element('button', 'tool-btn tool-btn-primary', 'Find the products');
     go.type = 'button';
@@ -151,14 +278,34 @@
             window.ToolSidebar.open('digest');
           }
         });
+        const make = element('button', 'tool-btn', 'Save as a new entry');
+        make.type = 'button';
+        make.title = 'Make this product an entry of the Database (a linear sequence, made from this plasmid)';
+        make.addEventListener('click', function () {
+          make.disabled = true;
+          saveProduct(item, card, context, editor, byBases);
+        });
         actions.append(select, copyButton(function () {
           return item.sequence;
-        }), gel);
+        }), gel, make);
         card.append(actions);
         result.append(card);
       });
     });
     box.append(one.box, two.box, go, result);
+    // two primers chosen elsewhere (the Primers tab): they are put in and the products are looked for
+    window.ToolsPcr.fill = function (a, b) {
+      one.set(a);
+      two.set(b);
+      go.click();
+    };
+    if (window.ToolsPcr.pending) {
+      const wanted = window.ToolsPcr.pending;
+      window.ToolsPcr.pending = null;
+      window.setTimeout(function () {
+        window.ToolsPcr.fill(wanted.a, wanted.b);
+      }, 0);
+    }
     return box;
   }
 
@@ -247,5 +394,28 @@
   window.ToolsTab.add({ id: 'pcr', title: 'PCR products of two primers', build: pcr });
   window.ToolsTab.add({ id: 'oe-pcr', title: 'Overlap extension PCR', build: overlapExtension });
   window.ToolsTab.add({ id: 'mutagenesis', title: 'Mutagenesis', build: mutagenesis });
-  window.ToolsPcr = { products: products };
+  window.ToolsPcr = {
+    products: products,
+    // the PCR section of the Tools panel is opened with two primers in it (called by the Primers tab)
+    show: function (a, b) {
+      window.ToolsPcr.pending = { a: a, b: b };
+      window.ToolSidebar.open('tools');
+      window.setTimeout(function () {
+        const part = Array.from(document.querySelectorAll('details.tools-part')).find(function (node) {
+          return /PCR products of two primers/.test((node.querySelector('summary') || {}).textContent || '');
+        });
+        if (!part) {
+          return;
+        }
+        if (part.open && window.ToolsPcr.fill) {
+          // it was built already: it is filled in at once
+          const wanted = window.ToolsPcr.pending;
+          window.ToolsPcr.pending = null;
+          window.ToolsPcr.fill(wanted.a, wanted.b);
+        } else {
+          part.open = true;
+        }
+      }, 150);
+    },
+  };
 })();
