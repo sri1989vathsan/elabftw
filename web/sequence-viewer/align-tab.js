@@ -75,7 +75,18 @@
       return 'alignment.php?entry=' + entryId + (upload > 0 ? '&ref=' + upload : '');
     }
 
-    function card(name, alignment, referenceLength, openable) {
+    // set by show(): adds to a bubble the kind of its file and the button that removes the file
+    let decorateCard = null;
+
+    function card(name, alignment, referenceLength, openable, notAligned) {
+      const box = cardBase(name, alignment, referenceLength, openable, notAligned);
+      if (decorateCard) {
+        decorateCard(box, name);
+      }
+      return box;
+    }
+
+    function cardBase(name, alignment, referenceLength, openable, notAligned) {
       const box = element('div', 'tool-card');
       box.dataset.read = name;
       const top = element('div', 'tool-card-top');
@@ -90,7 +101,7 @@
       }
       box.append(top);
       if (!alignment) {
-        box.append(element('div', 'tool-tags').appendChild(element('span', 'tool-tag tool-tag-bad', 'not found on this sequence')).parentNode);
+        box.append(element('div', 'tool-tags').appendChild(notAligned ? element('span', 'tool-tag', 'not aligned yet') : element('span', 'tool-tag tool-tag-bad', 'not found on this sequence')).parentNode);
         return box;
       }
       const chips = element('span', 'tool-chips');
@@ -285,7 +296,6 @@
         accepted.forEach(function (file) {
           dropped.push(file);
         });
-        names();
         run(everything(), results, message);
       };
       zone.addEventListener('click', function () {
@@ -331,9 +341,45 @@
         }
       });
 
-      const nameBox = element('div', 'tool-tags');
+      const zip = element('a', 'tool-muted', 'Download the reads (zip)');
+      zip.href = 'download-reads.php?entry=' + entryId;
+      zip.title = 'All the sequencing files of this plasmid in one zip file';
+      zip.hidden = list.length === 0;
+      host.append(zone, chooser, zip);
+      // the files are shown inside the bubble of their alignment (no separate list): the bubble says what kind of file it is and has the
+      // button that takes it away (a file kept in the entry is removed from the entry, after asking; a dropped one only from the tool)
+      decorateCard = function (box, name) {
+        const dropName = / \(dropped\)$/.test(name);
+        const upload = dropName ? null : list.find(function (u) {
+          return u.real_name === name;
+        });
+        const file = dropName ? dropped.find(function (f) {
+          return f.name + ' (dropped)' === name;
+        }) : null;
+        if (!upload && !file) {
+          return;
+        }
+        const fileName = upload ? upload.real_name : file.name;
+        const top = box.querySelector('.tool-card-top');
+        const kind = element('span', 'tool-chip', /\.ab1$/i.test(fileName) ? 'trace' : 'letters');
+        kind.title = /\.ab1$/i.test(fileName) ? 'A trace file from the sequencer (the peaks and the bases)' : 'A read as text only (the bases, no peaks)';
+        const remove = element('button', '', '\u00d7');
+        remove.type = 'button';
+        remove.title = upload ? 'Remove ' + fileName + ' from this entry' : 'Take ' + fileName + ' out of the alignment';
+        remove.setAttribute('aria-label', remove.title);
+        remove.style.cssText = 'border:0;background:none;cursor:pointer;font:inherit;margin-left:auto;padding:0 0 0 8px;color:inherit';
+        remove.addEventListener('click', function () {
+          if (upload) {
+            void removeSaved(upload, box);
+          } else {
+            dropped.splice(dropped.indexOf(file), 1);
+            box.remove();
+          }
+        });
+        top.append(kind, remove);
+      };
       // takes one saved sequencing file out of the entry (it is moved to the deleted files, as with any file of an entry)
-      const removeSaved = async function (upload) {
+      const removeSaved = async function (upload, box) {
         if (!window.confirm('Remove ' + upload.real_name + ' from this entry?')) {
           return;
         }
@@ -354,77 +400,14 @@
         list = list.filter(function (u) {
           return u.id !== upload.id;
         });
-        names();
-        keptChanged();
-        const items = everything();
-        if (items.length > 0) {
-          run(items, results, message);
-        } else {
-          results.textContent = '';
-          message.textContent = '';
-          message.className = 'tool-message';
-        }
+        box.remove();
+        zip.hidden = list.length === 0;
+        align.disabled = list.length === 0 && dropped.length === 0;
       };
-      // what depends on there being saved files: the heading, the zip link and the Align button (set once they exist)
-      let keptChanged = function () {};
-      const names = function () {
-        nameBox.textContent = '';
-        list.forEach(function (upload) {
-          const chip = element('span', 'tool-chip', upload.real_name);
-          chip.title = /\.ab1$/i.test(upload.real_name) ? 'A trace file from the sequencer (the peaks and the bases)' : 'A read as text only (the bases, no peaks)';
-          // a file kept in the entry is removed from the entry (after asking), like a dropped one is taken out of the tool
-          const removeKept = element('button', '', '\u00d7');
-          removeKept.type = 'button';
-          removeKept.title = 'Remove ' + upload.real_name + ' from this entry';
-          removeKept.setAttribute('aria-label', 'Remove ' + upload.real_name + ' from this entry');
-          removeKept.style.cssText = 'border:0;background:none;cursor:pointer;font:inherit;padding:0 0 0 4px;color:inherit';
-          removeKept.addEventListener('click', function () {
-            void removeSaved(upload);
-          });
-          chip.append(' ', removeKept);
-          nameBox.append(chip);
-        });
-        dropped.forEach(function (file) {
-          const chip = element('span', 'tool-chip', file.name + ' (dropped) ');
-          // a file dropped by mistake is taken out again, and the rest is aligned again
-          const remove = element('button', '', '\u00d7');
-          remove.type = 'button';
-          remove.title = 'Remove ' + file.name + ' from the alignment';
-          remove.setAttribute('aria-label', 'Remove ' + file.name);
-          remove.style.cssText = 'border:0;background:none;cursor:pointer;font:inherit;padding:0 0 0 2px;color:inherit';
-          remove.addEventListener('click', function () {
-            dropped.splice(dropped.indexOf(file), 1);
-            names();
-            const items = everything();
-            if (items.length > 0) {
-              run(items, results, message);
-            } else {
-              results.textContent = '';
-              message.textContent = '';
-              message.className = 'tool-message';
-            }
-          });
-          chip.append(remove);
-          nameBox.append(chip);
-        });
-      };
-      names();
-      const have = element('p', 'tool-muted', 'Sequencing files saved with this plasmid (hover a name to see what it is):');
-      const zip = element('a', 'tool-muted', 'Download the reads (zip)');
-      zip.href = 'download-reads.php?entry=' + entryId;
-      zip.title = 'All the sequencing files of this plasmid in one zip file';
-      have.hidden = list.length === 0;
-      zip.hidden = list.length === 0;
-      host.append(zone, chooser, have, nameBox, zip);
       const actions = element('div', 'tool-actions');
       const align = element('button', 'tool-btn tool-btn-primary', 'Align the reads');
       align.type = 'button';
       align.disabled = list.length === 0;
-      keptChanged = function () {
-        have.hidden = list.length === 0;
-        zip.hidden = list.length === 0;
-        align.disabled = list.length === 0 && dropped.length === 0;
-      };
       align.addEventListener('click', function () {
         run(everything(), results, message);
       });
@@ -538,15 +521,37 @@
       new MutationObserver(fillChoices).observe(results, { childList: true });
       fillChoices();
       // the last alignment of the entry, saved when the reads were aligned
+      // a file kept in the entry that is not in the saved alignment (never aligned, or added since) still has its bubble
+      const addNotAligned = function () {
+        const shown = Array.from(results.children).map(function (box) {
+          return box.dataset.read;
+        });
+        list.forEach(function (upload) {
+          if (shown.indexOf(upload.real_name) === -1) {
+            const box = card(upload.real_name, undefined, undefined, true, true);
+            results.append(box);
+          }
+        });
+      };
       if (window.AlignmentStore && entryId) {
         window.AlignmentStore.load(entryId).then(function (saved) {
           if (!saved || results.children.length > 0) {
+            if (results.children.length === 0) {
+              addNotAligned();
+            }
             return;
           }
           saved.results.forEach(function (item) {
+            // a file that was taken out of the entry since is not shown from the saved alignment
+            if (item.source !== 'dropped' && !list.some(function (u) {
+              return u.real_name === item.name;
+            })) {
+              return;
+            }
             const box = card(item.name + (item.source === 'dropped' ? ' (dropped)' : ''), item.alignment, undefined, item.source !== 'dropped');
             results.append(box);
           });
+          addNotAligned();
           const length = String(editor.getState().sequenceData.sequence || '').length;
           const when = new Date(saved.savedAt);
           message.textContent = 'Saved alignment of ' + saved.results.length + (saved.results.length === 1 ? ' read' : ' reads') + ', ' + (Number.isNaN(when.getTime()) ? '' : when.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })) + '.' + (saved.referenceLength && saved.referenceLength !== length ? ' The sequence has changed since (' + saved.referenceLength + ' bases then, ' + length + ' now): align again.' : '');
@@ -556,6 +561,8 @@
           openSaved.href = alignmentUrl();
           message.append(openSaved);
         });
+      } else {
+        addNotAligned();
       }
     }
 

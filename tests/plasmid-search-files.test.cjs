@@ -27,3 +27,13 @@ test('saved sequencing files of the Align tab can be removed, after asking', () 
   assert.match(js, /method: 'DELETE'/);
   assert.match(js, /'\/uploads\/' \+ upload\.id/);
 });
+
+test('the Align tab shows the sequencing files inside the bubbles of the alignments, not as a list of ovals', () => {
+  const js = read('web/sequence-viewer/align-tab.js');
+  assert.doesNotMatch(js, /nameBox/);
+  assert.doesNotMatch(js, /Sequencing files saved with this plasmid/);
+  assert.match(js, /decorateCard = function \(box, name\)/);
+  assert.match(js, /not aligned yet/);
+  // a file taken out of the entry is not brought back by the saved alignment
+  assert.match(js, /a file that was taken out of the entry since is not shown from the saved alignment/);
+});
