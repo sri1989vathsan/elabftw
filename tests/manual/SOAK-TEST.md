@@ -260,6 +260,7 @@ Checks that run outside `node --test`:
   map, the compact Details fields at a narrow and a wide window, and the order of the sections on the edit page.
 - `zip-export-check.php` (the ZIP export of the Database streams its files: peak PHP memory has to stay under 64 MB however large the attachments are; run it in the web container, see its header).
 - `backbone-cache-check.php` (the Backbone finder's cache survives a restart: the table `backbone_cache` of migration 152 gives the same answer when the temporary file is gone; run it in the web container, see its header).
+- Database list, "All per page" (by hand, with a few thousand entries): switching to it must not freeze the page (about 0.25 s, it was 3+ s); 250 rows are drawn first and the next 250 are added whenever the list is scrolled near its end (a real mouse wheel; scroll events do not fire in a hidden browser pane); a filter, sort or page size change ends the older draw (back to 25 shows 25 rows).
 
 Not covered by any scripted run yet: adding an order line to the Database from a link while the server has internet (checked with a stub only), the edit page re-locking
 on leaving, PCR products with tails or a wrapped sequence, the wide-window primer alignment.

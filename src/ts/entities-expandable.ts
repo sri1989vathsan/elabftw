@@ -368,6 +368,8 @@ function saveSort(sort: SortState): void {
 }
 
 const PAGE_SIZES = [25, 50, 100, 250, 0];
+// rows drawn per step (the largest fixed page size is drawn in one step; "All per page" goes on as the list is scrolled)
+const ROW_CHUNK = 250;
 const PAGE_SIZE_KEY = 'registry_page_size';
 
 function loadPageSize(): number {
@@ -599,6 +601,8 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
   const body = el('tbody');
   const valueOf = (row: Row, key: string): string | number => columns.find(c => c.key === key)?.get(row) ?? '';
   let shown: Row[] = [];
+  let fillToken = 0;
+  let stopWatchingScroll: (() => void) | null = null;
 
   const syncSelectAll = (): void => {
     const selectedShown = shown.filter(r => ui.selected.has(r.id)).length;
@@ -665,7 +669,44 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
     const to = pageSize === 0 ? filtered.length : Math.min(filtered.length, from + pageSize);
     // the rows of this page: the ones that "select all" and the count are about
     shown = filtered.slice(from, to);
-    shown.forEach(row => body.append(...buildRow(row, columns)));
+    // "All per page" with thousands of rows: only the first rows are drawn, the next ones are added when the list is scrolled near its end. Drawing
+    // 3,000 rows at once (68,000 elements) froze the page for seconds, and the browser lays the whole table out again after every step.
+    // A newer fillBody (filter, sort, page size) ends the scroll watching of the older one.
+    stopWatchingScroll?.();
+    stopWatchingScroll = null;
+    const token = ++fillToken;
+    let drawn = 0;
+    const addRows = (): void => {
+      const end = Math.min(shown.length, drawn + ROW_CHUNK);
+      for (let i = drawn; i < end; i++) {
+        body.append(...buildRow(shown[i], columns));
+      }
+      drawn = end;
+    };
+    addRows();
+    const scroller = body.closest<HTMLElement>('.table-responsive');
+    if (scroller && drawn < shown.length) {
+      const onScroll = (): void => {
+        if (token !== fillToken) {
+          scroller.removeEventListener('scroll', onScroll);
+          return;
+        }
+        if (drawn < shown.length && scroller.scrollTop + scroller.clientHeight > scroller.scrollHeight - 1200) {
+          addRows();
+        }
+      };
+      scroller.addEventListener('scroll', onScroll, { passive: true });
+      stopWatchingScroll = () => scroller.removeEventListener('scroll', onScroll);
+    } else {
+      // no scrolling box found: the rest is added step by step instead
+      const rest = (): void => {
+        if (token === fillToken && drawn < shown.length) {
+          addRows();
+          window.setTimeout(rest, 0);
+        }
+      };
+      window.setTimeout(rest, 0);
+    }
     drawPagers(filtered.length, from, to, pageSize);
     syncSelectAll();
   }
@@ -839,10 +880,11 @@ function render(container: HTMLElement, allRows: Row[], sort: SortState | null, 
   }
 
   table.append(thead, body);
-  fillBody();
   const wrap = el('div', 'table-responsive');
   wrap.append(table);
   container.append(pagers[0], wrap, pagers[1]);
+  // the table is in the page before the rows are drawn: "All per page" watches the scrolling of its box
+  fillBody();
 }
 
 export function mountExpandableTable(rootElement: HTMLElement | null, order: string, sort: string, onLoaded: () => void): void {
