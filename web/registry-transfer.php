@@ -72,7 +72,7 @@ use function trim;
  *
  * GET ?export=1&category=ID&scope=lab|mine downloads a CSV of the entries (the lab Database, or all the entries of the user);
  * GET ?template=1&category=ID downloads a CSV with only the headings of the module.
- * POST {category, register: both|personal|none, rows: [{title, fields: {name: value}, extra: {name: value}}]} makes the entries
+ * POST {category, register: both|lab|personal|none, rows: [{title, fields: {name: value}, extra: {name: value}}]} makes the entries
  * (up to 200 at a time); an entry that cannot be made is listed with the reason.
  */
 require_once __DIR__ . '/app/init.inc.php';
@@ -1034,6 +1034,8 @@ if (is_array($payload) && ($payload['action'] ?? '') === 'apply_owner_map') {
 $openKeys = array();
 // one row of a file becomes an entry of the module; returns the id, or the reason it was not made
 $makeEntry = static function (array $row, int $categoryId, array $definitions, string $register, ?Users $Owner = null, bool $keepNumber = false) use ($App, $pdo, $teamId, &$openKeys, $nameTokens): array {
+    // 'lab' (the lab Database only) and 'both' (the lab Database and the own database of the user) give the number of the lab
+    $inLab = $register === 'lab' || $register === 'both';
     $title = trim((string) ($row['title'] ?? ''));
     if ($title === '') {
         return array('id' => null, 'reason' => 'It has no title.');
@@ -1052,7 +1054,7 @@ $makeEntry = static function (array $row, int $categoryId, array $definitions, s
             $fields[$name] = array('type' => 'text', 'value' => mb_substr((string) $value, 0, 1000), 'position' => count($fields) + 1);
         }
     }
-    if ($register === 'both') {
+    if ($inLab) {
         $missing = array();
         foreach ($fields as $name => $field) {
             if (is_array($field) && !empty($field['required']) && trim((string) ($field['value'] ?? '')) === '') {
@@ -1065,7 +1067,7 @@ $makeEntry = static function (array $row, int $categoryId, array $definitions, s
     }
     // the number of the file becomes the lab number (the entry keeps the number it had before); a number that is taken is not used twice
     $number = null;
-    if ($keepNumber && $register === 'both') {
+    if ($keepNumber && $inLab) {
         $wanted = (int) preg_replace('/\D+/', '', (string) ($row['number'] ?? ''));
         if ($wanted > 0) {
             $taken = $pdo->prepare('SELECT COUNT(*) FROM inventory WHERE category = :category AND custom_id = :number AND team = :team');
@@ -1080,7 +1082,7 @@ $makeEntry = static function (array $row, int $categoryId, array $definitions, s
         }
     }
     $Entry = new Inventory($Owner ?? $App->Users);
-    $Entry->asUnregistered = $register !== 'both';
+    $Entry->asUnregistered = !$inLab;
     $Entry->withPersonal = $register === 'both' || $register === 'personal';
     $newId = $Entry->create(title: mb_substr($title, 0, 255), category: $categoryId, customId: $number, metadata: json_encode(array('extra_fields' => (object) $fields), JSON_UNESCAPED_UNICODE));
     // the entries of a shared account of LabCollector ("Wild Card") belong to the whole team: everyone can edit them
@@ -1101,14 +1103,14 @@ try {
         respond(404, array('error' => 'This module is not in your team.'));
     }
     $register = (string) ($source['register'] ?? 'personal');
-    if (!in_array($register, array('both', 'personal', 'none'), true)) {
+    if (!in_array($register, array('both', 'lab', 'personal', 'none'), true)) {
         respond(400, array('error' => 'Invalid request.'));
     }
     $settings = json_decode((string) $module['settings'], true);
     $needsFile = is_array($settings) && !empty($settings['requires_sequence_file']);
     // from a list of rows (not a zip) the entries of such a module go in the lab Database only when each row brings its sequence file
     $rowsHaveFiles = !$isZip && is_array($payload['rows'] ?? null) && $payload['rows'] !== array() && count(array_filter($payload['rows'], static fn($r): bool => is_array($r) && is_array($r['sequence_file'] ?? null) && trim((string) ($r['sequence_file']['content'] ?? '')) !== '')) === count($payload['rows']);
-    if ($register === 'both' && $needsFile && !$isZip && !$rowsHaveFiles) {
+    if (in_array($register, array('both', 'lab'), true) && $needsFile && !$isZip && !$rowsHaveFiles) {
         respond(400, array('error' => 'The entries of this module need a sequence file to go in the lab Database: import them into your own database, attach the files, and register them.'));
     }
     $definitions = $fieldsOf($module);
@@ -1420,7 +1422,7 @@ try {
         }
         // the folder chosen for the entries of My entries (the Database keeps its own folders)
         $wantedFolder = (int) ($payload['folder_id'] ?? 0);
-        if ($wantedFolder > 0 && $register !== 'both') {
+        if ($wantedFolder > 0 && !in_array($register, array('both', 'lab'), true)) {
             try {
                 (new Inventory($App->Users, (int) $made['id']))->patch(Action::Update, array('folder_id' => (string) $wantedFolder));
             } catch (Throwable $e) {

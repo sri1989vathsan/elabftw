@@ -215,15 +215,16 @@
     box.append(file);
     const mapping = element('div');
     const destination = element('select', 'form-control form-control-sm w-auto mb-2');
-    let bothOption = null;
-    [['personal', 'My database: only me, my own numbers'], ['both', 'The lab database: everyone sees them, with the lab number'], ['none', 'No database yet: private, no numbers until registered']].forEach(function (item) {
+    // the options that put the entries in the lab database (a module that needs a sequence file has them only for sequence files)
+    const labOptions = [];
+    [['lab', 'The lab database: everyone sees them, with the lab number'], ['both', 'Both: the lab database, and My database with my own numbers'], ['personal', 'My database: only me, my own numbers'], ['none', 'No database yet: private, no numbers until registered']].forEach(function (item) {
       const option = element('option', '', item[1]);
       option.value = item[0];
-      if (item[0] === 'both') {
-        bothOption = option;
+      if (item[0] === 'lab' || item[0] === 'both') {
+        labOptions.push(option);
         option.dataset.plain = item[1];
       }
-      if (item[0] === 'both' && module.settings && module.settings.requires_sequence_file) {
+      if ((item[0] === 'lab' || item[0] === 'both') && module.settings && module.settings.requires_sequence_file) {
         option.disabled = true;
         option.textContent += ' (this module needs a sequence file for each: not for an import)';
       }
@@ -252,7 +253,7 @@
     keep.type = 'checkbox';
     keepLabel.append(keep, document.createTextNode(' Keep the numbers of the file (the ID column) as the lab numbers. A number that is already used in this module is not imported.'));
     const showKeep = function () {
-      keepLabel.hidden = destination.value !== 'both';
+      keepLabel.hidden = destination.value !== 'both' && destination.value !== 'lab';
       if (keepLabel.hidden) {
         keep.checked = false;
       }
@@ -405,9 +406,16 @@
         keepLabel.style.removeProperty('display');
       }
       ownerBox.style.display = on ? 'none' : '';
-      if (bothOption && module.settings && module.settings.requires_sequence_file) {
-        bothOption.disabled = !on;
-        bothOption.textContent = on ? bothOption.dataset.plain : bothOption.dataset.plain + ' (this module needs a sequence file for each: not for an import)';
+      if (module.settings && module.settings.requires_sequence_file) {
+        labOptions.forEach(function (option) {
+          option.disabled = !on;
+          option.textContent = on ? option.dataset.plain : option.dataset.plain + ' (this module needs a sequence file for each: not for an import)';
+        });
+        // a module that needs sequence files cannot take a csv into the lab: back to My database
+        if (!on && (destination.value === 'lab' || destination.value === 'both')) {
+          destination.value = 'personal';
+          showKeep();
+        }
       }
     };
     const useSequences = function (list) {
@@ -419,6 +427,9 @@
       file.value = '';
       sequenceFiles = list;
       setSequenceMode(true);
+      // the lab database is the start; a module that needs sequence files has it enabled just now
+      destination.value = 'lab';
+      showKeep();
       message.textContent = '';
       mapping.append(element('p', 'small mb-1', list.length + (list.length === 1 ? ' sequence file' : ' sequence files') + ': one entry each, named from the file (a GenBank file gives its name and what else it says). Choose where they go, then Import.'));
       const names = element('ul', 'small text-muted mb-2');
