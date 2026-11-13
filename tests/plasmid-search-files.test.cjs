@@ -605,3 +605,11 @@ test('the edit page: the fields of Details are one line each (name, value, small
   assert.match(planned, /\[\?&\]mode=edit\\b/);
   assert.match(planned, /:has\(\[data-action="metadata-edit-field"\]\)/);
 });
+
+test('the edit page keeps its order: the main section (Details, Storage, Lineage, Description) is not moved under the Permissions, only the owner block of the view page is', () => {
+  const planned = read('web/planned.js');
+  assert.match(planned, /On the edit page this section is the main one/);
+  assert.match(planned, /if \(\/\[\?&\]mode=edit\\b\/\.test\(window\.location\.search\) \|\| section\.querySelector\('#metadataDiv, #extraFieldsSection'\)\) \{\s*return true;/);
+  // the section is moved (and gets its look) only after that check
+  assert.ok(planned.indexOf("section.classList.add('otd-ownership');") > planned.indexOf('On the edit page this section is the main one'));
+});

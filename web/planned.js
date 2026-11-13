@@ -1397,7 +1397,6 @@
       return false;
     }
     section.dataset.otdMoved = '1';
-    section.classList.add('otd-ownership');
     // "Started on" is not shown (view: the line; edit: the date field of the row, the other fields of the row stay)
     const dateInput = section.querySelector('#date_input');
     if (dateInput) {
@@ -1405,6 +1404,12 @@
     } else {
       started.style.setProperty('display', 'none', 'important');
     }
+    // On the edit page this section is the main one (the custom ID, the tags, the Details, the Storage, the Lineage and the Description are in
+    // it): it stays where it is, only "Started on" is not shown. Moving it put all of them under the Permissions.
+    if (/[?&]mode=edit\b/.test(window.location.search) || section.querySelector('#metadataDiv, #extraFieldsSection')) {
+      return true;
+    }
+    section.classList.add('otd-ownership');
     anchor.after(section);
     return true;
   };
