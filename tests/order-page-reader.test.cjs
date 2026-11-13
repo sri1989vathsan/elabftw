@@ -156,3 +156,17 @@ Host species Rabbit`, 'https://www.abcam.com/en-us/products/primary-antibodies/v
   assert.notStrictEqual(row.target, 'Retrieval : Citrate buffer, pH 6.0, 15 min');
   assert.ok(!/retrieval/i.test(row.target || ''), row.target);
 });
+
+test('an order that is only a link: its name comes from the title of the page, or from the end of the address', () => {
+  assert.strictEqual(O.cleanPageName('Anti-vimentin antibody - rabbit polyclonal (ab137321) | Abcam'), 'Anti-vimentin antibody - rabbit polyclonal');
+  assert.strictEqual(O.cleanPageName('PE anti-mouse CD45 Antibody | BioLegend'), 'PE anti-mouse CD45 Antibody');
+  assert.strictEqual(O.nameFromLink('https://www.abcam.com/en-us/products/primary-antibodies/vimentin-antibody-ab137321'), 'Vimentin antibody');
+  assert.strictEqual(O.nameFromLink('https://www.rndsystems.com/products/human-nestin-antibody-196908_mab1259'), 'Human nestin antibody 196908');
+  assert.strictEqual(O.nameFromLink('https://www.carlroth.com/ch/en/buffers/tris/p/4855.2'), 'Tris');
+  assert.strictEqual(O.nameFromLink('not a link'), '');
+});
+
+test('the name of a page read by the server: the label "Product name" and the vendor after the bar are taken off', () => {
+  const page = O.readPageText('Product name Anti-vimentin antibody - rabbit polyclonal (ab137321) | Abcam\nCatalog number AB137321\nHost species Rabbit', 'https://www.abcam.com/x');
+  assert.strictEqual(O.cleanPageName(page.name), 'Anti-vimentin antibody - rabbit polyclonal');
+});

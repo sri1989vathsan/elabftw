@@ -544,12 +544,16 @@
       return line.replace(/\s*[|\u2502]\s*/g, ' ').replace(/\s+/g, ' ').trim();
     }).filter(Boolean);
     const page = { name: '', sku: '', brand: vendorOfLink(link || ''), description: '', props: {} };
-    // the name is the first line that looks like the title of a product
-    page.name = (lines.find(function (line) {
+    // the name is the first line that looks like the title of a product (the bars of the line, "... | Abcam", are still there: the name is cut
+    // at them by cleanPageName; "Product name" in front of it is the label that link-page.php gives to the name of the product)
+    const named = String(text || '').split(/\r\n|\r|\n/).map(function (line) {
+      return line.replace(/\s+/g, ' ').trim();
+    }).filter(Boolean);
+    page.name = (named.find(function (line) {
       return line.length >= 6 && line.length <= 200 && (/antibod|\bab\d{4,7}\b|\[[^\]]+\]/i.test(line));
-    }) || lines.find(function (line) {
+    }) || named.find(function (line) {
       return line.length >= 6 && line.length <= 200;
-    }) || '');
+    }) || '').replace(/^product name\s+/i, '');
     TEXT_LABELS.forEach(function (entry) {
       const label = entry[1];
       const same = new RegExp('^(?:' + label + ')\\s*[:\\-]\\s*(.+)$|^(?:' + label + ')\\s+(.+)$', 'i');
@@ -832,6 +836,28 @@
     }());
     pagesOfLinks.set(link, work);
     return work;
+  }
+
+  // the name of an item from its link alone: from the title of the page ("Anti-vimentin antibody - rabbit polyclonal (ab137321) | Abcam"), or
+  // when the page cannot be read from the end of the address ("vimentin-antibody-ab137321" gives "Vimentin antibody")
+  function cleanPageName(name) {
+    return String(name || '').replace(/\s*[|–—]\s*[^|–—]+$/, '').replace(/\s*\((?:ab|[A-Z]{1,4})?-?\d[A-Za-z0-9-]*\)\s*$/, '').replace(/\s+/g, ' ').trim();
+  }
+  function nameFromLink(link) {
+    let segment = '';
+    try {
+      const parts = new URL(link).pathname.split('/').filter(Boolean);
+      // the last part that has letters (an address can end with a bare number)
+      segment = decodeURIComponent(parts.reverse().find(function (part) {
+        return /[A-Za-z]{3,}/.test(part);
+      }) || '');
+    } catch (error) {
+      return '';
+    }
+    segment = segment.replace(/\.(html?|php|aspx?)$/i, '').replace(/[-_+]+/g, ' ');
+    // the catalog number at the end ("ab137321", "MAB1259", "12345")
+    segment = segment.replace(/\s+(?:ab|mab|sc|nb|gtx)?\d{3,}[a-z0-9]*$/i, '').trim();
+    return segment === '' ? '' : segment.charAt(0).toUpperCase() + segment.slice(1);
   }
 
   // ---- an item is added once. The lines of an order that are in the Database already are found (a primer by its letters, on either strand;
@@ -1761,7 +1787,7 @@
     });
   }
 
-  window.OrderToDatabase = { open: open, parse: parseOrder, applyPage: applyPage, readPageText: readPageText };
+  window.OrderToDatabase = { open: open, parse: parseOrder, applyPage: applyPage, readPageText: readPageText, cleanPageName: cleanPageName, nameFromLink: nameFromLink };
 
   // on the orders page: a button under the title; an order opened there (?order=) is the one that is read
   if (/orders\.php$/.test(window.location.pathname)) {
@@ -2290,12 +2316,40 @@
         }
       }, 300);
     });
-    const autoAddEntry = function () {
-      const form = orderForm();
-      if (!form || form.title === '') {
+    // an order that is only a link (the title is empty): the title is made from the link, from its page when the server can read it
+    const titleFromLink = async function (form, link) {
+      const read = await pageFromLink(link);
+      const name = cleanPageName(read ? read.name : '') || nameFromLink(link);
+      if (name === '') {
         return;
       }
-      const found = /https?:\/\/[^\s"'<>)]+/.exec(form.notes.replace(/&amp;/g, '&')) || /https?:\/\/[^\s"'<>)]+/.exec(form.title);
+      const vendor = (read && read.brand) || vendorOfLink(link);
+      const input = form.card.querySelector('input[placeholder="What do you need ordered?"]');
+      // only when it is still empty: what the person wrote is not touched
+      if (input && input.value.trim() === '') {
+        input.value = name + (vendor ? '; ' + vendor : '');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        window.setTimeout(function () {
+          autoAddEntry();
+          prefillNewEntries();
+        }, 400);
+      }
+    };
+    const autoAddEntry = function () {
+      const form = orderForm();
+      if (!form) {
+        return;
+      }
+      const linkFound = /https?:\/\/[^\s"'<>)]+/.exec(form.notes.replace(/&amp;/g, '&'));
+      if (form.title === '') {
+        if (linkFound && form.card.dataset.otdTitling !== linkFound[0]) {
+          form.card.dataset.otdTitling = linkFound[0];
+          titleFromLink(form, linkFound[0]);
+        }
+        return;
+      }
+      const found = linkFound || /https?:\/\/[^\s"'<>)]+/.exec(form.title);
       if (!found || form.card.dataset.otdAuto === found[0]) {
         return;
       }
