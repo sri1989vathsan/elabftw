@@ -265,3 +265,13 @@ test('the files attached to an order are a soft card with the icon of their kind
   assert.match(js, /document\.createTextNode\('Add to database'\)/);
   assert.doesNotMatch(js, /fa-plus/);
 });
+
+test('each order says what kind it is and has a button to add it to the database', () => {
+  const js = read('web/order-to-database.js');
+  assert.match(js, /const NOUNS = \{ Primers: 'primers', Antibodies: 'antibody'/);
+  assert.match(js, /document\.createTextNode\('Add ' \+ \(NOUNS\[kind\] \|\| 'entry'\) \+ ' to database'\)/);
+  // the oligos are told by the title or by a sheet of oligos; the sheet of oligos has its own window
+  assert.match(js, /oligos\?\|primers\?/);
+  assert.match(js, /card\.querySelector\('\.op-add'\)/);
+  assert.match(js, /open\(\{ orderId: orderId \}\);/);
+});

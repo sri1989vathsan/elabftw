@@ -959,5 +959,59 @@
       });
       root.parentNode.insertBefore(button, root);
     }
+
+    // each order says what kind it is (read from its title, its description and its files) and has its own button to add it to the Database:
+    // "Add antibody to database", "Add primers to database"... It opens the window of the order with that order chosen.
+    const NOUNS = { Primers: 'primers', Antibodies: 'antibody', Plasmids: 'plasmid', Consumables: 'consumable', Reagents: 'reagent' };
+    const kindOf = function (card) {
+      const title = ((card.querySelector('.orders-item-title') || {}).textContent || '').trim();
+      const description = card.querySelector('.orders-item-description');
+      const files = Array.from(card.querySelectorAll('li.orders-upload a[href*="download.php"]')).map(function (link) {
+        return new URL(link.href, window.location.href).searchParams.get('name') || '';
+      });
+      // oligos: said in the title, or a sheet of oligos is attached (the sheet of an order of primers made by the editor)
+      if (/\b(oligos?|primers?)\b/i.test(title) || files.some(function (name) {
+        return /\.xlsx$/i.test(name) && /oligo|primer/i.test(name);
+      })) {
+        return 'Primers';
+      }
+      const rows = parseOrder({ title: title, notes: description ? description.innerHTML : '' });
+      return rows.length > 0 && rows[0].moduleTitle ? rows[0].moduleTitle : 'Reagents';
+    };
+    const enhanceCards = function () {
+      document.querySelectorAll('li.orders-card').forEach(function (card) {
+        if (card.querySelector('.otd-add')) {
+          return;
+        }
+        const idText = (card.querySelector('.orders-item-id') || {}).textContent || '';
+        const found = /#(\d+)/.exec(idText);
+        const meta = card.querySelector('.orders-item-meta');
+        if (!found || !meta) {
+          return;
+        }
+        const orderId = Number(found[1]);
+        const kind = kindOf(card);
+        const add = element('button', 'btn btn-sm otd-add', '', 'align-items:center;background:transparent;border:1px solid #1a9bb0;border-radius:999px;color:#1a9bb0;display:inline-flex;font-size:0.78rem;gap:0.35rem;line-height:1.2;margin-left:0.6rem;padding:0.15rem 0.7rem;vertical-align:middle;white-space:nowrap');
+        add.type = 'button';
+        add.append(element('i', 'fas fa-database fa-fw'), document.createTextNode('Add ' + (NOUNS[kind] || 'entry') + ' to database'));
+        add.title = 'This order looks like ' + (NOUNS[kind] || 'an item') + ': read its lines and add them to the Database (you can change the module in the window)';
+        add.addEventListener('click', function () {
+          // the sheet of oligos attached to the order has its own window (the primers of the sheet)
+          const sheet = kind === 'Primers' ? card.querySelector('.op-add') : null;
+          if (sheet) {
+            sheet.click();
+            return;
+          }
+          open({ orderId: orderId });
+        });
+        meta.append(add);
+      });
+    };
+    let cardsPending = 0;
+    new MutationObserver(function () {
+      window.clearTimeout(cardsPending);
+      cardsPending = window.setTimeout(enhanceCards, 150);
+    }).observe(document.body, { childList: true, subtree: true });
+    enhanceCards();
   }
 })();
