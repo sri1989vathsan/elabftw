@@ -336,6 +336,10 @@
         value = row.conjugate || '';
       } else if (/^cas\b/i.test(f.name)) {
         value = row.cas || '';
+      } else if (/^backbone/i.test(f.name)) {
+        value = String(row.backbone || '').split(',')[0].trim();
+      } else if (/^resistance/i.test(f.name)) {
+        value = row.resistance || '';
       } else if (/^conjugated$/i.test(f.name)) {
         value = row.conjugate ? (/^(un|none|no\b)/i.test(row.conjugate) ? 'No' : 'Yes') : '';
       }
@@ -371,17 +375,24 @@
   // ---- the details of a vendor page. The server has no internet and the browser cannot read the page of another site, so the user copies
   // the page (select everything, copy) and pastes it here: the text is read in the browser, nothing is sent anywhere.
   const TEXT_LABELS = [
-    ['Catalog number', 'catalog(?:ue)? (?:number|no\\.?|#)|catalog(?:ue)?|cat\\.? ?(?:no\\.?|#)|article (?:number|no\\.?|code)|art\\.? ?(?:no\\.?|nr\\.?|#)|product (?:code|number|no\\.?)|item (?:number|no\\.?)|order (?:number|no\\.?|code)|mfr\\.? part (?:number|no\\.?)|part (?:number|no\\.?)|reference|sku'],
+    ['Catalog number', 'cat no\\.? ?/ ?id\\.?|plasmid #|product #|code|catalog(?:ue)? (?:number|no\\.?|#)|catalog(?:ue)?|cat\\.? ?(?:no\\.?|#)|article (?:number|no\\.?|code)|art\\.? ?(?:no\\.?|nr\\.?|#)|product (?:code|number|no\\.?)|item (?:number|no\\.?)|order (?:number|no\\.?|code)|mfr\\.? part (?:number|no\\.?)|part (?:number|no\\.?)|reference|sku'],
     ['CAS number', 'cas (?:number|no\\.?|#)|cas'],
-    ['Clone number', 'clone (?:number|name|id)|clone'],
+    ['Clone number', 'clone (?:number|name|id|no\\.?|#)|clone'],
+    ['Host / Isotype', 'host ?/ ?isotype'],
+    ['Antibody source', 'antibody source|source'],
     ['Host species', 'host species|host'],
     ['Isotype', 'isotype'],
     ['Reacts with', 'verified reactivity|reacts with|species reactivity|tested reactivity|reactivity'],
-    ['Applications', 'tested applications|applications?|suitable for'],
+    ['Applications', 'tested applications|application\\(s\\)|technique\\(s\\)|applications?|suitable for'],
     ['Conjugate', 'conjugated to|conjugation|conjugate|dye'],
     ['Target', 'target|gene name|antigen'],
-    ['Concentration', 'concentration'],
-    ['Pack size', 'pack(?:age|ing)? size|packaging unit|packing|unit size|content|quantity|size'],
+    ['Label', 'label|format'],
+    ['Concentration', 'igg concentration|approx\\.? protein concentrations?|concentration range|concentration'],
+    ['Size / concentration', 'size ?/ ?concentration'],
+    ['Pack size', 'pack(?:age|ing)? size|pack qty\\.?|unit of measure|packaging unit|packing|unit size|content|quantity|amount|size'],
+    ['Supplier', 'supplier|brand|manufacturer'],
+    ['Vector backbone', 'vector backbone|backbone'],
+    ['Bacterial resistance', 'bacterial resistance\\(s\\)|bacterial resistance|resistance'],
   ];
 
   // the text of an image (a screenshot of a page: a table does not paste well, an image keeps it). The reading is done in the browser with
@@ -452,13 +463,51 @@
         // a pages repeats the label in the value ("Suitable for: IHC-P, WB"): the label is taken off
         value = value.replace(/^(?:suitable for|reacts with|tested applications|species reactivity)\s*:\s*/i, '');
         // a value is short: a long line is a sentence that starts with the word
-        if (value !== '' && value.length <= 120 && !/^(is|are|of|for|to|and|the|in|with)\b/i.test(value)) {
+        if (value !== '' && value.length <= 120 && !/^(is|are|of|for|to|and|the|in|with)\b/i.test(value) && !/^[\/:]/.test(value)) {
           page.props[entry[0]] = value;
           break;
         }
       }
     });
     const whole = lines.join('\n');
+    const props = page.props;
+    // fields that give two things in one: "Host / Isotype  Rabbit / IgG", "Antibody Source  Monoclonal Mouse IgG1 Clone # 196908" (or just
+    // "Rabbit"), "Size/Concentration  150 uL, 1000 ug/ml"
+    if (props['Host / Isotype']) {
+      const parts = props['Host / Isotype'].split('/').map(function (part) {
+        return part.trim();
+      });
+      props['Host species'] = props['Host species'] || parts[0] || '';
+      props.Isotype = props.Isotype || parts[1] || '';
+    }
+    if (props['Antibody source']) {
+      const source = props['Antibody source'];
+      const host = HOSTS.find(function (name) {
+        return new RegExp('\\b' + name + '\\b', 'i').test(source);
+      });
+      const isotype = /\bIg[GMAED]\d?[a-z]*/i.exec(source);
+      const clone = /\bclone\s*#?\s*([A-Za-z0-9-]+)/i.exec(source);
+      if (host && !props['Host species']) {
+        props['Host species'] = host;
+      }
+      if (isotype && !props.Isotype) {
+        props.Isotype = isotype[0];
+      }
+      if (clone && !props['Clone number']) {
+        props['Clone number'] = clone[1];
+      }
+    }
+    if (props['Size / concentration']) {
+      const parts = props['Size / concentration'].split(',').map(function (part) {
+        return part.trim();
+      });
+      props['Pack size'] = props['Pack size'] || parts[0] || '';
+      props.Concentration = props.Concentration || parts[1] || '';
+    }
+    // "Label  Unconjugated" (Novus) is the conjugate when it says so
+    if (!props.Conjugate && props.Label && /^(un)?conjugated|alexa|fitc|biotin|hrp|dylight|\bcy\d|\bapc\b|\bpe\b|[A-Za-z]+ ?\d{3}$/i.test(props.Label)) {
+      props.Conjugate = props.Label;
+    }
     // what is written in a sentence of the page: the application is "FC - Quality tested" (the application is FC), the clone in the notes
     // ("Clone 30-F11 reacts with..."), the conjugate in the preparation ("conjugated with Spark Blue 574 under...")
     if (page.props.Applications) {
@@ -496,7 +545,52 @@
     page.cats = cats;
     // the catalog number of a product that has it in its title (Abcam: "... (ab105389)")
     const inTitle = /\((ab\d{4,7})\)|\b(ab\d{4,7})\b/i.exec(lines.slice(0, 12).join(' '));
-    page.sku = page.props['Catalog number'] || (inTitle ? (inTitle[1] || inTitle[2]) : '');
+    // the numbers that vendors write in the title or the heading: "(A-11122)", "(GTX113617)", "(66009-1-Ig)" (a number with a letter in it),
+    // "sc-9996", "MAB1259", "NB100-1770"
+    const head = lines.slice(0, 6).join(' ');
+    const bracket = /\(([A-Za-z]{1,4}[A-Za-z0-9-]*\d[A-Za-z0-9-]*|\d+[A-Za-z][A-Za-z0-9-]*)\)/.exec(head);
+    const typed = /\b(sc-\d{3,6}|MAB\d{3,5}[A-Z]?|NB\d{2,3}-\d{3,5})\b|(?:^|\s)#(\d{3,6})\b/.exec(head);
+    // a short token in brackets after "Antibody" is the clone (Santa Cruz: "(B-2)"), a longer one the catalog number (Thermo: "(A-11122)")
+    [typed && (typed[1] || typed[2]), bracket && bracket[1].length >= 5 ? bracket[1] : ''].forEach(function (number) {
+      if (number && cats.indexOf(number) === -1) {
+        cats.push(number);
+      }
+    });
+    // a sentence of the page: "mouse monoclonal IgG2a kappa provided at 200 ug/ml for WB, IP, IF, FCM and ELISA"
+    if (!props.Isotype) {
+      const isotype = /\bIg[GMAED]\d?[a-z]*/.exec(whole);
+      if (isotype) {
+        props.Isotype = isotype[0];
+      }
+    }
+    if (!props.Concentration) {
+      const concentration = /\b(?:at|of)\s+(\d+(?:[.,]\d+)?\s*(?:\u00B5g|\u03BCg|ug|mg)\/(?:ml|\u00B5l|\u03BCl|ul))/i.exec(whole);
+      if (concentration) {
+        props.Concentration = concentration[1];
+      }
+    }
+    if (!props.Applications) {
+      const applications = /\bfor\s+((?:(?:WB|IP|IF|IHC(?:\([A-Z]\))?|FCM|FC|ELISA|ICC|ChIP)(?:\s*,\s*and\s+|\s*,\s*|\s+and\s+)?)+)/.exec(whole);
+      if (applications) {
+        props.Applications = applications[1].replace(/[,\s]+(?:and)?\s*$/, '').replace(/\s+and\s+/g, ', ');
+      }
+    }
+    // the values as they are kept: the clone without "(RUO)", the isotype without the host and the chain ("Mouse IgG1, kappa" is IgG1)
+    if (props['Clone number']) {
+      props['Clone number'] = props['Clone number'].replace(/\s*\(.*?\)\s*$/, '').trim();
+    }
+    if (props.Isotype) {
+      const kept = /\bIg[GMAED]\d?[a-z]*/.exec(props.Isotype);
+      props.Isotype = kept ? kept[0] : props.Isotype;
+    }
+    // Santa Cruz: "GFP Antibody (B-2): sc-9996", the clone is in the brackets of the heading
+    if (!props['Clone number']) {
+      const heading = /\bantibody\s*\(([A-Za-z0-9-]{2,})\)/i.exec(head);
+      if (heading && heading[1].length < 5 && cats.indexOf(heading[1]) === -1) {
+        props['Clone number'] = heading[1];
+      }
+    }
+    page.sku = props['Catalog number'] || (inTitle ? (inTitle[1] || inTitle[2]) : '') || cats[0] || '';
     page.description = lines.slice(0, 12).join(' ').slice(0, 600);
     return page;
   }
@@ -514,6 +608,9 @@
     ['concentration', /^(concentration|conc\.?)$/i],
     ['pack', /^(pack(age|ing)?( size)?|packaging unit|unit size|size|amount|content|quantity)$/i],
     ['cas', /^cas( (number|no\.?|#))?$/i],
+    ['vendor', /^(supplier|brand|manufacturer)$/i],
+    ['backbone', /^vector backbone$/i],
+    ['resistance', /^bacterial resistance$/i],
   ];
 
   // the details read from a page are put in the line: what the line has already is kept
