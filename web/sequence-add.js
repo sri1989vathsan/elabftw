@@ -198,12 +198,17 @@
         const letters = reader.clean(primer.sequence);
         if (letters.length >= reader.minLength) {
           const key = reader.key(letters);
-          known.set(key, (known.get(key) || []).concat(primer.id));
+          known.set(key, (known.get(key) || []).concat(primer));
         }
       });
       rows = found.map(function (primer) {
-        const ids = Array.from(new Set(known.get(primer.key) || []));
-        return Object.assign(primer, { id: ids.length === 1 ? ids[0] : null, several: ids.length > 1 });
+        const same = known.get(primer.key) || [];
+        const ids = Array.from(new Set(same.map(function (item) {
+          return item.id;
+        })));
+        // a primer that is only in My entries (no number of the lab) can be put in the lab database when it is the user's own
+        const only = ids.length === 1 ? same[0] : null;
+        return Object.assign(primer, { id: ids.length === 1 ? ids[0] : null, several: ids.length > 1, toLab: only !== null && !only.lab && only.own });
       });
     } catch (error) {
       // the sequence is attached: the question about the primers is not worth stopping for
@@ -243,8 +248,12 @@
         const have = rows.filter(function (row) {
           return row.picked && row.id !== null;
         }).length;
+        // the primers that are only in My entries go to the lab database when that is the choice of "New primers go to"
+        const lab = tools.inLab() ? rows.filter(function (row) {
+          return row.picked && row.toLab;
+        }).length : 0;
         go.disabled = add + have === 0;
-        go.textContent = add + have === 0 ? 'Nothing is ticked' : add > 0 ? 'Add ' + add + ' to the database' + (have > 0 ? ' and attach ' + (add + have) : ' and attach ' + (add === 1 ? 'it' : 'them')) : 'Attach ' + have;
+        go.textContent = add + have === 0 ? 'Nothing is ticked' : (add > 0 ? 'Add ' + add + ' to the database' + (have > 0 ? ' and attach ' + (add + have) : ' and attach ' + (add === 1 ? 'it' : 'them')) : 'Attach ' + have) + (lab > 0 ? ', put ' + lab + ' in the lab database' : '');
       };
       const bar = element('div', 'small mb-1');
       [['Tick all', true], ['Tick none', false]].forEach(function (choice) {
@@ -279,7 +288,7 @@
           row.picked = box.checked;
           refresh();
         });
-        const state = row.id !== null ? 'in the database' : row.several ? 'several in the database have these letters: left alone' : 'not in the database yet';
+        const state = row.id !== null ? (row.toLab ? 'in My entries only, not in the lab database' : 'in the database') : row.several ? 'several in the database have these letters: left alone' : 'not in the database yet';
         const text = element('span', '', row.name + (plasmids.size > 1 ? ' (' + row.plasmid + ')' : ''));
         text.style.flex = '1';
         const detail = element('span', 'text-muted ml-2', row.bases.length + ' bases, ' + state);
@@ -287,7 +296,12 @@
         line.append(box, text, detail);
         list.append(line);
       });
-      dialog.append(bar, list, tools.destinationControl(), message, actions);
+      const where = tools.destinationControl();
+      // the choice changes what the button says
+      where.addEventListener('change', function () {
+        refresh();
+      });
+      dialog.append(bar, list, where, message, actions);
       backdrop.append(dialog);
       document.body.append(backdrop);
 
@@ -317,6 +331,9 @@
         const titles = new Map();
         let attached = 0;
         let created = 0;
+        let inLab = 0;
+        const registered = new Set();
+        const notInLab = [];
         try {
           for (const row of rows.filter(function (item) {
             return item.picked && !item.several;
@@ -338,8 +355,18 @@
             }
             await tools.attach(row.entry, id);
             attached += 1;
+            // a primer that is only in My entries goes into the lab database too, when that is the choice
+            if (row.toLab && tools.inLab() && !registered.has(id)) {
+              registered.add(id);
+              try {
+                await tools.registerInLab(id);
+                inLab += 1;
+              } catch (error) {
+                notInLab.push(row.name + ': ' + (error.message || error));
+              }
+            }
           }
-          message.textContent = attached + (attached === 1 ? ' primer' : ' primers') + ' attached' + (created > 0 ? ', ' + created + ' of them added to the database' : '') + '.';
+          message.textContent = attached + (attached === 1 ? ' primer' : ' primers') + ' attached' + (created > 0 ? ', ' + created + ' of them added to the database' : '') + (inLab > 0 ? ', ' + inLab + ' put in the lab database' : '') + '.' + (notInLab.length > 0 ? ' Not put in the lab database: ' + notInLab.join('; ') : '');
         } catch (error) {
           message.textContent = (error.message || String(error)) + (attached > 0 ? ' (' + attached + ' attached before that.)' : '');
           message.className = 'sa-message error';

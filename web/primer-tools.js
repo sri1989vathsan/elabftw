@@ -221,7 +221,7 @@
     try {
       const slim = (await json('primers.php?list=1')).primers || [];
       return slim.map(function (entry) {
-        return { id: entry.id, title: entry.title, sequence: clean(entry.sequence), category: entry.category, color: entry.color };
+        return { id: entry.id, title: entry.title, sequence: clean(entry.sequence), category: entry.category, color: entry.color, lab: entry.lab !== false, own: entry.own === true, number: entry.number || null };
       }).filter(function (primer) {
         return primer.sequence.length >= MIN_LENGTH;
       });
@@ -248,10 +248,15 @@
     });
   }
 
+  // a primer that is only in My entries goes into the lab database: it gets the number of the lab and everyone can see it
+  async function registerInLab(id) {
+    await json('planned.php', { method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ action: 'lab', id: id }) });
+  }
+
   // a new primer in the database, with its sequence, orientation and melting temperature
-  // where the primers that are made go: 'none' My entries (private, no number yet), 'lab' the lab database (the number of the lab) or 'both'
-  // (the lab database and My database). The choice is remembered by the browser; My entries is the start.
-  const DESTINATIONS = [['none', 'My entries (private, no number yet)'], ['lab', 'The lab database (everyone sees them, with the lab number)'], ['both', 'Both: the lab database and My database']];
+  // where the primers that are made go: 'none' My entries (private, no number yet), 'personal' My database (private, the own number of the user),
+  // 'lab' the lab database (the number of the lab) or 'both' (the lab database and My database). The choice is remembered by the browser; My entries is the start.
+  const DESTINATIONS = [['none', 'My entries (private, no number yet)'], ['personal', 'My database (private, with my own number)'], ['lab', 'The lab database (everyone sees them, with the lab number)'], ['both', 'Both: the lab database and My database']];
   function destination() {
     try {
       const saved = window.localStorage.getItem('primerDestination');
@@ -262,6 +267,11 @@
   }
 
   // a small labelled choice of where the new primers go, bound to the remembered choice
+  // true when the choice puts the primers in the lab database
+  function inLab() {
+    return destination() === 'lab' || destination() === 'both';
+  }
+
   function destinationControl() {
     const wrap = document.createElement('label');
     wrap.className = 'primer-destination';
@@ -608,6 +618,8 @@
     allPrimers: allPrimers,
     createPrimer: createPrimer,
     destination: destination,
+    inLab: inLab,
+    registerInLab: registerInLab,
     destinationControl: destinationControl,
     getPrimer: getPrimer,
     currentUserId: currentUserId,

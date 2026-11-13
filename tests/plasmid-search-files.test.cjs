@@ -191,9 +191,12 @@ test('sequence files dropped on the import dialog wait for "Where the entries go
 test('the primers that are made go where the user chooses: My entries, the lab database or both', () => {
   const tools = read('web/primer-tools.js');
   assert.match(tools, /register: destination\(\)/);
-  assert.match(tools, /\['none', 'My entries[^\]]*\], \['lab', 'The lab database[^\]]*\], \['both', 'Both/);
+  assert.match(tools, /\['none', 'My entries[^\]]*\], \['personal', 'My database[^\]]*\], \['lab', 'The lab database[^\]]*\], \['both', 'Both/);
+  // a primer that is only in My entries goes into the lab database with the lab choices, not with My database
+  assert.match(tools, /return destination\(\) === 'lab' \|\| destination\(\) === 'both';/);
+  assert.match(read('web/sequence-add.js'), /tools\.registerInLab\(id\)/);
   assert.match(tools, /destinationControl: destinationControl,/);
-  assert.match(read('web/sequence-add.js'), /tools\.destinationControl\(\), message, actions/);
+  assert.match(read('web/sequence-add.js'), /const where = tools\.destinationControl\(\);[\s\S]*dialog\.append\(bar, list, where, message, actions\);/);
   assert.match(read('web/sequence-viewer/primers-panel.js'), /tools\.destinationControl\(\)/);
 });
 

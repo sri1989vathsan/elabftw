@@ -100,6 +100,8 @@ function describe(App $App, int $id): ?array
         'sequence' => $sequence,
         'orientation' => $orientation,
         'tm' => $tm,
+        // the number of the lab database (null while the primer is only in My entries or My database)
+        'number' => isset($data['custom_id']) && $data['custom_id'] !== null ? (int) $data['custom_id'] : null,
     );
 }
 
@@ -203,7 +205,7 @@ if (isset($_GET['list'])) {
     // every primer and probe the requester can read, with only what the search needs (name, bases, module), in one request: the
     // search on the sequence is done in the browser and there can be many thousands of them
     $canFilter = new CanSqlBuilder($App->Users, AccessType::Read)->getCanFilter();
-    $req = $pdo->prepare("SELECT entity.id, entity.title, entity.metadata, c.title AS category_title, c.color AS category_color
+    $req = $pdo->prepare("SELECT entity.id, entity.title, entity.metadata, entity.custom_id, entity.userid, c.title AS category_title, c.color AS category_color
         FROM inventory AS entity
         INNER JOIN inventory_categories AS c ON c.id = entity.category
         WHERE entity.state = 1 AND entity.is_planned = 0 AND entity.team = :team
@@ -224,7 +226,7 @@ if (isset($_GET['list'])) {
         if ($sequence === '') {
             continue;
         }
-        $primers[] = array('id' => (int) $row['id'], 'title' => (string) $row['title'], 'sequence' => $sequence, 'category' => (string) $row['category_title'], 'color' => (string) $row['category_color']);
+        $primers[] = array('id' => (int) $row['id'], 'title' => (string) $row['title'], 'sequence' => $sequence, 'category' => (string) $row['category_title'], 'color' => (string) $row['category_color'], 'number' => $row['custom_id'] !== null ? (int) $row['custom_id'] : null, 'lab' => $row['custom_id'] !== null, 'own' => (int) $row['userid'] === $userId);
     }
     respond(200, array('primers' => $primers));
 }

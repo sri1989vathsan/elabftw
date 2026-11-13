@@ -171,11 +171,32 @@
       message.className = 'primers-message' + (error ? ' error' : '');
     };
 
+    // the number of the primer in the lab database (#17), shown before its name; nothing for a primer that has none yet
+    // The numbers have a column of one width (the widest of the list, the numbers on the right) so that the names start at the same
+    // place in every row; a primer without a number keeps the empty space when the others have one.
+    let numberWidth = 0;
+    function numberTag(primer) {
+      const tag = element('span', 'primers-number', primer.number ? '#' + primer.number : '');
+      tag.style.color = '#6c757d';
+      tag.style.fontVariantNumeric = 'tabular-nums';
+      tag.style.marginRight = '0.4em';
+      tag.style.whiteSpace = 'nowrap';
+      tag.title = primer.number ? 'Number in the lab database: ' + primer.number : '';
+      if (numberWidth === 0) {
+        tag.hidden = true;
+      } else {
+        tag.style.display = 'inline-block';
+        tag.style.minWidth = numberWidth + 'ch';
+        tag.style.textAlign = 'right';
+      }
+      return tag;
+    }
+
     // a primer as a card: name, sequence, size, Tm and GC, the places where it binds as tags, and the buttons
     function card(primer, sites, buttons) {
       const box = element('div', 'primers-card');
       const top = element('div', 'primers-card-top');
-      top.append(element('strong', 'primers-card-name', primer.title));
+      top.append(numberTag(primer), element('strong', 'primers-card-name', primer.title));
       const chips = element('span', 'primers-chips');
       [primer.category && !/^primers?$/i.test(primer.category) ? primer.category.replace(/s$/i, '') : '', primer.sequence.length + ' bases', 'Tm ' + tools.tm(primer.sequence) + '\u00b0C', 'GC ' + tools.gc(primer.sequence) + '%'].forEach(function (text) {
         chips.append(element('span', 'primers-chip', text));
@@ -218,7 +239,12 @@
       toggle.type = 'button';
       const name = element('strong', 'primers-compact-name', primer.title);
       name.title = primer.title;
-      toggle.append(element('span', 'primers-compact-chevron', '\u25b8'), name);
+      // the chevron and the number keep their size when a long name is cut short
+      const chevron = element('span', 'primers-compact-chevron', '\u25b8');
+      chevron.style.flexShrink = '0';
+      const numberNode = numberTag(primer);
+      numberNode.style.flexShrink = '0';
+      toggle.append(chevron, numberNode, name);
       top.append(toggle);
       const first = sites[0];
       if (first) {
@@ -298,6 +324,9 @@
         previewDrawn = {};
         redraw();
       }
+      numberWidth = attachedPrimers.reduce(function (widest, p) {
+        return p.number ? Math.max(widest, String(p.number).length + 1) : widest;
+      }, 0);
       const attachedIds = new Set(attachedPrimers.map(function (p) {
         return p.id;
       }));
@@ -555,7 +584,7 @@
           const one = action('Attach', function () {
             attach(item.primer);
           }, 'primary');
-          sectionAttached.append(compactRow({ title: item.primer.title, category: 'In the database', sequence: item.primer.sequence }, findSitesCached(now.sequence, item.primer.sequence, now.circular), [one], 'matched' + item.primer.id));
+          sectionAttached.append(compactRow({ title: item.primer.title, category: 'In the database', sequence: item.primer.sequence, number: item.primer.number }, findSitesCached(now.sequence, item.primer.sequence, now.circular), [one], 'matched' + item.primer.id));
         });
       }
 
@@ -874,7 +903,36 @@
       });
       const destinationRow = tools.destinationControl();
       destinationRow.classList.add('small');
-      panel.append(subTabs, destinationRow, sectionAttached, sectionSearch);
+      // the attached primers that are only in My entries (no number of the lab) can go into the lab database with one click
+      const mineOnly = attachedPrimers.filter(function (a) {
+        const found = (databasePrimers || []).find(function (p) {
+          return Number(p.id) === Number(a.id);
+        });
+        return found && !found.lab && found.own;
+      });
+      const toLabRow = element('div', 'small mb-1');
+      if (mineOnly.length > 0) {
+        const toLab = element('button', 'cutter-button', 'Put ' + mineOnly.length + (mineOnly.length === 1 ? ' attached primer' : ' attached primers') + ' that ' + (mineOnly.length === 1 ? 'is' : 'are') + ' only in My entries into the lab database');
+        toLab.type = 'button';
+        toLab.addEventListener('click', async function () {
+          toLab.disabled = true;
+          let moved = 0;
+          try {
+            for (const item of mineOnly) {
+              await tools.registerInLab(Number(item.id));
+              moved++;
+            }
+            say(moved + ' primer' + (moved === 1 ? '' : 's') + ' put in the lab database.');
+          } catch (error) {
+            say((moved > 0 ? moved + ' put in the lab database, then: ' : '') + (error.message || String(error)), true);
+          }
+          databasePrimers = null;
+          await loadAttached();
+          await render();
+        });
+        toLabRow.append(toLab);
+      }
+      panel.append(subTabs, destinationRow, toLabRow, sectionAttached, sectionSearch);
       // the preview of the search belongs to the search tab
       if (subTab !== 'search' && Object.keys(previewDrawn).length > 0) {
         previewDrawn = {};
@@ -892,6 +950,7 @@
       });
       let added = 0;
       let skipped = 0;
+      let toLab = 0;
       const ids = [];
       const seen = new Map();
       try {
@@ -905,6 +964,12 @@
           const existing = known(item.bases);
           if (existing) {
             ids.push(existing.id);
+            // a primer that is only in My entries goes into the lab database when that is the choice above
+            if (!existing.lab && existing.own && tools.inLab()) {
+              await tools.registerInLab(existing.id);
+              toLab++;
+              continue;
+            }
             skipped++;
             continue;
           }
@@ -917,7 +982,7 @@
           added++;
         }
         if (!quiet) {
-          say(added + ' primer' + (added === 1 ? '' : 's') + ' added to the database' + (skipped > 0 ? ' (' + skipped + ' already there)' : '') + '.');
+          say(added + ' primer' + (added === 1 ? '' : 's') + ' added to the database' + (toLab > 0 ? ', ' + toLab + ' put in the lab database' : '') + (skipped > 0 ? ' (' + skipped + ' already there)' : '') + '.');
         }
       } catch (error) {
         say((added > 0 ? added + ' added, then: ' : '') + (error.message || String(error)), true);
