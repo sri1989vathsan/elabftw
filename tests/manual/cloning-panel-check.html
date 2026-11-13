@@ -1,0 +1,45 @@
+<!doctype html>
+<!-- Check of the Gibson panel without the eLabFTW stack: it is run in headless Chrome, the result is in <pre id="result">:
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --allow-file-access-from-files --virtual-time-budget=4000 --dump-dom file://$PWD/tests/manual/cloning-panel-check.html | grep -A12 "id=.result" --><html><body style="font-family:sans-serif;width:320px">
+<aside id="tool-sidebar"><div id="host"></div></aside>
+<script src="../../web/sequence-viewer/vendor/sequence-utils.umd.js"></script>
+<script src="../../web/sequence-viewer/vendor/bio-parsers.umd.js"></script>
+<script src="../../web/primer-tools.js"></script>
+<script src="../../web/sequence-viewer/tools-tab.js"></script>
+<script src="../../web/sequence-viewer/tools-pcr.js"></script>
+<script src="../../web/sequence-viewer/cloning-engine.js"></script>
+<script src="../../web/sequence-viewer/tools-gibson.js"></script>
+<script>
+function rnd(n,s){var o='';for(var i=0;i<n;i++){s=(s*1103515245+12345)&0x7fffffff;o+='ACGT'[(s>>16)&3]}return o}
+window.vec={sequence:rnd(3000,7),circular:true,features:{f1:{id:'f1',name:'marker',type:'CDS',start:100,end:400,strand:1}}};
+window.state={sequenceData:vec,selectionLayer:{start:-1,end:-1},caretPosition:-1};
+window.editor={getState:function(){return state},updateEditor:function(){}};
+window.ToolSidebar={register:function(t){t.show(document.getElementById('host'))},open:function(){}};
+window.ToolsTab.setup(editor,{entryId:5,name:'pTest.gb'});
+document.querySelector('details.tools-part').open=true;
+</script><script>
+setTimeout(function(){
+var out=[];
+var parts=[...document.querySelectorAll('details.tools-part')];
+var g=parts.find(function(d){return /Gibson/.test(d.textContent.slice(0,40))});
+out.push('parts: '+parts.map(function(d){return d.querySelector('summary').textContent}).join(' | '));
+g.open=true; g.dispatchEvent(new Event('toggle'));
+setTimeout(function(){
+var b=g.querySelector('.tools-block');
+var go=[...b.querySelectorAll('button')].find(function(x){return /Design/.test(x.textContent)});
+go.click(); out.push('no selection -> '+b.querySelector('.tool-message').textContent);
+state.selectionLayer={start:500,end:559};
+go.click(); out.push('no insert -> '+b.querySelector('.tool-message').textContent);
+b.querySelector('textarea').value=rnd(700,99);
+go.click();
+out.push('cards: '+b.querySelectorAll('.tool-card').length);
+out.push([...b.querySelectorAll('.tools-out')].map(function(x){return x.textContent}).join(' // '));
+out.push(b.querySelector('.tool-muted').textContent);
+[...b.querySelectorAll('.tool-message')].forEach(function(m){out.push('WARN '+m.textContent)});
+var save=[...b.querySelectorAll('button')].find(function(x){return /Save the plasmid/.test(x.textContent)});
+save.click(); out.push('save form: '+(b.querySelector('input[type=checkbox]')?'shown':'missing')+' '+[...b.querySelectorAll('label')].map(function(l){return l.textContent}).join(';'));
+var u=window.sequenceUtils.insertSequenceDataAtPositionOrRange({sequence:rnd(700,99)},vec,{start:500,end:559});
+out.push('product '+u.sequence.length+' bp, features '+Object.keys(u.features).length);
+var pre=document.createElement('pre');pre.id='result';pre.textContent=out.join(' // ');document.body.append(pre);
+},100);},100);
+</script></body></html>

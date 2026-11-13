@@ -115,8 +115,9 @@
     if (Math.abs(bindForward.length - bindReverse.length) > 8) {
       warnings.push('The two binding parts differ a lot in length (' + bindForward.length + ' and ' + bindReverse.length + ').');
     }
-    if (overlap < 20 && Math.min(result.overlapTm, result.overlapTmRight) < 42) {
-      warnings.push('The overlaps have a low Tm (' + Math.min(result.overlapTm, result.overlapTmRight) + ' °C); use a longer overlap for Gibson.');
+    // In-Fusion does not depend on the Tm of its short overlap; a Gibson or NEBuilder overlap is long enough to have one
+    if (overlap >= 20 && Math.min(result.overlapTm, result.overlapTmRight) < 45) {
+      warnings.push('The overlaps have a low Tm (' + Math.min(result.overlapTm, result.overlapTmRight) + ' °C); use a longer overlap.');
     }
     if (left === right) {
       warnings.push('The two overlaps are equal, the insert could join in either direction.');
