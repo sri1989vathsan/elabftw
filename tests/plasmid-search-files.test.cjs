@@ -649,13 +649,20 @@ test('placing an order: the button "Add a new entry of the database instead" of 
 test('placing an order with several links: a line for each item (a known one linked, a new one with a box), "Add all", and the editing of a new entry under its own line', () => {
   const order = read('web/order-to-database.js');
   assert.match(order, /const checkRows = async function \(form, rows\)/);
+  // the button follows the boxes: nothing ticked "Add all N", some ticked "Add the other M", all ticked "Remove all"
   assert.match(order, /'Add all ' \+ ticks\.length \+ ' new items'/);
+  assert.match(order, /'Add the other ' \+ rest \+ ' new '/);
+  assert.match(order, /'Remove all new items'/);
+  assert.match(order, /box\._follow = follow;/);
+  // every item is a block of two columns (the box or the mark of the database, then the words and under them the editing)
+  assert.match(order, /grid-template-columns:1\.25rem minmax\(0,1fr\)/);
+  assert.match(order, /an item that is there has nothing to edit/);
   // each new row of the form knows its link, and is given it before anything is written in it
   assert.match(order, /fresh\.dataset\.otdLink = form\.card\.dataset\.otdAssigning;/);
   assert.match(order, /const rowForPending = function \(rowEl, rows\)/);
   // the rows of the form are hidden; the name, the module and the columns are edited in the slot under the item
   assert.match(order, /const syncEditors = function \(\)/);
-  assert.match(order, /element\('div', 'otd-slot'\)/);
+  assert.match(order, /element\('div', 'otd-slot', '', 'grid-column:2;min-width:0'\)/);
   assert.match(order, /rowEl\.style\.setProperty\('display', 'none', 'important'\);/);
   // the same items are checked once at a time; a title is made for an order of links that has none
   assert.match(order, /the check of these items is still running/);

@@ -2548,13 +2548,13 @@
     };
     // the editing of a new entry, under its line: the name, the module and the columns. It writes into the (hidden) row of the form.
     const buildEditor = function (rowEl) {
-      const wrap = element('div', '', '', 'align-items:center;display:flex;flex-wrap:wrap;gap:0.4rem;margin:0.2rem 0 0.5rem 1.5rem;width:100%');
+      const wrap = element('div', '', '', 'align-items:center;display:flex;flex-wrap:wrap;gap:0.4rem;margin:0.1rem 0 0.2rem;width:100%');
       const sourceInput = rowEl.querySelector('input[placeholder^="New entry title"]');
       const sourceSelect = rowEl.querySelector('select.orders-category-select');
       if (!sourceInput || !sourceSelect) {
         return wrap;
       }
-      const name = element('input', 'form-control form-control-sm', '', 'flex:1 1 12rem;min-width:10rem;width:auto');
+      const name = element('input', 'form-control form-control-sm', '', 'flex:1 1 100%;width:auto');
       name.type = 'text';
       name.value = sourceInput.value;
       name.setAttribute('aria-label', 'Name of the new entry');
@@ -2562,7 +2562,7 @@
         sourceInput.value = name.value;
         sourceInput.dispatchEvent(new Event('input', { bubbles: true }));
       });
-      const module = element('select', 'form-control form-control-sm', '', 'flex:0 1 11rem;width:auto');
+      const module = element('select', 'form-control form-control-sm', '', 'flex:0 1 10rem;min-width:7rem;width:auto');
       module.setAttribute('aria-label', 'Module of the new entry');
       Array.from(sourceSelect.options).forEach(function (option) {
         const copy = element('option', '', option.textContent);
@@ -2608,37 +2608,66 @@
         slot.append(buildEditor(rowEl));
       });
     };
+    // The look of an item of the form: two columns, the box (or the mark of the database) at the left, at the right the words and, under them, the
+    // editing of a new entry. The words start in the same place for every item.
+    let tickCounter = 0;
+    const itemBlock = function () {
+      const block = element('div', '', '', 'align-items:start;column-gap:0.5rem;display:grid;grid-template-columns:1.25rem minmax(0,1fr);margin-bottom:0.45rem;width:100%');
+      const side = element('div', '', '', 'align-items:center;display:flex;height:1.5rem;justify-content:center');
+      const words = element('div', '', '', 'line-height:1.5rem;min-width:0');
+      const slot = element('div', 'otd-slot', '', 'grid-column:2;min-width:0');
+      block.append(side, words, slot);
+      return { block: block, side: side, words: words, slot: slot };
+    };
+    const knownWords = function (parts, existing, linked) {
+      // an item that is there has nothing to edit
+      parts.slot.remove();
+      parts.side.append(element('i', 'fas fa-database fa-fw', '', 'color:#1d8348'));
+      parts.words.append(element('span', '', 'In the database: ', 'color:#1d8348;font-weight:600'));
+      const link = element('a', '', existing.title);
+      link.href = 'registry.php?mode=view&id=' + existing.id;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      parts.words.append(link, element('span', 'text-muted', linked ? ' · linked to this order' : ' · not linked yet'));
+    };
+    const newWords = function (parts, text) {
+      const id = 'otd-tick-' + (++tickCounter);
+      const tick = element('input');
+      tick.type = 'checkbox';
+      tick.id = id;
+      tick.style.margin = '0';
+      parts.side.append(tick);
+      const label = element('label', 'mb-0', text, 'cursor:pointer');
+      label.htmlFor = id;
+      parts.words.append(label, element('span', 'text-muted', ' · not in the database yet'));
+      return tick;
+    };
     const drawState = function (form, state) {
       const box = stateBox(form);
       if (!box) {
         return;
       }
       box.style.display = 'flex';
+      box.style.flexDirection = 'column';
+      box.style.alignItems = 'flex-start';
       box.textContent = '';
+      const parts = itemBlock();
+      box.append(parts.block);
       if (state.existing) {
-        const mark = element('span', '', '', 'color:#1d8348;font-weight:600');
-        mark.append(element('i', 'fas fa-database fa-fw'), document.createTextNode(' In the database: '));
-        const link = element('a', '', state.existing.title);
-        link.href = 'registry.php?mode=view&id=' + state.existing.id;
-        link.target = '_blank';
-        link.rel = 'noopener';
-        box.append(mark, link, element('span', 'text-muted', state.linked ? 'linked to this order' : 'not linked yet'));
+        knownWords(parts, state.existing, state.linked);
         if (!state.linked) {
-          const again = element('button', 'btn btn-ghost btn-sm', 'Link it');
+          const again = element('button', 'btn btn-ghost btn-sm', 'Link it', 'margin-left:0.5rem');
           again.type = 'button';
           again.addEventListener('click', async function () {
             again.disabled = true;
             state.linked = await linkToOrder(form, state.existing);
             drawState(form, state);
           });
-          box.append(again);
+          parts.words.append(again);
         }
         return;
       }
-      box.append(element('span', 'text-muted', 'Not in the database yet.'));
-      const label = element('label', 'mb-0', '', 'align-items:center;cursor:pointer;display:inline-flex;gap:0.35rem');
-      const tick = element('input');
-      tick.type = 'checkbox';
+      const tick = newWords(parts, 'Add it to the Database too');
       tick.checked = form.card.querySelector('.orders-pending-resource') !== null;
       tick.addEventListener('change', function () {
         if (tick.checked) {
@@ -2646,7 +2675,7 @@
             return /Add a new entry of the database instead/.test(candidate.textContent);
           });
           if (button) {
-            // the row is added (the window of the columns does not open: the "Columns..." button of the row opens it)
+            // the row is added (the window of the columns does not open: the "Columns..." button under the item opens it)
             autoClicking = true;
             button.click();
             autoClicking = false;
@@ -2659,9 +2688,6 @@
         }
         window.setTimeout(syncEditors, 400);
       });
-      label.append(tick, document.createTextNode('Add it to the Database too'));
-      box.append(label, element('span', 'text-muted', 'The columns are filled in from the order and its link.'));
-      box.append(element('div', 'otd-slot', '', 'flex:1 1 100%'));
       window.setTimeout(syncEditors, 50);
     };
     // An order with several links: every item has a line. An item that is in the Database is linked to the order, a new one has a box "Add it to the Database"
@@ -2703,21 +2729,28 @@
       box.style.alignItems = 'flex-start';
       box.textContent = '';
       const ticks = [];
+      let all = null;
+      // the button and the count follow the boxes: nothing ticked "Add all", some ticked "Add the other ...", all ticked "Remove all"
+      const follow = function () {
+        if (!all) {
+          return;
+        }
+        const on = ticks.filter(function (tick) {
+          return tick.checked;
+        }).length;
+        const rest = ticks.length - on;
+        all.textContent = on === 0 ? 'Add all ' + ticks.length + ' new items' : (rest > 0 ? 'Add the other ' + rest + ' new ' + (rest === 1 ? 'item' : 'items') : 'Remove all new items');
+        all.title = on === 0 ? 'Tick every new item: they are added to the Database when the order is requested' : (rest > 0 ? on + ' of ' + ticks.length + ' are ticked' : 'Untick every new item: none is added');
+        count.textContent = on + ' of ' + ticks.length + ' new items will be added when the order is requested';
+      };
+      const count = element('span', 'text-muted small');
+      box._follow = follow;
       items.forEach(function (item) {
-        const block = element('div', '', '', 'width:100%');
-        const line = element('div', '', '', 'align-items:baseline;display:flex;flex-wrap:wrap;gap:0.15rem 0.6rem');
+        const parts = itemBlock();
         if (item.existing) {
-          const mark = element('span', '', '', 'color:#1d8348;font-weight:600');
-          mark.append(element('i', 'fas fa-database fa-fw'), document.createTextNode(' In the database: '));
-          const link = element('a', '', item.existing.title);
-          link.href = 'registry.php?mode=view&id=' + item.existing.id;
-          link.target = '_blank';
-          link.rel = 'noopener';
-          line.append(mark, link, element('span', 'text-muted', item.linked ? 'linked to this order' : 'not linked'));
+          knownWords(parts, item.existing, item.linked);
         } else {
-          const label = element('label', 'mb-0', '', 'align-items:baseline;cursor:pointer;display:inline-flex;gap:0.35rem');
-          const tick = element('input');
-          tick.type = 'checkbox';
+          const tick = newWords(parts, 'Add "' + item.name + '" to the Database');
           tick.checked = hasRowFor(form, item);
           tick.addEventListener('change', function () {
             if (tick.checked) {
@@ -2725,36 +2758,33 @@
             } else {
               removeRowFor(form, item);
             }
+            follow();
             window.setTimeout(syncEditors, 400);
           });
           ticks.push(tick);
-          label.append(tick, document.createTextNode('Add "' + item.name + '" to the Database'));
-          line.append(label, element('span', 'text-muted', 'not in the database yet'));
-          block.append(line);
-          // the editing of this item comes under its line when it is ticked
-          const slot = element('div', 'otd-slot');
-          slot.dataset.link = item.row.link;
-          block.append(slot);
+          // the editing of this item comes under its words when it is ticked
+          parts.slot.dataset.link = item.row.link;
         }
-        if (item.existing) {
-          block.append(line);
-        }
-        box.append(block);
+        box.append(parts.block);
       });
       if (ticks.length > 1) {
-        const all = element('button', 'btn btn-ghost btn-sm', 'Add all ' + ticks.length + ' new items');
+        all = element('button', 'btn btn-ghost btn-sm', '', 'margin-bottom:0.25rem');
         all.type = 'button';
         all.addEventListener('click', function () {
+          const everyone = ticks.every(function (tick) {
+            return tick.checked;
+          });
           ticks.forEach(function (tick) {
-            if (!tick.checked) {
+            if (tick.checked === everyone) {
               tick.click();
             }
           });
         });
-        box.append(all);
+        box.append(all, count);
+        follow();
       }
       if (ticks.length > 0) {
-        box.append(element('span', 'text-muted', 'The columns are filled in from the order and the links.'));
+        box.append(element('span', 'text-muted small', 'The columns are filled in from the order and the links.'));
       }
       window.setTimeout(syncEditors, 50);
     };
@@ -2778,6 +2808,9 @@
             tick.checked = hasRowFor(form, pending);
           }
         });
+        if (box._follow) {
+          box._follow();
+        }
         return;
       }
       form.card.dataset.otdRows = key;
