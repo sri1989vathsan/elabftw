@@ -55,5 +55,14 @@ $check('different primers have different keys', GenbankPrimers::key($forward) !=
 $check('a file with no primers gives an empty list', GenbankPrimers::read("LOCUS x\nORIGIN\n        1 acgt\n//\n") === array());
 $check('the reverse complement keeps ambiguity codes in pairs', GenbankPrimers::reverseComplement('ACGTRYKM') === 'KMRYACGT', GenbankPrimers::reverseComplement('ACGTRYKM'));
 
+// ApE and SnapGene write the key "primer" and the oligo as it was ordered in a note
+$ape = "LOCUS       ape 60 bp DNA circular\nFEATURES             Location/Qualifiers\n"
+    . "     primer          5..20\n                     /label=\"ape fwd\"\n                     /note=\"sequence: " . strtolower($forward) . "\"\n"
+    . "     primer          complement(31..48)\n                     /label=\"ape rev\"\n                     /note=\"sequence: TTTT" . $reverseSite . "\"\n"
+    . "ORIGIN\n        1 " . strtolower($sequence) . "\n//\n";
+$apePrimers = GenbankPrimers::read($ape);
+$check('the key primer is read like primer_bind', count($apePrimers) === 2, $apePrimers);
+$check('the oligo written in the note is the primer (also with a tail the site does not have)', ($apePrimers[0]['bases'] ?? '') === $forward && ($apePrimers[1]['bases'] ?? '') === 'TTTT' . $reverseSite, $apePrimers);
+
 echo $failures === 0 ? "all passed\n" : $failures . " failed\n";
 exit($failures === 0 ? 0 : 1);

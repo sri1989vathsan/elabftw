@@ -112,7 +112,8 @@
     const sequence = parsed.sequence;
     const primers = [];
     for (const feature of parsed.features) {
-      if (feature.key.toLowerCase() !== 'primer_bind') {
+      // primer_bind is the standard key; ApE and SnapGene write the key primer
+      if (feature.key.toLowerCase() !== 'primer_bind' && feature.key.toLowerCase() !== 'primer') {
         continue;
       }
       let location = feature.location;
@@ -134,6 +135,11 @@
       let bases = sequence.slice(from - 1, to);
       if (!forward) {
         bases = reverseComplement(bases);
+      }
+      // a note "sequence: acgt..." is the oligo as it was ordered (with a tail that does not bind, when there is one): it is the primer
+      const written = /sequence:\s*([A-Za-z ]+)/i.exec(String(feature.qualifiers.note || ''));
+      if (written && clean(written[1]).length >= MIN_LENGTH) {
+        bases = clean(written[1]);
       }
       primers.push({ name: nameOf(feature.qualifiers), start: from, end: to, forward: forward, bases: bases });
     }
@@ -167,7 +173,7 @@
     const found = new Map();
     parse(text).features.forEach(function (feature) {
       const key = feature.key.toLowerCase();
-      if (key === 'primer_bind' || key === 'source') {
+      if (key === 'primer_bind' || key === 'primer' || key === 'source') {
         return;
       }
       ['label', 'gene', 'product', 'standard_name'].forEach(function (qualifier) {

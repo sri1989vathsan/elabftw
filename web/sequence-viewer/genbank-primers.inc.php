@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Elabftw\Elabftw;
 
+use function in_array;
 use function preg_match;
 use function preg_replace;
 use function preg_split;
@@ -110,7 +111,8 @@ final class GenbankPrimers
         $sequence = strtoupper($sequence);
         $primers = array();
         foreach ($features as $feature) {
-            if (strtolower($feature['key']) !== 'primer_bind') {
+            // primer_bind is the standard key; ApE and SnapGene write the key primer
+            if (!in_array(strtolower($feature['key']), array('primer_bind', 'primer'), true)) {
                 continue;
             }
             $location = $feature['location'];
@@ -130,6 +132,10 @@ final class GenbankPrimers
             $bases = substr($sequence, $start - 1, $end - $start + 1);
             if (!$forward) {
                 $bases = self::reverseComplement($bases);
+            }
+            // a note "sequence: acgt..." is the oligo as it was ordered (with a tail that does not bind, when there is one): it is the primer
+            if (preg_match('/sequence:\s*([A-Za-z ]+)/i', (string) ($feature['qualifiers']['note'] ?? ''), $w) === 1 && strlen(self::clean($w[1])) >= self::MIN_LENGTH) {
+                $bases = self::clean($w[1]);
             }
             $primers[] = array('name' => self::nameOf($feature['qualifiers']), 'start' => $start, 'end' => $end, 'forward' => $forward, 'bases' => $bases);
         }

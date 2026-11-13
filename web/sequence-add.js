@@ -211,11 +211,9 @@
       return;
     }
 
-    const inDatabase = rows.filter(function (row) {
-      return row.id !== null;
-    });
-    const missing = rows.filter(function (row) {
-      return row.id === null && !row.several;
+    // every primer of the file is listed with a box: what is ticked is attached (and added to the database when it is not there yet)
+    rows.forEach(function (row) {
+      row.picked = !row.several;
     });
     await new Promise(function (resolve) {
       const backdrop = element('div', 'sa-backdrop');
@@ -225,20 +223,71 @@
       const plasmids = new Set(rows.map(function (row) {
         return row.entry;
       }));
+      const inDatabase = rows.filter(function (row) {
+        return row.id !== null;
+      }).length;
+      const notThere = rows.filter(function (row) {
+        return row.id === null && !row.several;
+      }).length;
       dialog.append(element('h4', '', 'Primers in the GenBank file' + (plasmids.size > 1 ? 's' : '')));
       dialog.append(element('p', '', rows.length + (rows.length === 1 ? ' primer is' : ' primers are') + ' written in the file' + (plasmids.size > 1 ? 's' : '') + ': '
-        + inDatabase.length + ' already in the database' + (missing.length > 0 ? ', ' + missing.length + ' not in the database yet' : '') + '.'));
-      const list = element('ul', 'small');
-      list.style.maxHeight = '14rem';
-      list.style.overflow = 'auto';
-      rows.forEach(function (row) {
-        const state = row.id !== null ? 'in the database' : row.several ? 'several in the database have these letters: left alone' : 'not in the database';
-        list.append(element('li', '', row.name + (plasmids.size > 1 ? ' (' + row.plasmid + ')' : '') + ' - ' + state));
-      });
-      dialog.append(list);
+        + inDatabase + ' already in the database' + (notThere > 0 ? ', ' + notThere + ' not in the database yet' : '') + '. Tick the ones to add to the database and attach to the plasmid.'));
       const message = element('p', 'sa-message');
       const actions = element('div', 'sa-actions');
-      dialog.append(message, actions);
+      const go = element('button', 'btn btn-primary', '');
+      go.type = 'button';
+      const refresh = function () {
+        const add = rows.filter(function (row) {
+          return row.picked && row.id === null && !row.several;
+        }).length;
+        const have = rows.filter(function (row) {
+          return row.picked && row.id !== null;
+        }).length;
+        go.disabled = add + have === 0;
+        go.textContent = add + have === 0 ? 'Nothing is ticked' : add > 0 ? 'Add ' + add + ' to the database' + (have > 0 ? ' and attach ' + (add + have) : ' and attach ' + (add === 1 ? 'it' : 'them')) : 'Attach ' + have;
+      };
+      const bar = element('div', 'small mb-1');
+      [['Tick all', true], ['Tick none', false]].forEach(function (choice) {
+        const node = element('button', 'btn btn-link btn-sm p-0 mr-3', choice[0]);
+        node.type = 'button';
+        node.addEventListener('click', function () {
+          rows.forEach(function (row) {
+            row.picked = choice[1] && !row.several;
+          });
+          list.querySelectorAll('input').forEach(function (box, index) {
+            box.checked = rows[index].picked;
+          });
+          refresh();
+        });
+        bar.append(node);
+      });
+      const list = element('div', 'small');
+      list.style.maxHeight = '16rem';
+      list.style.overflow = 'auto';
+      list.style.border = '1px solid #dee2e6';
+      list.style.borderRadius = '4px';
+      list.style.padding = '0.3rem 0.5rem';
+      rows.forEach(function (row) {
+        const line = element('label', 'd-flex align-items-baseline');
+        line.style.fontWeight = '400';
+        line.style.marginBottom = '0.2rem';
+        const box = element('input', 'mr-2');
+        box.type = 'checkbox';
+        box.checked = row.picked;
+        box.disabled = row.several;
+        box.addEventListener('change', function () {
+          row.picked = box.checked;
+          refresh();
+        });
+        const state = row.id !== null ? 'in the database' : row.several ? 'several in the database have these letters: left alone' : 'not in the database yet';
+        const text = element('span', '', row.name + (plasmids.size > 1 ? ' (' + row.plasmid + ')' : ''));
+        text.style.flex = '1';
+        const detail = element('span', 'text-muted ml-2', row.bases.length + ' bases, ' + state);
+        detail.style.whiteSpace = 'nowrap';
+        line.append(box, text, detail);
+        list.append(line);
+      });
+      dialog.append(bar, list, message, actions);
       backdrop.append(dialog);
       document.body.append(backdrop);
 
@@ -253,14 +302,12 @@
         }
       };
       document.addEventListener('keydown', onKey);
-      const button = function (text, className, onClick) {
-        const node = element('button', 'btn ' + className, text);
-        node.type = 'button';
-        node.addEventListener('click', onClick);
-        actions.append(node);
-        return node;
-      };
-      const run = async function (create) {
+      const notNow = element('button', 'btn btn-secondary', 'Not now');
+      notNow.type = 'button';
+      notNow.addEventListener('click', close);
+      actions.append(notNow, go);
+      refresh();
+      go.addEventListener('click', async function () {
         actions.querySelectorAll('button').forEach(function (node) {
           node.disabled = true;
         });
@@ -271,9 +318,11 @@
         let attached = 0;
         let created = 0;
         try {
-          for (const row of rows) {
+          for (const row of rows.filter(function (item) {
+            return item.picked && !item.several;
+          })) {
             let id = row.id;
-            if (id === null && create && !row.several) {
+            if (id === null) {
               id = made.get(row.key) || null;
               if (id === null) {
                 // two different primers with one name are told apart by the plasmid and the place
@@ -287,10 +336,8 @@
                 created += 1;
               }
             }
-            if (id !== null) {
-              await tools.attach(row.entry, id);
-              attached += 1;
-            }
+            await tools.attach(row.entry, id);
+            attached += 1;
           }
           message.textContent = attached + (attached === 1 ? ' primer' : ' primers') + ' attached' + (created > 0 ? ', ' + created + ' of them added to the database' : '') + '.';
         } catch (error) {
@@ -298,19 +345,11 @@
           message.className = 'sa-message error';
         }
         actions.textContent = '';
-        button('Close', 'btn-primary', close);
-      };
-      button('Not now', 'btn-secondary', close);
-      if (inDatabase.length > 0) {
-        button('Attach the ' + inDatabase.length + ' in the database', missing.length > 0 ? 'btn-secondary' : 'btn-primary', function () {
-          run(false);
-        });
-      }
-      if (missing.length > 0) {
-        button((inDatabase.length > 0 ? 'Attach them all, and add the ' : 'Add the ') + missing.length + ' missing to the database' + (inDatabase.length > 0 ? '' : ' and attach them'), 'btn-primary', function () {
-          run(true);
-        });
-      }
+        const done = element('button', 'btn btn-primary', 'Close');
+        done.type = 'button';
+        done.addEventListener('click', close);
+        actions.append(done);
+      });
     });
   }
 

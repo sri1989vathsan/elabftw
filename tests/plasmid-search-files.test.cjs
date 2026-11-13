@@ -99,8 +99,7 @@ test('a plasmid that gets its sequence from a GenBank file is offered its primer
   // files dropped on the list: one question for all the GenBank files
   assert.match(js, /if \(withPrimers\.length > 0\) \{\s*await offerPrimers\(withPrimers\);/);
   // nothing is made unless the user picks the button that says so; "Not now" is there
-  assert.match(js, /button\('Not now', 'btn-secondary', close\)/);
-  assert.match(js, /run\(true\)/);
+  assert.match(js, /element\('button', 'btn btn-secondary', 'Not now'\)/);
   assert.match(js, /tools\.createPrimer\(title, row\.bases, row\.forward, row\.plasmid, row\.entry\)/);
   // a failure to read the file never stops the upload
   assert.match(js, /The primers of the file could not be read/);
@@ -179,4 +178,45 @@ test('sequence files dropped on the import dialog wait for "Where the entries go
   assert.match(js, /window\.location\.href = 'registry\.php\?mode=edit&id=' \+ made\[0\];/);
   assert.match(js, /in My entries, in your own database \(private\)/);
   assert.match(js, /failed\.length > 0, 10\);/);
+});
+
+test('primers written as the feature "primer" (ApE, SnapGene) are read, with the oligo of the note as the primer', () => {
+  const window = {};
+  new Function('window', read('web/genbank-primers.js'))(window);
+  const reader = window.GenbankPrimers;
+  const sequence = 'ACGTTGCAAGGCTTAACCGGTTAAGCTTGGATCCAATTCGGCCATATGCGCGTAATACGA';
+  const file = 'LOCUS       ape 60 bp DNA circular\nFEATURES             Location/Qualifiers\n'
+    + '     primer          5..20\n                     /label="ape fwd"\n                     /note="sequence: ' + sequence.slice(4, 20).toLowerCase() + '"\n'
+    + '     primer          complement(31..48)\n                     /label="ape rev"\n                     /note="sequence: TTTT' + sequence.slice(30, 48) + '"\n'
+    + '     primer          50..58\n                     /label="too short"\n'
+    + '     CDS             1..30\n                     /label="AmpR"\n'
+    + 'ORIGIN\n        1 ' + sequence.toLowerCase() + '\n//\n';
+  const primers = reader.read(file);
+  // the third is 9 bases: read, and left out later by the minimum length
+  assert.equal(primers.length, 3);
+  assert.equal(primers[0].bases, sequence.slice(4, 20));
+  assert.equal(primers[0].name, 'ape fwd');
+  // the note is the oligo as ordered, tail included
+  assert.equal(primers[1].bases, 'TTTT' + sequence.slice(30, 48));
+  assert.equal(primers[1].forward, false);
+  // a primer called AmpR would not make the resistance
+  const named = 'LOCUS       x 20 bp DNA circular\nFEATURES             Location/Qualifiers\n     primer          1..10\n                     /label="AmpR-F"\nORIGIN\n        1 acgtacgtacgtacgtacgt\n//\n';
+  assert.equal(reader.summary(named).resistance, '');
+});
+
+test('the primers dialog lists every primer of the file with a box, and only the ticked ones are added and attached', () => {
+  const js = read('web/sequence-add.js');
+  assert.match(js, /row\.picked = !row\.several;/);
+  assert.match(js, /box\.type = 'checkbox';/);
+  assert.match(js, /\['Tick all', true\], \['Tick none', false\]/);
+  // what is ticked decides: nothing ticked, nothing to do
+  assert.match(js, /'Nothing is ticked'/);
+  assert.match(js, /rows\.filter\(function \(item\) \{\s*return item\.picked && !item\.several;/);
+  // a primer that is not in the database is added when it is ticked, one that is there is only attached
+  assert.match(js, /if \(id === null\) \{\s*id = made\.get\(row\.key\) \|\| null;/);
+  assert.match(js, /await tools\.attach\(row\.entry, id\);/);
+  // the ones that match several primers of the database are not ticked and cannot be ticked
+  assert.match(js, /box\.disabled = row\.several;/);
+  const php = read('web/sequence-viewer/genbank-primers.inc.php');
+  assert.match(php, /array\('primer_bind', 'primer'\)/);
 });
