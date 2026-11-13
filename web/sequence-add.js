@@ -103,6 +103,65 @@
     });
   }
 
+  // what a GenBank file says about the plasmid (its name, size, resistance...), null for another kind of file
+  async function summaryOf(file) {
+    if (!file || !GENBANK_FILE.test(file.name || '')) {
+      return null;
+    }
+    try {
+      if (!window.GenbankPrimers) {
+        await loadScript('genbank-primers.js');
+      }
+      return window.GenbankPrimers.summary(await file.text());
+    } catch (error) {
+      return null;
+    }
+  }
+
+  // the fields of the module that the file answers are filled in (the resistance, when the genes of the file show one antibiotic);
+  // what the file does not say is left as it is
+  async function applyDetails(entryId, details) {
+    if (!details || details.resistance === '') {
+      return;
+    }
+    try {
+      const entry = await (await fetch('api/v2/inventory/' + entryId, { credentials: 'same-origin' })).json();
+      const metadata = JSON.parse(entry.metadata || '{"extra_fields":{}}');
+      const fields = metadata.extra_fields || {};
+      const key = Object.keys(fields).find(function (field) {
+        return /^resistance/i.test(field);
+      });
+      if (!key || (Array.isArray(fields[key].options) && fields[key].options.indexOf(details.resistance) === -1)) {
+        return;
+      }
+      fields[key].value = details.resistance;
+      metadata.extra_fields = fields;
+      await fetch('api/v2/inventory/' + entryId, {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() },
+        body: JSON.stringify({ metadata: JSON.stringify(metadata) }),
+      });
+    } catch (error) {
+      console.warn('The details of the file could not be filled in:', error);
+    }
+  }
+
+  // a line that tells what was read from the file
+  function describeDetails(details) {
+    const parts = [];
+    if (details.name) {
+      parts.push('name ' + details.name);
+    }
+    if (details.length > 0) {
+      parts.push(details.length + ' bp' + (details.topology ? ', ' + details.topology : ''));
+    }
+    if (details.resistance) {
+      parts.push('resistance ' + details.resistance + ' (' + details.resistanceFrom + ')');
+    }
+    return parts.length > 0 ? 'Read from the file: ' + parts.join('; ') + '.' : '';
+  }
+
   // items: [{ entry: id of the plasmid, title, file: the sequence file that was attached }]. Resolves when the user is done.
   async function offerPrimers(items) {
     let rows = [];
@@ -364,6 +423,26 @@
     showChoice();
 
     const message = element('p', 'sa-message');
+    // the name was filled in from the file, not typed: a new file may replace it
+    let nameFromFile = false;
+    name.addEventListener('input', function () {
+      nameFromFile = false;
+    });
+    const fillFromFile = async function (chosen) {
+      const details = await summaryOf(chosen);
+      if (!details) {
+        return;
+      }
+      if (details.name && (name.value.trim() === '' || nameFromFile)) {
+        name.value = details.name;
+        nameFromFile = true;
+      }
+      const said = describeDetails(details);
+      if (said !== '') {
+        message.className = 'sa-message';
+        message.textContent = chosen.name + ' chosen. ' + said;
+      }
+    };
     const actions = element('div', 'sa-actions');
     const cancel = element('button', 'btn btn-secondary', 'Cancel');
     cancel.type = 'button';
@@ -413,6 +492,13 @@
       radios.file.checked = true;
       showChoice();
       message.textContent = event.dataTransfer.files.length > 1 ? dropped.name + ' chosen (one file for a new entry: the others were left out).' : dropped.name + ' chosen.';
+      fillFromFile(dropped);
+    });
+    // a GenBank file chosen or dropped fills the name (unless the user typed one) and tells what else it says
+    file.addEventListener('change', function () {
+      if (file.files && file.files[0]) {
+        fillFromFile(file.files[0]);
+      }
     });
     backdrop.append(dialog);
     document.body.append(backdrop);
@@ -448,9 +534,15 @@
           return;
         }
         if (title === '') {
-          title = sequenceFile.name.replace(/\.[^.]+$/, '');
+          // the name the GenBank file carries, else the name of the file
+          const found = await summaryOf(sequenceFile);
+          title = (found && found.name) || sequenceFile.name.replace(/\.[^.]+$/, '');
         }
       } else if (radios.paste.checked) {
+        if (title === '' && /^LOCUS\b/m.test(paste.value)) {
+          const found = await summaryOf(new File([paste.value], 'pasted.gb'));
+          title = (found && found.name) || '';
+        }
         sequenceFile = fileFromText(title, paste.value);
         if (!sequenceFile) {
           message.textContent = 'There is no sequence in the text.';
@@ -463,6 +555,8 @@
         const id = await createEntry(categoryId, title);
         if (sequenceFile) {
           await uploadFile(id, sequenceFile);
+          // what the GenBank file says is filled in the fields of the entry
+          await applyDetails(id, await summaryOf(sequenceFile));
         }
         for (const parentId of parents.ids()) {
           await addParent(id, parentId);
@@ -587,6 +681,57 @@
       button.textContent = error.message || String(error);
     }
   });
+  function toast(text, failed) {
+    const note = element('div', 'sa-toast', text);
+    note.setAttribute('role', 'status');
+    if (failed) {
+      note.style.background = '#b3261e';
+    }
+    document.body.append(note);
+    window.setTimeout(function () {
+      note.remove();
+    }, 6000);
+  }
+
+  // files given to a module: one new entry each (named by the GenBank file, with what it says), or all of them to one entry that is there.
+  // The GenBank files can carry primers: one question for all of them. Used by the drop on the list and by the Import dialog.
+  async function addFiles(files, entry, category) {
+    toast('Adding ' + files.length + (files.length === 1 ? ' file' : ' files') + '...');
+    let done = 0;
+    const failed = [];
+    const withPrimers = [];
+    for (const file of files) {
+      try {
+        const details = await summaryOf(file);
+        const named = (details && details.name) || file.name.replace(/\.[^.]+$/, '');
+        const target = entry > 0 ? entry : await createEntry(category, named, 'personal');
+        await uploadFile(target, file);
+        done += 1;
+        // a new entry takes the name and the resistance the GenBank file carries; an entry that is there keeps what it has
+        if (entry === 0) {
+          await applyDetails(target, details);
+        }
+        if (GENBANK_FILE.test(file.name)) {
+          withPrimers.push({ entry: target, title: named, file: file });
+        }
+      } catch (error) {
+        failed.push(file.name + ': ' + (error.message || error));
+      }
+    }
+    // the GenBank files dropped can carry primers: one question for all of them
+    if (withPrimers.length > 0) {
+      await offerPrimers(withPrimers);
+    }
+    toast((entry > 0 ? done + ' attached to the entry.' : done + ' new in your database, one entry per file.') + (failed.length ? ' Not added: ' + failed.join('; ') : ''), failed.length > 0);
+    if (done > 0) {
+      window.setTimeout(function () {
+        window.location.reload();
+      }, 1500);
+    }
+  }
+
+  window.SequenceAdd = { addFiles: function (category, files) { return addFiles(files, 0, category); } };
+
   // ---- drag and drop of files on the list of a module: a file dropped on a row is attached to that entry (a sequence file opens in
   // the sequence editor); files dropped elsewhere on the list make one entry each in the module that is open, in your own database
   (function () {
@@ -595,17 +740,6 @@
     }
     const hasFiles = function (event) {
       return event.dataTransfer && Array.prototype.indexOf.call(event.dataTransfer.types || [], 'Files') !== -1;
-    };
-    const toast = function (text, failed) {
-      const note = element('div', 'sa-toast', text);
-      note.setAttribute('role', 'status');
-      if (failed) {
-        note.style.background = '#b3261e';
-      }
-      document.body.append(note);
-      window.setTimeout(function () {
-        note.remove();
-      }, 6000);
     };
     const rowOf = function (target) {
       let row = target.closest ? target.closest('tr.expandable-row, tr.expandable-detail-row') : null;
@@ -658,32 +792,7 @@
         toast('Open a module first: files dropped on the list make new entries in the module that is open.', true);
         return;
       }
-      toast('Adding ' + files.length + (files.length === 1 ? ' file' : ' files') + '...');
-      let done = 0;
-      const failed = [];
-      const withPrimers = [];
-      for (const file of files) {
-        try {
-          const target = entry > 0 ? entry : await createEntry(category, file.name.replace(/\.[^.]+$/, ''), 'personal');
-          await uploadFile(target, file);
-          done += 1;
-          if (GENBANK_FILE.test(file.name)) {
-            withPrimers.push({ entry: target, title: file.name.replace(/\.[^.]+$/, ''), file: file });
-          }
-        } catch (error) {
-          failed.push(file.name + ': ' + (error.message || error));
-        }
-      }
-      // the GenBank files dropped can carry primers: one question for all of them
-      if (withPrimers.length > 0) {
-        await offerPrimers(withPrimers);
-      }
-      toast((entry > 0 ? done + ' attached to the entry.' : done + ' new in your database, one entry per file.') + (failed.length ? ' Not added: ' + failed.join('; ') : ''), failed.length > 0);
-      if (done > 0) {
-        window.setTimeout(function () {
-          window.location.reload();
-        }, 1500);
-      }
+      await addFiles(files, entry, category);
     });
   })();
 })();

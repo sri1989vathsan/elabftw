@@ -37,8 +37,8 @@
     return 'primer';
   };
 
-  // [{name, start, end, forward, bases}], positions are 1-based with the end included; features with a split location are left out
-  function read(genbank) {
+  // the sequence and the features of a GenBank file: {sequence, features: [{key, location, qualifiers}]}
+  function parse(genbank) {
     let sequence = '';
     const features = [];
     let current = null;
@@ -103,9 +103,15 @@
     if (current) {
       features.push(current);
     }
-    sequence = sequence.toUpperCase();
+    return { sequence: sequence.toUpperCase(), features: features };
+  }
+
+  // [{name, start, end, forward, bases}], positions are 1-based with the end included; features with a split location are left out
+  function read(genbank) {
+    const parsed = parse(genbank);
+    const sequence = parsed.sequence;
     const primers = [];
-    for (const feature of features) {
+    for (const feature of parsed.features) {
       if (feature.key.toLowerCase() !== 'primer_bind') {
         continue;
       }
@@ -134,5 +140,51 @@
     return primers;
   }
 
-  window.GenbankPrimers = { read: read, clean: clean, reverseComplement: reverseComplement, key: key, minLength: MIN_LENGTH };
+  // names that are not a name of a plasmid: the file name is used instead
+  const GENERIC_NAMES = /^(untitled|unnamed|exported|sequence|new[ _-]?dna|dna|unknown|name)\b/i;
+  // the antibiotic of the resistance genes, by the names the features carry (a short name has to be the whole name)
+  const RESISTANCE = [
+    ['Ampicillin', /^(amp|ampr|ampicillin|bla|blatem|ampicillin resistance|beta-lactamase)$|\bampicillin\b|\bbeta-lactamase\b/i],
+    ['Kanamycin', /^(kan|kanr|kanamycin|nptii|nptiii|neor|aph\(3'\)-ia?|kanamycin resistance)$|\bkanamycin\b/i],
+    ['Chloramphenicol', /^(cm|cmr|camr|cat|chloramphenicol|chloramphenicol resistance|chloramphenicol acetyltransferase)$|\bchloramphenicol\b/i],
+    ['Spectinomycin', /^(spec|specr|aada|spectinomycin|spectinomycin resistance)$|\bspectinomycin\b/i],
+  ];
+
+  // what a GenBank file says about the plasmid: {name, length, topology, definition, resistance, resistanceFrom}; empty strings when not there
+  function summary(genbank) {
+    const text = String(genbank || '');
+    const out = { name: '', length: 0, topology: '', definition: '', resistance: '', resistanceFrom: '' };
+    const locus = /^LOCUS[ \t]+(\S+)([^\r\n]*)/m.exec(text);
+    if (locus) {
+      out.name = GENERIC_NAMES.test(locus[1]) ? '' : locus[1];
+      const size = /(\d+)\s*bp/i.exec(locus[2]);
+      out.length = size ? Number(size[1]) : 0;
+      out.topology = /\bcircular\b/i.test(locus[2]) ? 'circular' : /\blinear\b/i.test(locus[2]) ? 'linear' : '';
+    }
+    const definition = /^DEFINITION[ \t]+([^\r\n]*(?:\r?\n {2,}[^\r\n]*)*)/m.exec(text);
+    out.definition = definition ? definition[1].replace(/\s+/g, ' ').replace(/\.$/, '').trim() : '';
+    // the antibiotic: only when the genes show exactly one
+    const found = new Map();
+    parse(text).features.forEach(function (feature) {
+      const key = feature.key.toLowerCase();
+      if (key === 'primer_bind' || key === 'source') {
+        return;
+      }
+      ['label', 'gene', 'product', 'standard_name'].forEach(function (qualifier) {
+        const value = String(feature.qualifiers[qualifier] || '').replace(/^[\s"]+|[\s"]+$/g, '');
+        RESISTANCE.forEach(function (entry) {
+          if (value !== '' && entry[1].test(value) && !found.has(entry[0])) {
+            found.set(entry[0], value);
+          }
+        });
+      });
+    });
+    if (found.size === 1) {
+      out.resistance = Array.from(found.keys())[0];
+      out.resistanceFrom = Array.from(found.values())[0];
+    }
+    return out;
+  }
+
+  window.GenbankPrimers = { read: read, summary: summary, clean: clean, reverseComplement: reverseComplement, key: key, minLength: MIN_LENGTH };
 })();

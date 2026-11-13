@@ -200,7 +200,7 @@
     box.setAttribute('aria-modal', 'true');
     box.append(element('h5', '', 'Import into ' + module.title));
     const help = element('p', 'small text-muted');
-    help.append(document.createTextNode('A CSV file with a heading row (Excel can save one), or a ZIP from an export with files. Every row makes an entry. '));
+    help.append(document.createTextNode('A CSV file with a heading row (Excel can save one), or a ZIP from an export with files (choose the file, or drop it on this window). Every row makes an entry. Sequence files (GenBank, FASTA, SnapGene) dropped here make one entry each, named after the file. '));
     const template = element('a', '', 'Download a template');
     template.href = 'registry-transfer.php?template=1&category=' + category;
     help.append(template, document.createTextNode(' with the fields of this module, or '));
@@ -326,6 +326,60 @@
     box.append(mapping, element('p', 'small text-muted mb-1', 'Where the entries go'), destination, keepLabel, storageLabel, primersLabel, ownerBox, message, buttons);
     back.append(box);
     document.body.append(back);
+
+    // a file dropped on the dialog is the file to import. The drop stops here: the list behind the dialog would otherwise take it as
+    // a file to attach to a row or make an entry from. Only an outline marks the dialog (a tint would make it see-through).
+    const hasFiles = function (event) {
+      return event.dataTransfer && Array.prototype.indexOf.call(event.dataTransfer.types || [], 'Files') !== -1;
+    };
+    const mark = function (on) {
+      box.style.outline = on ? '2px dashed #5b8def' : '';
+      box.style.outlineOffset = on ? '-6px' : '';
+    };
+    back.addEventListener('dragover', function (event) {
+      if (hasFiles(event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        mark(true);
+      }
+    });
+    back.addEventListener('dragleave', function (event) {
+      if (!back.contains(event.relatedTarget)) {
+        mark(false);
+      }
+    });
+    back.addEventListener('drop', function (event) {
+      if (!hasFiles(event)) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      mark(false);
+      const dropped = event.dataTransfer.files[0];
+      if (!dropped) {
+        return;
+      }
+      // sequence files (GenBank, FASTA, SnapGene): one entry each in this module, named and filled in from the file, then the question
+      // about the primers of the GenBank files (the code is that of the drop on the list, see sequence-add.js)
+      const sequences = Array.from(event.dataTransfer.files).filter(function (candidate) {
+        return /\.(gb|gbk|gbff|genbank|fasta|fa|fna|dna)$/i.test(candidate.name);
+      });
+      if (sequences.length > 0 && window.SequenceAdd) {
+        back.remove();
+        window.SequenceAdd.addFiles(category, sequences.slice(0, 50));
+        return;
+      }
+      if (!/\.(csv|tsv|txt|zip)$/i.test(dropped.name)) {
+        message.className = 'small mb-2 text-danger';
+        message.textContent = dropped.name + ' cannot be imported: use a CSV file, a ZIP from an export, or sequence files (GenBank, FASTA, SnapGene).';
+        return;
+      }
+      message.textContent = '';
+      const list = new DataTransfer();
+      list.items.add(dropped);
+      file.files = list.files;
+      file.dispatchEvent(new Event('change'));
+    });
 
     const normal = function (text) {
       return String(text).toLowerCase().replace(/[^a-z0-9]+/g, '');

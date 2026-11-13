@@ -119,3 +119,41 @@ test('a sequence file can be dropped on the dialog of a new entry, which stays o
   // the general drop tint is see-through: on the dialog it would replace the white of the popup
   assert.match(css, /\.sa-dialog\.sa-drop-target \{[^}]*, #fff;/);
 });
+
+test('a GenBank file gives the name and the resistance of the plasmid (JavaScript reader)', () => {
+  const window = {};
+  new Function('window', read('web/genbank-primers.js'))(window);
+  const reader = window.GenbankPrimers;
+  const file = 'LOCUS       pTEST_1            2686 bp ds-DNA     circular SYN 01-JAN-2000\nDEFINITION  A test\n            plasmid.\nFEATURES             Location/Qualifiers\n     source          1..2686\n     CDS             complement(100..960)\n                     /label="AmpR"\n     promoter        1000..1100\n                     /label="AmpR promoter"\nORIGIN\n        1 acgt\n//\n';
+  assert.deepEqual(reader.summary(file), { name: 'pTEST_1', length: 2686, topology: 'circular', definition: 'A test plasmid', resistance: 'Ampicillin', resistanceFrom: 'AmpR' });
+  // a generic name is not a name; two antibiotics are not guessed
+  const two = 'LOCUS       Untitled 10 bp DNA linear\nFEATURES             Location/Qualifiers\n     CDS 1..9\n                     /gene="bla"\n     CDS 1..9\n                     /label="KanR"\nORIGIN\n 1 acgtacgtac\n//';
+  const said = reader.summary(two);
+  assert.equal(said.name, '');
+  assert.equal(said.resistance, '');
+  // the primers are read as before
+  assert.equal(reader.read(file).length, 0);
+});
+
+test('dropping or choosing a GenBank file fills the name and the fields; the import dialog takes dropped files', () => {
+  const js = read('web/sequence-add.js');
+  assert.match(js, /async function summaryOf\(file\)/);
+  assert.match(js, /async function applyDetails\(entryId, details\)/);
+  // the dialog: name filled unless typed, a message tells what was read
+  assert.match(js, /if \(details\.name && \(name\.value\.trim\(\) === '' \|\| nameFromFile\)\)/);
+  assert.match(js, /fillFromFile\(dropped\);/);
+  assert.match(js, /file\.addEventListener\('change', function \(\) \{\s*if \(file\.files && file\.files\[0\]\) \{\s*fillFromFile/);
+  // creating: the name of the file's LOCUS line before the name of the file, and the fields filled after the upload
+  assert.match(js, /title = \(found && found\.name\) \|\| sequenceFile\.name/);
+  assert.match(js, /await applyDetails\(id, await summaryOf\(sequenceFile\)\);/);
+  // one function adds files to a module: the drop on the list and the import dialog use it
+  assert.match(js, /async function addFiles\(files, entry, category\)/);
+  assert.match(js, /await addFiles\(files, entry, category\);/);
+  assert.match(js, /window\.SequenceAdd = \{ addFiles:/);
+  const planned = read('web/planned.js');
+  assert.match(planned, /back\.addEventListener\('drop', function \(event\)/);
+  assert.match(planned, /window\.SequenceAdd\.addFiles\(category, sequences\.slice\(0, 50\)\);/);
+  // the dialog keeps its own background while a file is over it (an outline only)
+  assert.match(planned, /box\.style\.outline = on \? '2px dashed #5b8def' : '';/);
+  assert.doesNotMatch(planned, /box\.style\.background/);
+});
