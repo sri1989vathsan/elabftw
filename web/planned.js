@@ -1497,3 +1497,75 @@
   ].join('\n');
   document.head.append(style);
 })();
+
+/**
+ * The page of an entry of a module (view and edit): the Description comes right after the Details, and the Storage and the Lineage after it.
+ * The page has them as Details, Storage, Lineage, Description. The Description (with the editor of its text) stays where it is in the page and
+ * the Storage and Lineage parts are moved after it, in the browser: the template of the page is not changed.
+ */
+(function () {
+  'use strict';
+  if (!/registry\.php$/.test(window.location.pathname) || !/[?&]mode=(view|edit)\b/.test(window.location.search)) {
+    return;
+  }
+  const order = function () {
+    const main = document.getElementById('main_section');
+    if (!main || main.dataset.otdDescription) {
+      return Boolean(main && main.dataset.otdDescription);
+    }
+    const kids = Array.from(main.children);
+    const heading = function (label) {
+      return kids.findIndex(function (node) {
+        const title = node.matches('h3') ? node : node.querySelector('h3');
+        return title !== null && title.textContent.trim().replace(/\s+/g, ' ').indexOf(label) === 0;
+      });
+    };
+    const details = heading('Details');
+    const storage = heading('Storage');
+    const description = heading('Description');
+    if (details < 0 || storage < 0 || description < 0 || !(details < storage && storage < description)) {
+      return false;
+    }
+    // the rule after the details, the parts from there to the rules before the Description (the Storage with its windows, the Lineage)
+    let from = details + 1;
+    while (from < kids.length && !kids[from].matches('hr')) {
+      from++;
+    }
+    from++;
+    let to = description - 1;
+    while (to > from && kids[to].matches('hr')) {
+      to--;
+    }
+    // the last rule of the moved parts stays with them
+    const moved = kids.slice(from, to + 2 > description ? description : to + 2);
+    if (moved.length === 0 || from >= description) {
+      return false;
+    }
+    main.dataset.otdDescription = '1';
+    // the rules that were between the Lineage and the Description: one is enough in front of the Description (it is after the Details)
+    const extra = kids.slice(to + 1, description).filter(function (node) {
+      return node.matches('hr');
+    });
+    extra.forEach(function (node) {
+      node.remove();
+    });
+    const last = Array.from(main.children).pop();
+    const rule = document.createElement('hr');
+    last.after(rule);
+    let after = rule;
+    moved.forEach(function (node) {
+      after.after(node);
+      after = node;
+    });
+    return true;
+  };
+  if (!order()) {
+    let tries = 0;
+    const timer = window.setInterval(function () {
+      tries += 1;
+      if (order() || tries > 20) {
+        window.clearInterval(timer);
+      }
+    }, 300);
+  }
+})();

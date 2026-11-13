@@ -613,3 +613,12 @@ test('the edit page keeps its order: the main section (Details, Storage, Lineage
   // the section is moved (and gets its look) only after that check
   assert.ok(planned.indexOf("section.classList.add('otd-ownership');") > planned.indexOf('On the edit page this section is the main one'));
 });
+
+test('the Description comes right after the Details; the Storage and Lineage parts are moved after it (the editor of the text is not moved)', () => {
+  const planned = read('web/planned.js');
+  assert.match(planned, /main\.dataset\.otdDescription = '1';/);
+  assert.match(planned, /heading\('Details'\)/);
+  assert.match(planned, /heading\('Storage'\)/);
+  assert.match(planned, /heading\('Description'\)/);
+  assert.match(planned, /moved\.forEach\(function \(node\) \{\s*after\.after\(node\);/);
+});
