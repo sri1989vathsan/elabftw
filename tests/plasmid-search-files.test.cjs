@@ -394,10 +394,10 @@ test('the state of an order is in the header of its card, in the look of the Lab
   assert.doesNotMatch(changed, /OrdersBoard\.svelte/);
 });
 
-test('placing an order: a link adds the new entry of the Database by itself, with its module and its columns (shown and editable), read from the page of the link when the server has internet', () => {
+test('placing an order: the columns of a new entry are shown and editable, read from the page of the link when the server has internet', () => {
   const js = read('web/order-to-database.js');
-  // the form of a new order: title and module filled in, the row added by itself for an order with a link (not for an item that is there already)
-  assert.match(js, /const autoAddEntry = function \(\)/);
+  // the form of a new order: title and module filled in; the row is added when the box "Add it to the Database too" is ticked (not by itself)
+  assert.match(js, /const checkOrder = function \(\)/);
   assert.match(js, /\/Add a new entry of the database instead\/\.test\(candidate\.textContent\)/);
   assert.match(js, /findExisting\(\{ name: row\.name, catalog: row\.catalog, sequence: '' \}\)/);
   // the columns of the module under the row, and what the person sees is what the entry gets
@@ -513,7 +513,8 @@ test('two primers ticked in the Primers tab give their PCR product, which can be
   assert.match(pcr, /function genbankOf\(item, template, name, names\)/);
   assert.match(pcr, /circular: false, sequence: item\.sequence/);
   assert.match(pcr, /type: 'primer_bind', start: 0/);
-  assert.match(pcr, /action: 'add', entry: id, parent: context\.entryId/);
+  // the parents are a list (the save form is shared with the cloning tools): each one is added as a parent of the new entry
+  assert.match(pcr, /action: 'add', entry: id, parent: parentId/);
   assert.match(pcr, /await tools\.attach\(id, entry\.id\);/);
   assert.match(pcr, /\['lab', 'The lab database \(it is locked\)'\]/);
 });
@@ -621,4 +622,20 @@ test('the Description comes right after the Details; the Storage and Lineage par
   assert.match(planned, /heading\('Storage'\)/);
   assert.match(planned, /heading\('Description'\)/);
   assert.match(planned, /moved\.forEach\(function \(node\) \{\s*after\.after\(node\);/);
+});
+
+test('placing an order: nothing is added to the Database by itself; a known item is linked, a new one is offered with a box that is not ticked', () => {
+  const order = read('web/order-to-database.js');
+  assert.doesNotMatch(order, /autoAddEntry/);
+  assert.match(order, /const checkOrder = function \(\) \{/);
+  // a known item is linked to the order through the field "Link an entry of the database"
+  assert.match(order, /const linkToOrder = async function \(form, existing\)/);
+  assert.match(order, /In the database: /);
+  // a new one: the box "Add it to the Database too" is not ticked; ticking adds the row, unticking takes it away
+  assert.match(order, /'Add it to the Database too'/);
+  assert.match(order, /tick\.checked = form\.card\.querySelector\('\.orders-pending-resource'\) !== null;/);
+  assert.match(order, /\.orders-pending-resource button\[title="Remove"\]/);
+  // the link that the form made is taken away when the order is changed to another item or its title is cleared
+  assert.match(order, /const dropAutoLink = function \(form\)/);
+  assert.match(order, /dropAutoLink\(form\);\n        delete form\.card\.dataset\.otdState;/);
 });

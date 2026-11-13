@@ -2117,8 +2117,8 @@
     });
     // ---- placing an order: the new entry of the Database is found from what the order says.
     // The form of a new order has "Add a new entry of the database instead": a title and a module. Here the title and the module are filled
-    // in from the order (its title, its notes, its link), when the order has a link the row is added by itself (it can be removed with the
-    // bin; it is made only when the order is requested), and when the entry is made its columns are filled in like the lines of an order.
+    // in from the order (its title, its notes, its link), an item that is in the Database is linked to the order, a new one is offered with a box
+    // "Add it to the Database too" (not ticked; the entry is made when the order is requested), with its columns filled in like the lines of an order.
     const orderForm = function () {
       const card = document.querySelector('.orders-new-card');
       if (!card) {
@@ -2324,7 +2324,7 @@
         }
       });
     };
-    // an order with a link adds its entry of the Database by itself, once for each link, unless the item is there already
+    // the timer of the check of the order (the check is made a little after the last key)
     let autoTimer = 0;
     let autoClicking = false;
     // a click on "Add a new entry of the database instead" adds the row (the form does it) and opens the window of its columns
@@ -2358,57 +2358,208 @@
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
         window.setTimeout(function () {
-          autoAddEntry();
+          checkOrder();
           prefillNewEntries();
         }, 400);
       }
     };
-    const autoAddEntry = function () {
+    // ---- what the form says about the item while the order is placed. Nothing is added to the Database by itself:
+    // - the item is in the Database already (found by its name or its catalog number): it is linked to the order and the form says so;
+    // - it is not: the title, the module and the columns are made ready (from the order and from the page of its link), and the form asks
+    //   "Add it to the Database too" with a box that is not ticked. Ticking it adds the row of the new entry (the entry is made when the order
+    //   is requested), unticking it takes the row away again.
+    const orderPause = function (ms) {
+      return new Promise(function (resolve) {
+        window.setTimeout(resolve, ms);
+      });
+    };
+    const stateBox = function (form) {
+      let box = form.card.querySelector('.otd-order-state');
+      if (!box) {
+        const input = form.card.querySelector('input[placeholder^="Link an entry of the database"]');
+        const picker = input ? input.closest('.orders-resource-picker') : null;
+        if (!picker) {
+          return null;
+        }
+        box = element('div', 'otd-order-state small mb-2', '', 'align-items:center;display:flex;flex-wrap:wrap;gap:0.25rem 0.75rem');
+        picker.before(box);
+      }
+      return box;
+    };
+    const hideState = function (form) {
+      const box = form.card.querySelector('.otd-order-state');
+      if (box) {
+        box.style.display = 'none';
+      }
+    };
+    // the item is linked to the order through the field "Link an entry of the database": its name is searched and the result with that name is pressed,
+    // the way a person does it (once for each name: a link that was taken away by hand is not put back)
+    const linkToOrder = async function (form, existing) {
+      if (form.card.querySelector('.orders-resource-badge')) {
+        return true;
+      }
+      const input = form.card.querySelector('input[placeholder^="Link an entry of the database"]');
+      if (!input) {
+        return false;
+      }
+      input.value = searchTerm(existing.title);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      for (let tries = 0; tries < 10; tries++) {
+        await orderPause(300);
+        const hit = Array.from(form.card.querySelectorAll('button.orders-resource-result')).find(function (candidate) {
+          return normalName(candidate.textContent) === normalName(existing.title);
+        });
+        if (hit) {
+          hit.click();
+          // the link that was made here is remembered: it is taken away again when the order is changed to another item
+          for (let wait = 0; wait < 10; wait++) {
+            await orderPause(250);
+            const badges = form.card.querySelectorAll('.orders-resource-badge a');
+            if (badges.length > 0) {
+              form.card.dataset.otdAutoBadge = badges[badges.length - 1].getAttribute('href') || '';
+              break;
+            }
+          }
+          return true;
+        }
+      }
+      input.value = '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      return false;
+    };
+    // the link that was made by the form itself is taken away again (when the order is changed to another item or its title is cleared)
+    const dropAutoLink = function (form) {
+      const old = form.card.dataset.otdAutoBadge;
+      if (!old) {
+        return;
+      }
+      form.card.querySelectorAll('.orders-resource-badge').forEach(function (badge) {
+        const anchor = badge.querySelector('a');
+        const remove = badge.querySelector('button[title="Remove"]');
+        if (anchor && remove && anchor.getAttribute('href') === old) {
+          remove.click();
+        }
+      });
+      delete form.card.dataset.otdAutoBadge;
+      delete form.card.dataset.otdLinked;
+    };
+    const drawState = function (form, state) {
+      const box = stateBox(form);
+      if (!box) {
+        return;
+      }
+      box.style.display = 'flex';
+      box.textContent = '';
+      if (state.existing) {
+        const mark = element('span', '', '', 'color:#1d8348;font-weight:600');
+        mark.append(element('i', 'fas fa-database fa-fw'), document.createTextNode(' In the database: '));
+        const link = element('a', '', state.existing.title);
+        link.href = 'registry.php?mode=view&id=' + state.existing.id;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        box.append(mark, link, element('span', 'text-muted', state.linked ? 'linked to this order' : 'not linked yet'));
+        if (!state.linked) {
+          const again = element('button', 'btn btn-ghost btn-sm', 'Link it');
+          again.type = 'button';
+          again.addEventListener('click', async function () {
+            again.disabled = true;
+            state.linked = await linkToOrder(form, state.existing);
+            drawState(form, state);
+          });
+          box.append(again);
+        }
+        return;
+      }
+      box.append(element('span', 'text-muted', 'Not in the database yet.'));
+      const label = element('label', 'mb-0', '', 'align-items:center;cursor:pointer;display:inline-flex;gap:0.35rem');
+      const tick = element('input');
+      tick.type = 'checkbox';
+      tick.checked = form.card.querySelector('.orders-pending-resource') !== null;
+      tick.addEventListener('change', function () {
+        if (tick.checked) {
+          const button = Array.from(form.card.querySelectorAll('button')).find(function (candidate) {
+            return /Add a new entry of the database instead/.test(candidate.textContent);
+          });
+          if (button) {
+            // the row is added (the window of the columns does not open: the "Columns..." button of the row opens it)
+            autoClicking = true;
+            button.click();
+            autoClicking = false;
+            window.setTimeout(prefillNewEntries, 100);
+          }
+        } else {
+          form.card.querySelectorAll('.orders-pending-resource button[title="Remove"]').forEach(function (remove) {
+            remove.click();
+          });
+        }
+      });
+      label.append(tick, document.createTextNode('Add it to the Database too'));
+      box.append(label, element('span', 'text-muted', 'The columns are filled in from the order and its link (Columns… on the new row).'));
+    };
+    const checkOrder = function () {
       const form = orderForm();
       if (!form) {
         return;
       }
       const linkFound = /https?:\/\/[^\s"'<>)]+/.exec(form.notes.replace(/&amp;/g, '&'));
       if (form.title === '') {
+        // an order that is only a link: its title is made from the link first
         if (linkFound && form.card.dataset.otdTitling !== linkFound[0]) {
           form.card.dataset.otdTitling = linkFound[0];
           titleFromLink(form, linkFound[0]);
         }
+        hideState(form);
+        dropAutoLink(form);
+        delete form.card.dataset.otdState;
         return;
       }
-      const found = linkFound || /https?:\/\/[^\s"'<>)]+/.exec(form.title);
-      if (!found || form.card.dataset.otdAuto === found[0]) {
-        return;
-      }
-      // something is linked or added already: nothing is added by itself
-      if (form.card.querySelector('.orders-pending-resource input[placeholder^="New entry title"]') || form.card.querySelector('.orders-resource-badge')) {
-        return;
-      }
-      form.card.dataset.otdAuto = found[0];
       const row = parseOrder({ title: form.title, notes: form.notes })[0];
+      if (!row || row.name.trim() === '') {
+        hideState(form);
+        return;
+      }
+      const key = normalName(row.name) + '|' + String(row.catalog || '');
+      const box = form.card.querySelector('.otd-order-state');
+      if (form.card.dataset.otdState === key && box) {
+        // the same item: only the box of the row is kept in step with the form
+        const tick = box.querySelector('input[type="checkbox"]');
+        if (tick) {
+          tick.checked = form.card.querySelector('.orders-pending-resource') !== null;
+        }
+        return;
+      }
+      form.card.dataset.otdState = key;
+      // the link that was made for the item before is not the link of this one
+      dropAutoLink(form);
       findExisting({ name: row.name, catalog: row.catalog, sequence: '' }).catch(function () {
         return null;
-      }).then(function (existing) {
-        if (existing) {
+      }).then(async function (existing) {
+        const now = orderForm();
+        // the order was changed meanwhile: the answer is for another item
+        if (!now || now.card.dataset.otdState !== key) {
           return;
         }
-        const button = Array.from(form.card.querySelectorAll('button')).find(function (candidate) {
-          return /Add a new entry of the database instead/.test(candidate.textContent);
-        });
-        if (button) {
-          // the row is added by itself: its window does not open (the "Columns..." button of the row opens it)
-          autoClicking = true;
-          button.click();
-          autoClicking = false;
-          window.setTimeout(prefillNewEntries, 100);
+        if (existing) {
+          // a row of a new entry that was added for another item is not needed for an item that is there
+          const state = { existing: existing, linked: false };
+          if (now.card.dataset.otdLinked !== key) {
+            now.card.dataset.otdLinked = key;
+            state.linked = await linkToOrder(now, existing);
+          } else {
+            state.linked = now.card.querySelector('.orders-resource-badge') !== null;
+          }
+          drawState(now, state);
+          return;
         }
+        drawState(now, { existing: null });
+        prefillNewEntries();
       });
     };
     document.addEventListener('input', function (event) {
       if (event.target && event.target.closest && event.target.closest('.orders-new-card')) {
         window.clearTimeout(autoTimer);
         autoTimer = window.setTimeout(function () {
-          autoAddEntry();
+          checkOrder();
           prefillNewEntries();
         }, 900);
       }
