@@ -932,7 +932,7 @@
   };
 
   // an antibody or a reagent is ordered: a dialog asks for the amount (and the link or the vendor when they are not in the entry), then an
-  // order is made, "Name; Vendor", with the link, the clone and the amount in its description, and linked to the entry
+  // order is made, "Name; Vendor", with the link, the clone and the amount in its description (the entry is not linked to the order: no chip with its name)
   window.addEventListener('registry:order-entry', function (event) {
     const entry = event.detail;
     const field = function (pattern) {
@@ -1021,10 +1021,7 @@
           throw new Error('The order could not be made (' + response.status + ').');
         }
         const orderId = Number((response.headers.get('Location') || '').split('/').pop());
-        const linked = await fetch('primers.php', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() }, body: JSON.stringify({ action: 'order', primers: [entry.id], order: orderId }) });
-        if (!linked.ok) {
-          throw new Error('The order was made, but it could not be linked to the entry (' + linked.status + ').');
-        }
+        // the entry is not linked to the order: the order has no chip with the name of the entry (the link to it is in the description)
         back.remove();
         window.location.href = 'orders.php?order=' + orderId;
       } catch (error) {

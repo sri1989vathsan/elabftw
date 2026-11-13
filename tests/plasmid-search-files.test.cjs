@@ -251,3 +251,9 @@ test('ordering primers from the editor attaches the order sheet only: the primer
   assert.match(read('web/primer-tools.js'), /action: 'order', primers: primerIds, order: orderId, link: false/);
   assert.match(read('web/primers.php'), /\$linkPrimers = \(\$payload\['link'\] \?\? true\) !== false;/);
 });
+
+test('an item ordered from the database (an antibody, a reagent) is not linked to the order: no chip with its name', () => {
+  const planned = read('web/planned.js');
+  assert.doesNotMatch(planned, /action: 'order', primers: \[entry\.id\]/);
+  assert.match(planned, /the entry is not linked to the order: the order has no chip/);
+});
