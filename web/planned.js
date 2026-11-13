@@ -1448,7 +1448,7 @@
         method: 'POST',
         credentials: 'same-origin',
         keepalive: true,
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': meta ? meta.content : '' },
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': meta ? meta.content : '' },
         body: JSON.stringify({ id: id }),
       });
     } catch (error) {

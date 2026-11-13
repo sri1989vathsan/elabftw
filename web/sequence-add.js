@@ -66,7 +66,7 @@
       await fetch('registry-lock.php', {
         method: 'POST',
         credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() },
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() },
         body: JSON.stringify({ id: entryId }),
       });
     } catch (error) {
