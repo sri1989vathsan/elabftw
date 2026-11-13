@@ -307,6 +307,11 @@
     return restored;
   }
 
+  function junctionOf(sequence, position, nameA, nameB, byName) {
+    const records = [byName[String(nameA).toLowerCase()], byName[String(nameB).toLowerCase()]];
+    return { position: position, enzymes: [nameA, nameB], restored: junction(sequence, position, records) };
+  }
+
   function summary(fragment) {
     const end = function (e) {
       return e.type === 'free' ? 'end' : e.enzyme + (e.type === 'blunt' ? ' blunt' : " " + e.type + "'");
@@ -408,6 +413,7 @@
       warnings.push('The chosen piece of the insert still has an end that was not cut.');
     }
     const products = [];
+    const byName = enzymesByName(enzymes);
     [piece, reversed(piece)].forEach(function (oriented) {
       const made = assemble(backbone, oriented);
       if (!made) {
@@ -424,8 +430,8 @@
         features: features,
         lostFeatures: lost,
         junctions: [
-          { position: made.offset, enzymes: [backbone.right.enzyme, oriented.left.enzyme], restored: junction(made.sequence, made.offset, [backbone.right.enzyme, oriented.left.enzyme].map(function (name) { return findEnzyme({ enzymes: enzymesByName(enzymes) }, name); })) },
-          { position: made.sequence.length - backbone.left.len, enzymes: [oriented.right.enzyme, backbone.left.enzyme], restored: [] },
+          junctionOf(made.sequence, made.offset, backbone.right.enzyme, oriented.left.enzyme, byName),
+          junctionOf(made.sequence, made.sequence.length - backbone.left.len, oriented.right.enzyme, backbone.left.enzyme, byName),
         ],
       });
     });

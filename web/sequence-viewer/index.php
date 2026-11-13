@@ -157,6 +157,7 @@ $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'U
   <script src="cloning-engine.js?v=<?= (int) filemtime(__DIR__ . '/cloning-engine.js') ?>"></script>
   <script src="cloning-insert.js?v=<?= (int) filemtime(__DIR__ . '/cloning-insert.js') ?>"></script>
   <script src="tools-gibson.js?v=<?= (int) filemtime(__DIR__ . '/tools-gibson.js') ?>"></script>
+  <script src="tools-restriction.js?v=<?= (int) filemtime(__DIR__ . '/tools-restriction.js') ?>"></script>
   <script src="open-menu.js?v=<?= (int) filemtime(__DIR__ . '/open-menu.js') ?>"></script>
   <script src="lineage-paste.js?v=<?= (int) filemtime(__DIR__ . '/lineage-paste.js') ?>"></script>
   <script src="primers-panel.js?v=<?= (int) filemtime(__DIR__ . '/primers-panel.js') ?>"></script>

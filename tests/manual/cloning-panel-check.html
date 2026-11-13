@@ -9,7 +9,9 @@
 <script src="../../web/sequence-viewer/tools-pcr.js"></script>
 <script src="../../web/sequence-viewer/cloning-engine.js"></script>
 <script src="../../web/sequence-viewer/cloning-insert.js"></script>
+<script src="../../web/sequence-viewer/enzymes-library.js"></script>
 <script src="../../web/sequence-viewer/tools-gibson.js"></script>
+<script src="../../web/sequence-viewer/tools-restriction.js"></script>
 <script>
 function rnd(n,s){var o='';for(var i=0;i<n;i++){s=(s*1103515245+12345)&0x7fffffff;o+='ACGT'[(s>>16)&3]}return o}
 window.vec={sequence:rnd(3000,7),circular:true,features:{f1:{id:'f1',name:'marker',type:'CDS',start:100,end:400,strand:1}}};
@@ -43,4 +45,28 @@ var u=window.sequenceUtils.insertSequenceDataAtPositionOrRange({sequence:rnd(700
 out.push('product '+u.sequence.length+' bp, features '+Object.keys(u.features).length);
 var pre=document.createElement('pre');pre.id='result';pre.textContent=out.join(' // ');document.body.append(pre);
 },100);},100);
+</script><script>
+setTimeout(function(){
+var out=[];
+state.selectionLayer={start:-1,end:-1};
+var core=rnd(3000,5).replace(/GGATCC|CTCGAG|GAATTC/g,'AAAAAA');
+var gene=rnd(600,3).replace(/GGATCC|CTCGAG|GAATTC/g,'AAAAAA');
+var stuffer=rnd(30,8).replace(/GGATCC|CTCGAG|GAATTC/g,'AAAAAA');
+window.vec.sequence=core.slice(0,1000)+'GGATCC'+stuffer+'CTCGAG'+core.slice(1000);
+window.vec.features={};
+var r=[...document.querySelectorAll('details.tools-part')].find(function(d){return /Restriction/.test(d.querySelector('summary').textContent)});
+r.open=true;r.dispatchEvent(new Event('toggle'));
+setTimeout(function(){
+var b=r.querySelector('.tools-block');
+var selects=b.querySelectorAll('select');
+out.push('first group: '+[...selects[0].querySelectorAll('optgroup')[0].querySelectorAll('option')].slice(0,200).map(function(o){return o.value}).filter(function(v){return v==='BamHI'||v==='XhoI'||v==='EcoRI'}).join(','));
+selects[0].value='BamHI';selects[1].value='XhoI';
+b.querySelector('textarea').value='AAAAAAGGATCC'+gene+'CTCGAGTTTTTT';
+b.querySelector('textarea').dispatchEvent(new Event('input'));
+[...b.querySelectorAll('button')].find(function(x){return /Find the plasmids/.test(x.textContent)}).click();
+out.push([...b.querySelectorAll('.tool-card strong')].map(function(x){return x.textContent}).join(' | '));
+out.push([...b.querySelectorAll('.tool-card .tool-muted')].map(function(x){return x.textContent}).join(' | '));
+[...b.querySelectorAll('.tool-message')].forEach(function(m){out.push('MSG '+m.textContent)});
+var pre=document.createElement('pre');pre.id='result2';pre.textContent=out.join(' // ');document.body.append(pre);
+},100);},600);
 </script></body></html>
