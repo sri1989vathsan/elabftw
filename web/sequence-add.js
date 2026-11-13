@@ -287,7 +287,7 @@
         line.append(box, text, detail);
         list.append(line);
       });
-      dialog.append(bar, list, message, actions);
+      dialog.append(bar, list, tools.destinationControl(), message, actions);
       backdrop.append(dialog);
       document.body.append(backdrop);
 
@@ -435,7 +435,7 @@
     const sequenceTitle = element('div', 'sa-section', 'Sequence');
     const choices = element('div', 'sa-choices');
     const radios = {};
-    [['none', 'Add it later'], ['file', 'Attach a file (GenBank, FASTA or SnapGene), or drop it here'], ['paste', 'Paste the sequence']].forEach(function (choice, index) {
+    [['none', 'Add it later'], ['file', 'Attach a file (GenBank, FASTA or SnapGene), or drop it here (several files dropped together make one entry each)'], ['paste', 'Paste the sequence']].forEach(function (choice, index) {
       const label = element('label', 'sa-radio');
       const radio = element('input');
       radio.type = 'radio';
@@ -525,12 +525,21 @@
         message.className = 'sa-message error';
         return;
       }
+      // several sequence files dropped together: one new entry each, in the lab database (like this dialog makes its entry), named from the files
+      const sequences = Array.from(event.dataTransfer.files).filter(function (candidate) {
+        return SEQUENCE_FILE_NAME.test(candidate.name);
+      });
+      if (sequences.length > 1) {
+        close();
+        addFiles(sequences.slice(0, 50), 0, categoryId, 'both');
+        return;
+      }
       const list = new DataTransfer();
       list.items.add(dropped);
       file.files = list.files;
       radios.file.checked = true;
       showChoice();
-      message.textContent = event.dataTransfer.files.length > 1 ? dropped.name + ' chosen (one file for a new entry: the others were left out).' : dropped.name + ' chosen.';
+      message.textContent = dropped.name + ' chosen.';
       fillFromFile(dropped);
     });
     // a GenBank file chosen or dropped fills the name (unless the user typed one) and tells what else it says

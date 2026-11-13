@@ -249,6 +249,46 @@
   }
 
   // a new primer in the database, with its sequence, orientation and melting temperature
+  // where the primers that are made go: 'none' My entries (private, no number yet), 'lab' the lab database (the number of the lab) or 'both'
+  // (the lab database and My database). The choice is remembered by the browser; My entries is the start.
+  const DESTINATIONS = [['none', 'My entries (private, no number yet)'], ['lab', 'The lab database (everyone sees them, with the lab number)'], ['both', 'Both: the lab database and My database']];
+  function destination() {
+    try {
+      const saved = window.localStorage.getItem('primerDestination');
+      return DESTINATIONS.some(function (item) { return item[0] === saved; }) ? saved : 'none';
+    } catch (error) {
+      return 'none';
+    }
+  }
+
+  // a small labelled choice of where the new primers go, bound to the remembered choice
+  function destinationControl() {
+    const wrap = document.createElement('label');
+    wrap.className = 'primer-destination';
+    wrap.style.fontWeight = '400';
+    wrap.style.display = 'block';
+    wrap.style.margin = '0.3rem 0';
+    wrap.append(document.createTextNode('New primers go to: '));
+    const select = document.createElement('select');
+    select.className = 'primer-destination-select';
+    DESTINATIONS.forEach(function (item) {
+      const option = document.createElement('option');
+      option.value = item[0];
+      option.textContent = item[1];
+      select.append(option);
+    });
+    select.value = destination();
+    select.addEventListener('change', function () {
+      try {
+        window.localStorage.setItem('primerDestination', select.value);
+      } catch (error) {
+        // the choice is just not remembered
+      }
+    });
+    wrap.append(select);
+    return wrap;
+  }
+
   async function createPrimer(title, sequence, forward, target, plasmidId) {
     const category = await primersCategoryId();
     if (!category) {
@@ -258,7 +298,7 @@
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token() },
-      body: JSON.stringify({ category: category, title: title }),
+      body: JSON.stringify({ category: category, title: title, register: destination() }),
     });
     if (!response.ok) {
       throw new Error('The primer could not be created (' + response.status + ').');
@@ -567,6 +607,8 @@
     findSites: findSites,
     allPrimers: allPrimers,
     createPrimer: createPrimer,
+    destination: destination,
+    destinationControl: destinationControl,
     getPrimer: getPrimer,
     currentUserId: currentUserId,
     updatePrimer: updatePrimer,

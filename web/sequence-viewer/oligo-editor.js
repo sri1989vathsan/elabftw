@@ -231,7 +231,7 @@
     // a copy in the Database: a new primer with these bases, attached to this plasmid; the old one can leave the plasmid
     const copy = element('button', 'tool-btn', 'Save as new primer');
     copy.type = 'button';
-    copy.title = 'Make a new primer in the Database with this name and these bases';
+    copy.title = 'Make a new primer in the Database with this name and these bases (where it goes: the choice of the Primers tab)';
     const replace = element('input');
     replace.type = 'checkbox';
     replace.checked = !owner;

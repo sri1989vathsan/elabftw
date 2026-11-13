@@ -165,7 +165,15 @@ test('sequence files dropped on the import dialog wait for "Where the entries go
   // Import takes the destination of the dialog: the lab database, My database, or no number yet
   assert.match(planned, /window\.SequenceAdd\.addFiles\(category, chosen, destination\.value\);/);
   // the lab database is possible for these (the file is the sequence) even in a module that needs a sequence file
-  assert.match(planned, /bothOption\.disabled = !on;/);
+  assert.match(planned, /option\.disabled = !on;/);
+  // the lab database comes first and is the start; "Both" (the lab and My database) is an option of its own
+  assert.match(planned, /\[\['lab', 'The lab database[^\]]*\], \['both', 'Both: the lab database, and My database[^\]]*\], \['personal'/);
+  assert.match(planned, /destination\.value = 'lab';/);
+  // the import of a csv/zip knows the destination 'lab' (the lab database only) next to 'both'
+  const transfer = read('web/registry-transfer.php');
+  assert.match(transfer, /array\('both', 'lab', 'personal', 'none'\)/);
+  assert.match(transfer, /\$inLab = \$register === 'lab' \|\| \$register === 'both';/);
+  assert.match(transfer, /\$Entry->asUnregistered = !\$inLab;/);
   // choosing a csv or a zip leaves the sequence mode
   assert.match(planned, /file\.addEventListener\('change', async function \(\) \{\s*setSequenceMode\(false\);/);
   // the label with d-block would show although it is hidden: the stylesheet says hidden wins, and has a version in its address
@@ -178,6 +186,15 @@ test('sequence files dropped on the import dialog wait for "Where the entries go
   assert.match(js, /window\.location\.href = 'registry\.php\?mode=edit&id=' \+ made\[0\];/);
   assert.match(js, /in My entries, in your own database \(private\)/);
   assert.match(js, /failed\.length > 0, 10\);/);
+});
+
+test('the primers that are made go where the user chooses: My entries, the lab database or both', () => {
+  const tools = read('web/primer-tools.js');
+  assert.match(tools, /register: destination\(\)/);
+  assert.match(tools, /\['none', 'My entries[^\]]*\], \['lab', 'The lab database[^\]]*\], \['both', 'Both/);
+  assert.match(tools, /destinationControl: destinationControl,/);
+  assert.match(read('web/sequence-add.js'), /tools\.destinationControl\(\), message, actions/);
+  assert.match(read('web/sequence-viewer/primers-panel.js'), /tools\.destinationControl\(\)/);
 });
 
 test('primers written as the feature "primer" (ApE, SnapGene) are read, with the oligo of the note as the primer', () => {
@@ -219,4 +236,10 @@ test('the primers dialog lists every primer of the file with a box, and only the
   assert.match(js, /box\.disabled = row\.several;/);
   const php = read('web/sequence-viewer/genbank-primers.inc.php');
   assert.match(php, /array\('primer_bind', 'primer'\)/);
+});
+
+test('several sequence files dropped on the new entry dialog make one entry each', () => {
+  const js = read('web/sequence-add.js');
+  assert.match(js, /if \(sequences\.length > 1\) \{\s*close\(\);\s*addFiles\(sequences\.slice\(0, 50\), 0, categoryId, 'both'\);/);
+  assert.doesNotMatch(js, /the others were left out/);
 });

@@ -872,7 +872,9 @@
         subTabs.append(button);
         tabDef[3].hidden = subTab !== tabDef[0];
       });
-      panel.append(subTabs, sectionAttached, sectionSearch);
+      const destinationRow = tools.destinationControl();
+      destinationRow.classList.add('small');
+      panel.append(subTabs, destinationRow, sectionAttached, sectionSearch);
       // the preview of the search belongs to the search tab
       if (subTab !== 'search' && Object.keys(previewDrawn).length > 0) {
         previewDrawn = {};
