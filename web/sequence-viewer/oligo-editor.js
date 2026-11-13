@@ -199,10 +199,16 @@
     open.href = '../registry.php?mode=view&id=' + target.id;
     open.target = '_blank';
     open.rel = 'noopener';
-    if (!owner || entry.locked) {
+    // a locked primer is unlocked by its owner for the update and locked again after it (an entry that was unlocked to be edited goes back to
+    // locked once the edit is made)
+    if (owner && entry.locked) {
+      save.textContent = 'Unlock and update primer';
+      save.title = 'The primer is locked in the Database: it is unlocked for the update and locked again';
+    }
+    if (!owner) {
       save.disabled = true;
-      save.title = entry.locked ? 'The primer is locked' : 'Only the owner of the primer can update it';
-      message.textContent = entry.locked ? 'This primer is locked in the Database, so it cannot be updated.' : 'This primer belongs to ' + (entry.owner || 'someone else') + ': only the owner can update it in the Database. You can still move the binding window here to look at it.';
+      save.title = 'Only the owner of the primer can update it';
+      message.textContent = 'This primer belongs to ' + (entry.owner || 'someone else') + ': only the owner can update it in the Database. You can still move the binding window here to look at it.';
       message.className = 'tool-message';
     }
     save.addEventListener('click', async function () {
@@ -215,17 +221,38 @@
       save.disabled = true;
       message.textContent = 'Saving...';
       message.className = 'tool-message';
+      const headers = { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': document.body.dataset.csrf || '' };
+      let unlocked = false;
       try {
+        if (entry.locked) {
+          // the lock button of the entry toggles: it is pressed once, the primer is known to be locked
+          const response = await fetch('../api/v2/inventory/' + target.id, { method: 'PATCH', credentials: 'same-origin', headers: headers, body: JSON.stringify({ action: 'lock' }) });
+          if (!response.ok) {
+            throw new Error('The primer could not be unlocked (' + response.status + ').');
+          }
+          unlocked = true;
+          entry.locked = false;
+        }
         await tools.updatePrimer(target.id, { title: name.value.trim(), sequence: now.sequence, forward: now.forward });
         if (window.PrimerPanel && window.PrimerPanel.reload) {
           await window.PrimerPanel.reload();
         }
-        message.textContent = 'Updated: the primer in the database is the same as here. Every sequence that uses it shows the new one.';
+        message.textContent = 'Updated: the primer in the database is the same as here. Every sequence that uses it shows the new one.' + (unlocked ? ' It is locked again.' : '');
       } catch (error) {
         message.textContent = error.message || String(error);
         message.className = 'tool-message error';
+      } finally {
+        if (unlocked) {
+          // locked again after the edit (also when the edit failed)
+          try {
+            await fetch('../registry-lock.php', { method: 'POST', credentials: 'same-origin', headers: headers, body: JSON.stringify({ id: target.id }) });
+            entry.locked = true;
+          } catch (error) {
+            // it stays unlocked: it can be locked by hand
+          }
+        }
       }
-      save.disabled = !owner || entry.locked;
+      save.disabled = !owner;
     });
 
     // a copy in the Database: a new primer with these bases, attached to this plasmid; the old one can leave the plasmid

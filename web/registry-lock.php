@@ -2,7 +2,7 @@
 
 /**
  * Fork-only. Locks an entry of the lab Database. The lock button of the page toggles (a second call would unlock); this call only locks:
- * POST {id} locks the entry when it is in the lab Database (it has a number) and is not locked yet, and gives {locked: true}. It is called
+ * POST {id} locks the entry when it is in the lab Database or in My database (it has a number of the lab or of its owner) and is not locked yet, and gives {locked: true}. It is called
  * when an entry enters the Database (after its file, its details and its primers are done), and when an edit is over (the person leaves
  * the edit page, the sequence editor has saved): an entry that was unlocked by hand to edit it goes back to locked. An entry that is only in
  * My entries (no number) is not locked. Needs the right to edit the entry; unlocking is done by hand with the lock button.
@@ -59,7 +59,7 @@ try {
     $Entry->readOne();
     $Entry->canOrExplode(AccessType::Write);
     // only an entry of the Database (with a number) is locked, and only when it is not locked yet
-    if (($Entry->entityData['custom_id'] ?? null) === null) {
+    if (($Entry->entityData['custom_id'] ?? null) === null && ($Entry->entityData['personal_id'] ?? null) === null) {
         respond(200, array('locked' => false, 'reason' => 'This entry is not in the Database.'));
     }
     if ((int) ($Entry->entityData['locked'] ?? 0) === 1) {

@@ -108,7 +108,9 @@
       if (rowStart < 0) {
         return;
       }
-      const first = rowStart + Math.round((g.parentNode.getBoundingClientRect().left - rowEl.getBoundingClientRect().left) / charWidth);
+      // the column is counted from the first letter of the sequence of the row, not from the left edge of the row: in a wide window the row has
+      // a margin on its left, and counting from its edge put the oligo some columns too far to the right (letters and box shifted)
+      const first = rowStart + Math.round((g.parentNode.getBoundingClientRect().left - rowText.getBoundingClientRect().left) / charWidth);
       const last = Math.min(primer.end, rowStart + rowText.textContent.length - 1);
       if (first < primer.start || first > last) {
         return;

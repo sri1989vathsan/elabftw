@@ -73,4 +73,102 @@
     }
   });
   window.addEventListener('blur', close);
+
+  // ---- the menu of the editor on a primer of the file (right click): when the primer is in the Database too, "Edit oligo" is added to it, the
+  // panel that changes the primer of the Database (name, bases, place, overhang). A primer that is only in the file keeps the dialog of the
+  // editor. The primer is found in the Database by its bases (either strand), then by its name.
+  let lastFilePrimer = null;
+  document.addEventListener('contextmenu', function (event) {
+    const holder = event.target.closest && event.target.closest('svg.veRowViewAnnotationPosition');
+    const g = event.target.closest && (event.target.closest('g.veRowViewPrimer') || (holder && holder.querySelector(':scope > g.veRowViewPrimer')));
+    lastFilePrimer = g && g.dataset.id && !/^dbprimer-/.test(g.dataset.id) ? g.dataset.id : null;
+  }, true);
+
+  async function databasePrimerFor(id) {
+    const tools = window.PrimerTools;
+    const editor = window.sequenceEditor;
+    if (!tools || !editor) {
+      return null;
+    }
+    const data = editor.getState().sequenceData;
+    const primers = data.primers || {};
+    const primer = primers[id] || Object.keys(primers).map(function (key) {
+      return primers[key];
+    }).find(function (candidate) {
+      return candidate.id === id;
+    });
+    if (!primer) {
+      return null;
+    }
+    let bases = tools.clean(data.sequence).slice(primer.start, primer.end + 1);
+    if (primer.strand === -1 || primer.forward === false) {
+      bases = tools.reverseComplement(bases);
+    }
+    const reverse = tools.reverseComplement(bases);
+    const list = await tools.allPrimers();
+    return list.find(function (entry) {
+      return entry.sequence === bases || entry.sequence === reverse;
+    }) || list.find(function (entry) {
+      return String(entry.title).toLowerCase() === String(primer.name || '').toLowerCase();
+    }) || null;
+  }
+
+  new MutationObserver(function (changes) {
+    if (!lastFilePrimer) {
+      return;
+    }
+    changes.forEach(function (change) {
+      change.addedNodes.forEach(function (node) {
+        if (!(node instanceof Element)) {
+          return;
+        }
+        const list = node.matches('.bp3-menu') ? node : node.querySelector('.bp3-menu');
+        if (!list || list.dataset.oligoAdded || !/Primer/.test(list.textContent)) {
+          return;
+        }
+        list.dataset.oligoAdded = '1';
+        const id = lastFilePrimer;
+        databasePrimerFor(id).then(function (found) {
+          if (!found || !document.body.contains(list)) {
+            return;
+          }
+          const li = document.createElement('li');
+          const link = document.createElement('a');
+          link.className = 'bp3-menu-item bp3-popover-dismiss';
+          link.tabIndex = 0;
+          const label = document.createElement('div');
+          label.className = 'bp3-fill bp3-text-overflow-ellipsis';
+          label.textContent = 'Edit oligo in the Database';
+          label.title = found.title;
+          link.append(label);
+          // the menu of the editor closes when the mouse goes down on it (before a click comes): the panel opens on the mouse down, or on Enter
+          let done = false;
+          const open = function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (done) {
+              return;
+            }
+            done = true;
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            const popover = list.closest('.bp3-portal') || list.closest('.bp3-popover');
+            if (popover) {
+              popover.style.display = 'none';
+            }
+            window.OligoEditor.open(found.id);
+          };
+          link.addEventListener('mousedown', open);
+          link.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+              open(event);
+            }
+          });
+          li.append(link);
+          list.prepend(li);
+        }).catch(function () {
+          // the menu stays as the editor made it
+        });
+      });
+    });
+  }).observe(document.body, { childList: true, subtree: true });
 })();

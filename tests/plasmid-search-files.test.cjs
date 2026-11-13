@@ -517,3 +517,22 @@ test('two primers ticked in the Primers tab give their PCR product, which can be
   assert.match(pcr, /await tools\.attach\(id, entry\.id\);/);
   assert.match(pcr, /\['lab', 'The lab database \(it is locked\)'\]/);
 });
+
+test('the oligo of a primer of the file: "Edit oligo" is in the menu of the editor when the primer is in the Database, the primer is drawn from its own letters (not from the edge of the row), and a locked primer is unlocked for its update and locked again', () => {
+  // the menu of the editor on a primer of the file gets "Edit oligo in the Database" (opened on the mouse down: the menu closes before a click)
+  const menu = read('web/sequence-viewer/primer-menu.js');
+  assert.match(menu, /async function databasePrimerFor\(id\)/);
+  assert.match(menu, /label\.textContent = 'Edit oligo in the Database';/);
+  assert.match(menu, /link\.addEventListener\('mousedown', open\);/);
+  assert.match(menu, /window\.OligoEditor\.open\(found\.id\);/);
+  // the column of an oligo is counted from the first letter of the sequence of the row (a wide window has a margin on the left of the row)
+  const style = read('web/sequence-viewer/oligo-style.js');
+  assert.match(style, /rowText\.getBoundingClientRect\(\)\.left\) \/ charWidth\);/);
+  assert.doesNotMatch(style, /rowEl\.getBoundingClientRect\(\)\.left\) \/ charWidth\);/);
+  // a locked primer of its owner: "Unlock and update primer", locked again after the update (also when it failed)
+  const oligo = read('web/sequence-viewer/oligo-editor.js');
+  assert.match(oligo, /save\.textContent = 'Unlock and update primer';/);
+  assert.match(oligo, /fetch\('\.\.\/registry-lock\.php'/);
+  // the lock call also locks an entry of My database
+  assert.match(read('web/registry-lock.php'), /\(\$Entry->entityData\['personal_id'\] \?\? null\) === null/);
+});
