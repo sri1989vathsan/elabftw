@@ -127,7 +127,9 @@
         const list = element('div', 'tool-muted');
         assembly.order.forEach(function (item, k) {
           list.append(element('div', '', (k + 1) + '. ' + item.name + (item.group === 0 ? ' (backbone, ' : ' (') + item.orientation + ', ' + item.size + ' bp)'));
-          list.append(element('div', 'tools-out', '→ ' + assembly.overhangs[k].sequence + ' →'));
+          const joint = element('div', '', '→ ' + assembly.overhangs[k].sequence + ' →');
+          joint.style.cssText = 'font-family:ui-monospace,Menlo,monospace;font-size:0.78rem;margin:0.15rem 0 0.15rem 1rem;color:var(--text-accent,#1a5fb4)';
+          list.append(joint);
         });
         card.append(list);
         (assembly.warn || []).forEach(function (text) {
