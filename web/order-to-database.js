@@ -29,7 +29,47 @@
     'sarstedt.com': 'Sarstedt',
     'eppendorf.com': 'Eppendorf',
     'vwr.com': 'VWR',
+    // the suppliers of the shops of the lab
+    'agilent.com': 'Agilent',
+    'axonlab.com': 'Axon Lab',
+    'bd.com': 'BD Biosciences',
+    'bechtle.com': 'Bechtle',
+    'bioconcept.ch': 'BioConcept',
+    'brack.ch': 'Brack',
+    'brunschwig.ch': 'Brunschwig',
+    'brutsch.ch': 'Brütsch-Rüegger Tools',
+    'bruetsch.ch': 'Brütsch-Rüegger Tools',
+    'conrad.ch': 'Conrad',
+    'dell.com': 'Dell',
+    'digitec.ch': 'Digitec',
+    'distrelec.ch': 'Distrelec',
+    'faust.ch': 'Faust',
+    'gilson.com': 'Gilson',
+    'huberlab.ch': 'Huberlab',
+    'kaiserkraft.ch': 'Kaiser+Kraft',
+    'linde-gas.ch': 'Linde',
+    'lubio.ch': 'Lubio Science',
+    'lucerna-chem.ch': 'Lucerna-Chem',
+    'lyreco.com': 'Lyreco',
+    'merckgroup.com': 'Merck',
+    'mt.com': 'Mettler Toledo',
+    'milian.ch': 'Milian',
+    'promega.com': 'Promega',
+    'qiagen.com': 'Qiagen',
+    'carlroth.com': 'Roth',
+    'rs-online.com': 'RS',
+    'sfs.ch': 'SFS',
+    'starlabgroup.com': 'Starlab',
+    'starlab.ch': 'Starlab',
+    'stemcell.com': 'STEMCELL Technologies',
+    'thorlabs.com': 'Thorlabs',
+    'vitaris.ch': 'Vitaris',
   };
+  // names that are written in the order by hand (no link): the vendor is put right when the name is near ("Simga", "Carl Roth", "Thermo")
+  const VENDOR_NAMES = Object.keys(VENDORS).map(function (domain) {
+    return VENDORS[domain];
+  }).concat(['Sarstedt', 'Corning', 'Eppendorf', 'DBSSE', 'Carl Roth', 'Fisher Scientific', 'Thermo', 'Invitrogen', 'Millipore', 'Sigma']);
+  const VENDOR_ALIASES = { 'carl roth': 'Roth', 'roth': 'Roth', 'thermo': 'Thermo Fisher Scientific', 'fisher scientific': 'Thermo Fisher Scientific', 'fisher': 'Thermo Fisher Scientific', 'invitrogen': 'Thermo Fisher Scientific', 'millipore': 'Merck', 'sigma': 'Sigma-Aldrich' };
   const HOSTS = ['Mouse', 'Rabbit', 'Rat', 'Goat', 'Donkey', 'Sheep', 'Hamster', 'Chicken'];
 
   const token = function () {
@@ -113,7 +153,7 @@
 
   // the catalog number a vendor puts in the address of a product
   function catalogOfLink(link) {
-    const patterns = [/abcam\.com\/.*?\b(ab\d{3,7})\b/i, /thermofisher\.com\/.*\/([A-Za-z0-9-]{4,})\/?(?:\?.*)?$/i, /sigmaaldrich\.com\/.*\/product\/[^/]+\/([A-Za-z0-9-]+)/i, /cellsignal\.com\/products\/.*?\/(\d{3,6})(?:\?|$)/i, /biolegend\.com\/.*?\/(\d{5,7})(?:\?|$)/i, /corning\.com\/.*\/([A-Za-z0-9-]{4,})\.html/i];
+    const patterns = [/abcam\.com\/.*?\b(ab\d{3,7})\b/i, /thermofisher\.com\/.*\/([A-Za-z0-9-]{4,})\/?(?:\?.*)?$/i, /sigmaaldrich\.com\/.*\/product\/[^/]+\/([A-Za-z0-9-]+)/i, /cellsignal\.com\/products\/.*?\/(\d{3,6})(?:\?|$)/i, /biolegend\.com\/.*?\/(\d{5,7})(?:\?|$)/i, /corning\.com\/.*\/([A-Za-z0-9-]{4,})\.html/i, /carlroth\.com\/.*\/p\/([A-Za-z0-9.-]+?)(?:[?#\/]|$)/i, /promega\.[a-z]+\/.*[?&]catNum=([A-Za-z0-9]+)/i];
     for (const pattern of patterns) {
       const found = pattern.exec(link);
       if (found) {
@@ -140,8 +180,31 @@
     return d[a.length][b.length];
   }
 
+  // the vendor that a name written by hand means, when it is near to a vendor that is known; otherwise the name as it was written
+  function vendorOfName(typed) {
+    const word = typed.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const alias = VENDOR_ALIASES[typed.toLowerCase().trim()];
+    if (alias) {
+      return alias;
+    }
+    if (word.length < 4) {
+      return typed;
+    }
+    const found = VENDOR_NAMES.find(function (name) {
+      return name.toLowerCase().replace(/[^a-z0-9]/g, '') === word;
+    }) || VENDOR_NAMES.find(function (name) {
+      return name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).some(function (token) {
+        return token.length >= 4 && distance(word, token) <= 2;
+      });
+    });
+    return found ? (VENDOR_ALIASES[found.toLowerCase()] || found) : typed;
+  }
+
   function fixVendor(typed, link) {
     const known = vendorOfLink(link);
+    if (typed !== '' && known === '') {
+      return vendorOfName(typed);
+    }
     if (typed === '' || known === '') {
       return typed || known;
     }
@@ -170,6 +233,10 @@
       return 'Antibodies';
     }
     if (/\b(tubes?|tips?|plates?|flasks?|dish(es)?|pipettes?|gloves?|filters?|falcon|eppendorf|syringes?|needles?|slides?|coverslips?)\b/i.test(row.name)) {
+      return 'Consumables';
+    }
+    // the vendors that sell little else than consumables
+    if (/starlab|sarstedt|corning|kaiser|lyreco/i.test(String(row.vendor || '') + ' ' + String(row.link || ''))) {
       return 'Consumables';
     }
     return 'Reagents';
@@ -267,6 +334,8 @@
         value = row.applications || '';
       } else if (/^(conjugate|dye)/i.test(f.name)) {
         value = row.conjugate || '';
+      } else if (/^cas\b/i.test(f.name)) {
+        value = row.cas || '';
       } else if (/^conjugated$/i.test(f.name)) {
         value = row.conjugate ? (/^(un|none|no\b)/i.test(row.conjugate) ? 'No' : 'Yes') : '';
       }
@@ -302,7 +371,8 @@
   // ---- the details of a vendor page. The server has no internet and the browser cannot read the page of another site, so the user copies
   // the page (select everything, copy) and pastes it here: the text is read in the browser, nothing is sent anywhere.
   const TEXT_LABELS = [
-    ['Catalog number', 'catalog(?:ue)? (?:number|no\\.?|#)|catalog(?:ue)?|cat\\.? ?(?:no\\.?|#)|product (?:code|number)|item (?:number|no\\.?)|part (?:number|no\\.?)|sku'],
+    ['Catalog number', 'catalog(?:ue)? (?:number|no\\.?|#)|catalog(?:ue)?|cat\\.? ?(?:no\\.?|#)|article (?:number|no\\.?|code)|art\\.? ?(?:no\\.?|nr\\.?|#)|product (?:code|number|no\\.?)|item (?:number|no\\.?)|order (?:number|no\\.?|code)|mfr\\.? part (?:number|no\\.?)|part (?:number|no\\.?)|reference|sku'],
+    ['CAS number', 'cas (?:number|no\\.?|#)|cas'],
     ['Clone number', 'clone (?:number|name|id)|clone'],
     ['Host species', 'host species|host'],
     ['Isotype', 'isotype'],
@@ -311,7 +381,7 @@
     ['Conjugate', 'conjugated to|conjugation|conjugate|dye'],
     ['Target', 'target|gene name|antigen'],
     ['Concentration', 'concentration'],
-    ['Pack size', 'pack size|unit size|size'],
+    ['Pack size', 'pack(?:age|ing)? size|packaging unit|packing|unit size|content|quantity|size'],
   ];
 
   // the text of an image (a screenshot of a page: a table does not paste well, an image keeps it). The reading is done in the browser with
@@ -442,7 +512,8 @@
     ['applications', /^(applications?|tested applications?|suitable for)$/i],
     ['conjugate', /^(conjugate|conjugation|label|dye)$/i],
     ['concentration', /^(concentration|conc\.?)$/i],
-    ['pack', /^(pack size|unit size|size|amount)$/i],
+    ['pack', /^(pack(age|ing)?( size)?|packaging unit|unit size|size|amount|content|quantity)$/i],
+    ['cas', /^cas( (number|no\.?|#))?$/i],
   ];
 
   // the details read from a page are put in the line: what the line has already is kept

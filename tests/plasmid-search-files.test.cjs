@@ -343,3 +343,16 @@ test('the page reader knows the layout of BioLegend and Abcam pages (verified re
   assert.match(js, /String\(row\.link \|\| ''\)\.indexOf\(number\) !== -1/);
   assert.match(js, /see \(\?:reactivity\|application\|all\) \(\?:data\|images\?\)/);
 });
+
+test('the suppliers of the lab are known by their links and by their names (also with a slip), and reagent pages with article and CAS numbers are read', () => {
+  const js = read('web/order-to-database.js');
+  for (const domain of ['carlroth.com', 'qiagen.com', 'promega.com', 'stemcell.com', 'starlabgroup.com', 'lubio.ch', 'lucerna-chem.ch', 'mt.com']) {
+    assert.ok(js.includes("'" + domain + "'"), domain);
+  }
+  assert.match(js, /function vendorOfName\(typed\)/);
+  assert.match(js, /return vendorOfName\(typed\);/);
+  assert.match(js, /starlab\|sarstedt\|corning\|kaiser\|lyreco/);
+  assert.match(js, /\['CAS number', 'cas \(\?:number/);
+  assert.match(js, /article \(\?:number/);
+  assert.match(js, /carlroth\\\.com/);
+});
