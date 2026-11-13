@@ -878,6 +878,17 @@
   function normalName(text) {
     return String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
   }
+  // The search of the Database does not take "/", "(", "%" or "_" in its text (the name "Ampicillin 100 mg/ml" found nothing, so an entry that was
+  // added was not seen and could be added again): the longest part of the name without such a sign is searched, the names are compared after.
+  function searchTerm(name) {
+    const parts = String(name || '').split(/[^\p{L}\p{N}\- ]+/u).map(function (part) {
+      return part.trim();
+    }).filter(Boolean);
+    parts.sort(function (a, b) {
+      return b.length - a.length;
+    });
+    return parts[0] || String(name || '').trim();
+  }
   // {id, title} of the entry that is there, or null
   async function findExisting(row) {
     if (row.sequence) {
@@ -897,7 +908,7 @@
     if (term === '') {
       return null;
     }
-    const response = await fetch('api/v2/inventory?limit=20&q=' + encodeURIComponent(term), { credentials: 'same-origin' });
+    const response = await fetch('api/v2/inventory?limit=50&q=' + encodeURIComponent(searchTerm(term)), { credentials: 'same-origin' });
     const entries = response.ok ? await response.json().catch(function () {
       return [];
     }) : [];
@@ -1935,7 +1946,7 @@
         const items = [];
         for (const row of named) {
           const term = row.name.trim();
-          const response = await fetch('api/v2/inventory?limit=20&q=' + encodeURIComponent(term), { credentials: 'same-origin' });
+          const response = await fetch('api/v2/inventory?limit=50&q=' + encodeURIComponent(searchTerm(term)), { credentials: 'same-origin' });
           const entries = response.ok ? await response.json().catch(function () {
             return [];
           }) : [];
