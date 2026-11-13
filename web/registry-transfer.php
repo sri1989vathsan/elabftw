@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Elabftw\Elabftw;
 
 use Elabftw\Elabftw\CreateUploadFromFs;
+use Elabftw\Elabftw\GenbankPrimers;
 use Elabftw\Enums\AccessType;
 use Elabftw\Enums\Action;
 use Elabftw\Models\ExperimentsFolders;
@@ -75,6 +76,7 @@ use function trim;
  * (up to 200 at a time); an entry that cannot be made is listed with the reason.
  */
 require_once __DIR__ . '/app/init.inc.php';
+require_once __DIR__ . '/sequence-viewer/genbank-primers.inc.php';
 
 function respond(int $status, array $body): never
 {
@@ -1190,6 +1192,112 @@ try {
         return $ownerUsers[$id] ??= new Users($id, $teamId);
     };
 
+    // the primers written in the GenBank files of the plasmids of an import (option "primers" of the form): the ones that are in the database
+    // (found by their letters, either strand) are attached to the plasmid and, with the choice "create", the ones that are not are made first
+    $linkFilePrimers = static function (array $files, string $mode) use ($App, $pdo, $teamId, $userId, $register, $makeEntry, $fieldsOf, $ownerFor): array {
+        $report = array('plasmids' => count($files), 'attached' => 0, 'already' => 0, 'created' => 0, 'missing' => 0, 'too_short' => 0, 'ambiguous' => array(), 'not_made' => array(), 'errors' => array());
+        // every primer and probe the importer can read, by the letters of the oligo
+        $canFilter = new CanSqlBuilder($App->Users, AccessType::Read)->getCanFilter();
+        $req = $pdo->prepare('SELECT entity.id, entity.metadata FROM inventory AS entity
+            INNER JOIN inventory_categories AS c ON c.id = entity.category
+            WHERE entity.state = 1 AND entity.is_planned = 0 AND entity.team = :team AND c.title REGEXP \'^(primers?|probes?)$\'' . $canFilter);
+        $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+        $req->bindValue(':userid', $userId, PDO::PARAM_INT);
+        $pdo->execute($req);
+        $known = array();
+        foreach ($req->fetchAll() as $row) {
+            $metadata = json_decode((string) ($row['metadata'] ?? ''), true);
+            foreach (is_array($metadata) ? ($metadata['extra_fields'] ?? array()) : array() as $name => $field) {
+                if (is_array($field) && preg_match('/^sequence/i', (string) $name) === 1) {
+                    $letters = GenbankPrimers::clean((string) ($field['value'] ?? ''));
+                    if (strlen($letters) >= GenbankPrimers::MIN_LENGTH) {
+                        $known[GenbankPrimers::key($letters)][] = (int) $row['id'];
+                    }
+                    break;
+                }
+            }
+        }
+        $module = null;
+        if ($mode === 'create') {
+            $req = $pdo->prepare('SELECT id, title, fields, settings FROM inventory_categories WHERE team = :team AND state = 1 AND title REGEXP \'^primers?$\' ORDER BY id LIMIT 1');
+            $req->bindValue(':team', $teamId, PDO::PARAM_INT);
+            $pdo->execute($req);
+            $found = $req->fetch();
+            $module = is_array($found) ? $found : null;
+            if ($module === null) {
+                $report['errors'][] = 'There is no module of primers: no primer was made.';
+            }
+        }
+        $definitions = $module !== null ? $fieldsOf($module) : array();
+        $sequenceField = null;
+        $orientationField = null;
+        foreach (array_keys($definitions) as $name) {
+            if ($sequenceField === null && preg_match('/^sequence/i', (string) $name) === 1) {
+                $sequenceField = (string) $name;
+            } elseif ($orientationField === null && preg_match('/^orientation/i', (string) $name) === 1) {
+                $orientationField = (string) $name;
+            }
+        }
+        $attach = $pdo->prepare('INSERT IGNORE INTO inventory_primer_links (plasmid_id, primer_id, users_id) VALUES (:plasmid, :primer, :userid)');
+        $madeNames = array();
+        foreach ($files as $file) {
+            try {
+                foreach (GenbankPrimers::read((string) $file['content']) as $primer) {
+                    if (strlen($primer['bases']) < GenbankPrimers::MIN_LENGTH) {
+                        $report['too_short']++;
+                        continue;
+                    }
+                    $key = GenbankPrimers::key($primer['bases']);
+                    $ids = array_values(array_unique($known[$key] ?? array()));
+                    if (count($ids) > 1) {
+                        $report['ambiguous'][] = $primer['name'] . ' (' . $file['title'] . ')';
+                        continue;
+                    }
+                    if ($ids === array()) {
+                        if ($mode !== 'create' || $module === null) {
+                            $report['missing']++;
+                            continue;
+                        }
+                        // two different primers with one name (in one import) are told apart by the plasmid and the place
+                        $title = $primer['name'];
+                        if (isset($madeNames[strtolower($title)]) && $madeNames[strtolower($title)] !== $key) {
+                            $title .= ' (' . $file['title'] . ' ' . $primer['start'] . '-' . $primer['end'] . ')';
+                        }
+                        $row = array('title' => $title, 'fields' => array(), 'extra' => array());
+                        if ($sequenceField !== null) {
+                            $row['fields'][$sequenceField] = $primer['bases'];
+                        } else {
+                            $row['extra']['Sequence'] = $primer['bases'];
+                        }
+                        if ($orientationField !== null) {
+                            $row['fields'][$orientationField] = $primer['forward'] ? 'Forward' : 'Reverse';
+                        }
+                        $made = $makeEntry($row, (int) $module['id'], $definitions, $register, $ownerFor($file['row']), false);
+                        if ($made['id'] === null) {
+                            $report['not_made'][] = $primer['name'] . ': ' . $made['reason'];
+                            continue;
+                        }
+                        $madeNames[strtolower($title)] = $key;
+                        $known[$key][] = (int) $made['id'];
+                        $ids = array((int) $made['id']);
+                        $report['created']++;
+                    }
+                    $attach->bindValue(':plasmid', (int) $file['plasmid'], PDO::PARAM_INT);
+                    $attach->bindValue(':primer', $ids[0], PDO::PARAM_INT);
+                    $attach->bindValue(':userid', $userId, PDO::PARAM_INT);
+                    $pdo->execute($attach);
+                    $report[$attach->rowCount() > 0 ? 'attached' : 'already']++;
+                }
+            } catch (Throwable $e) {
+                $report['errors'][] = $file['title'] . ': ' . $e->getMessage();
+            }
+        }
+        $report['ambiguous'] = array_slice(array_values(array_unique($report['ambiguous'])), 0, 20);
+        $report['not_made'] = array_slice($report['not_made'], 0, 20);
+        $report['errors'] = array_slice($report['errors'], 0, 20);
+        return $report;
+    };
+
     if ($isZip) {
         @set_time_limit(0);
         // a zip of the export: entries.csv, and the files of the entries in files/<key>/
@@ -1212,6 +1320,8 @@ try {
         }
         $fs = Storage::EXPORTS->getStorage()->getFs();
         $tmpDir = 'registry-import-' . bin2hex(random_bytes(6));
+        $primerMode = in_array((string) ($source['primers'] ?? ''), array('attach', 'create'), true) ? (string) $source['primers'] : '';
+        $genbankFiles = array();
         $count = 0;
         while (($cells = fgetcsv($handle, 0, ',', '"', '')) !== false && $count < 5000) {
             // the row of hints of a template starts with #
@@ -1263,6 +1373,9 @@ try {
                         $fs->write($path, $content);
                         $Entry->Uploads->create(new CreateUploadFromFs($fs, $fileName, $path, new FileHash($fs, $path)));
                         $filesAttached++;
+                        if ($primerMode !== '' && preg_match('/\.(gb|gbk|gbff|genbank)$/i', $fileName) === 1) {
+                            $genbankFiles[] = array('plasmid' => (int) $made['id'], 'title' => (string) $row['title'], 'content' => $content, 'row' => $row);
+                        }
                     } catch (Throwable $e) {
                         $skipped[] = array('row' => 'File ' . $fileName . ' of row ' . $count, 'reason' => $e->getMessage());
                     }
@@ -1275,7 +1388,8 @@ try {
             // the temporary files are cleaned by the exports clean-up
         }
         $zip->close();
-        respond(200, array('created' => count($created), 'files' => $filesAttached, 'skipped' => $skipped, 'owners_not_found' => array_keys($notFound)));
+        $primerReport = $primerMode !== '' ? $linkFilePrimers($genbankFiles, $primerMode) : null;
+        respond(200, array('created' => count($created), 'files' => $filesAttached, 'skipped' => $skipped, 'owners_not_found' => array_keys($notFound), 'primers' => $primerReport));
     }
 
     foreach (array_slice(is_array($payload['rows'] ?? null) ? $payload['rows'] : array(), 0, 200) as $index => $row) {

@@ -230,6 +230,17 @@
     storageBox.type = 'checkbox';
     storageLabel.append(storageBox, document.createTextNode(' Make the storage places written in the file (rooms, freezers, boxes and the positions of the entries). Admins only.'));
     storageLabel.hidden = true;
+    // the primers written in the GenBank files of a zip: linked to the primers of the database, and made when they are missing (off unless chosen)
+    const primersLabel = element('label', 'd-block small mb-2');
+    const primersChoice = element('select', 'form-control form-control-sm w-auto d-inline-block ml-1');
+    [['', 'Do nothing'], ['attach', 'Attach the primers that are already in the database'], ['create', 'Attach them, and make the primers that are missing']].forEach(function (item) {
+      const option = element('option', '', item[1]);
+      option.value = item[0];
+      primersChoice.append(option);
+    });
+    primersLabel.append(document.createTextNode('Primers written in the GenBank files of the zip:'), primersChoice);
+    primersLabel.title = 'Each primer of a file is found in the database by its letters (either strand) and attached to the plasmid. A primer that is not there is made in the module of primers when you choose the last option; the entries made take the next numbers of that module.';
+    primersLabel.hidden = true;
     const keepLabel = element('label', 'd-block small mb-2');
     const keep = element('input');
     keep.type = 'checkbox';
@@ -312,7 +323,7 @@
       }
     });
     buttons.append(cancel, run);
-    box.append(mapping, element('p', 'small text-muted mb-1', 'Where the entries go'), destination, keepLabel, storageLabel, ownerBox, message, buttons);
+    box.append(mapping, element('p', 'small text-muted mb-1', 'Where the entries go'), destination, keepLabel, storageLabel, primersLabel, ownerBox, message, buttons);
     back.append(box);
     document.body.append(back);
 
@@ -331,6 +342,7 @@
       }
       zipMode = /\.zip$/i.test(file.files[0].name);
       storageLabel.hidden = !zipMode;
+      primersLabel.hidden = !zipMode;
       if (zipMode) {
         // a zip of an export: the columns are matched by their names and the files are attached
         mapping.append(element('p', 'small text-muted mb-1', 'A ZIP from an export of this module: the columns are matched by their names, and the files of each entry are attached to it.'));
@@ -398,6 +410,7 @@
           form.append('category', String(category));
           form.append('register', destination.value);
           form.append('keep_numbers', keep.checked ? '1' : '0');
+          form.append('primers', primersChoice.value);
           form.append('owner_mode', ownerFields().owner_mode);
           form.append('owner_user', String(ownerFields().owner_user));
           form.append('file', file.files[0]);
@@ -410,6 +423,13 @@
           message.textContent = body.created + ' entries made, ' + body.files + ' files attached.' + ((body.owners_not_found || []).length ? ' No user was found for: ' + body.owners_not_found.slice(0, 6).join(', ') + '; those entries are yours.' : '') + (body.skipped.length ? ' Not made (' + body.skipped.length + '): ' + body.skipped.slice(0, 6).map(function (i) {
             return i.row + ': ' + i.reason;
           }).join(' ') : '');
+          if (body.primers) {
+            const p = body.primers;
+            message.textContent += ' Primers of the files: ' + p.attached + ' attached' + (p.already ? ', ' + p.already + ' already attached' : '') + (p.created ? ', ' + p.created + ' made' : '') + (p.missing ? ', ' + p.missing + ' not in the database' : '') + (p.too_short ? ', ' + p.too_short + ' too short' : '') + '.'
+              + (p.ambiguous.length ? ' Not attached, several primers have these letters: ' + p.ambiguous.slice(0, 6).join(', ') + '.' : '')
+              + (p.not_made.length ? ' Not made: ' + p.not_made.slice(0, 4).join(' ') : '')
+              + (p.errors.length ? ' ' + p.errors.slice(0, 3).join(' ') : '');
+          }
           if (storageBox.checked) {
             const madeResponse = await fetch('registry-transfer.php', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() }, body: JSON.stringify({ action: 'build_storage', category: category }) });
             const made = await madeResponse.json();
