@@ -62,6 +62,14 @@
     };
   }
 
+  // The nodes of the editor are not removed: the editor draws them again when something changes (a selection, a dialog) and it removes
+  // them itself; a node that is gone makes it fail ("removeChild") and the whole editor is blank. They are hidden.
+  function hide(node) {
+    if (!node.classList.contains('oligo-bases')) {
+      node.style.setProperty('display', 'none', 'important');
+    }
+  }
+
   function restyle() {
     const editor = window.sequenceEditor;
     if (!editor) {
@@ -108,9 +116,7 @@
       const info = layout(primer, sequence);
       const forward = info.forward;
       // the editor draws its own letters for an oligo that has bases: they are not wanted
-      g.parentNode.querySelectorAll(':scope > text.tg-primer-bases, :scope > text.tg-primer-bases-insert').forEach(function (node) {
-        node.remove();
-      });
+      g.parentNode.querySelectorAll(':scope > text.tg-primer-bases, :scope > text.tg-primer-bases-insert').forEach(hide);
       // the box: only the places that match the sequence, a little wider than its letters; the arrow of the 3' end is on the piece
       // that has that end
       const from = Math.max(first, info.boundStart);
@@ -134,9 +140,7 @@
       // the letters of the whole piece, the overhang ones in red
       let text = g.querySelector(':scope > text.oligo-bases');
       if (!text) {
-        g.querySelectorAll(':scope > text').forEach(function (node) {
-          node.remove();
-        });
+        g.querySelectorAll(':scope > text').forEach(hide);
         text = document.createElementNS(SVG, 'text');
         text.setAttribute('class', 'veLabelText ve-monospace-font oligo-bases');
         g.append(text);

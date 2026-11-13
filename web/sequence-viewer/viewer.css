@@ -1984,6 +1984,8 @@ body.hide-seq-orfs .veRowView .veRowViewOrfsContainer {
 
 .view-toggles {
   display: flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   gap: 2px;
   padding: 2px;
   background: rgba(255, 255, 255, 0.92);
@@ -2039,6 +2041,10 @@ body.hide-seq-orfs .veRowView .veRowViewOrfsContainer {
   border: 0;
   padding: 0;
   background: transparent;
+  /* in a narrow panel the buttons go on a second line, they do not leave the panel */
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
 }
 
 /* the Edit oligo panel: the oligo split in overhang and binding part */

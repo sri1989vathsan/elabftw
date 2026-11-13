@@ -487,3 +487,14 @@ test('an entry that enters the lab Database is locked, a plasmid sequence is not
   // "Started on" is not shown
   assert.match(read('web/planned.js'), /"Started on" is not shown/);
 });
+
+test('the oligo drawing does not delete nodes that the editor draws: "Edit Primer" (right click) opened a blank editor because the editor failed to remove a node that was gone', () => {
+  const js = read('web/sequence-viewer/oligo-style.js');
+  // nodes of the editor are hidden, not removed (the editor removes them itself when it draws again)
+  assert.doesNotMatch(js, /node\.remove\(\)/);
+  assert.match(js, /function hide\(node\)/);
+  assert.match(js, /querySelectorAll\(':scope > text\.tg-primer-bases, :scope > text\.tg-primer-bases-insert'\)\.forEach\(hide\);/);
+  assert.match(js, /g\.querySelectorAll\(':scope > text'\)\.forEach\(hide\);/);
+  // the buttons of the maps wrap in a narrow panel instead of leaving it
+  assert.match(read('web/sequence-viewer/viewer.css'), /\.view-toggles \{\s*display: flex;\s*flex-wrap: wrap;\s*max-width: 100%;/);
+});
