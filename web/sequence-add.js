@@ -7,6 +7,7 @@
 (function () {
   'use strict';
   const SEQUENCE_FILES = '.gb,.gbk,.gbff,.genbank,.fasta,.fa,.fna,.dna';
+  const SEQUENCE_FILE_NAME = /\.(gb|gbk|gbff|genbank|fasta|fa|fna|dna)$/i;
   const token = function () {
     const meta = document.querySelector('meta[name="csrf-token"]');
     return meta ? meta.content : '';
@@ -336,7 +337,7 @@
     const sequenceTitle = element('div', 'sa-section', 'Sequence');
     const choices = element('div', 'sa-choices');
     const radios = {};
-    [['none', 'Add it later'], ['file', 'Attach a file (GenBank, FASTA or SnapGene)'], ['paste', 'Paste the sequence']].forEach(function (choice, index) {
+    [['none', 'Add it later'], ['file', 'Attach a file (GenBank, FASTA or SnapGene), or drop it here'], ['paste', 'Paste the sequence']].forEach(function (choice, index) {
       const label = element('label', 'sa-radio');
       const radio = element('input');
       radio.type = 'radio';
@@ -370,6 +371,49 @@
     create.type = 'button';
     actions.append(cancel, create);
     dialog.append(nameLabel, parentsLabel, sequenceTitle, choices, file, paste, message, actions);
+
+    // a sequence file dropped on the dialog is chosen as the file of the new entry. The drop stops here: the list behind the dialog
+    // would otherwise make one entry per file dropped (see the drop of files on the list below)
+    const hasFiles = function (event) {
+      return event.dataTransfer && Array.prototype.indexOf.call(event.dataTransfer.types || [], 'Files') !== -1;
+    };
+    backdrop.addEventListener('dragover', function (event) {
+      if (hasFiles(event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        dialog.classList.add('sa-drop-target');
+      }
+    });
+    backdrop.addEventListener('dragleave', function (event) {
+      if (!backdrop.contains(event.relatedTarget)) {
+        dialog.classList.remove('sa-drop-target');
+      }
+    });
+    backdrop.addEventListener('drop', function (event) {
+      if (!hasFiles(event)) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      dialog.classList.remove('sa-drop-target');
+      const dropped = event.dataTransfer.files[0];
+      message.className = 'sa-message';
+      message.textContent = '';
+      if (!dropped) {
+        return;
+      }
+      if (!SEQUENCE_FILE_NAME.test(dropped.name)) {
+        message.textContent = dropped.name + ' is not a sequence file (GenBank, FASTA or SnapGene).';
+        message.className = 'sa-message error';
+        return;
+      }
+      const list = new DataTransfer();
+      list.items.add(dropped);
+      file.files = list.files;
+      radios.file.checked = true;
+      showChoice();
+      message.textContent = event.dataTransfer.files.length > 1 ? dropped.name + ' chosen (one file for a new entry: the others were left out).' : dropped.name + ' chosen.';
+    });
     backdrop.append(dialog);
     document.body.append(backdrop);
     name.focus();

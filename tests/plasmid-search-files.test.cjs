@@ -107,3 +107,15 @@ test('a plasmid that gets its sequence from a GenBank file is offered its primer
   const compose = read('docker-compose.inventory.yml');
   assert.match(compose, /\.\/web\/genbank-primers\.js:\/elabftw\/web\/genbank-primers\.js:ro/);
 });
+
+test('a sequence file can be dropped on the dialog of a new entry, which stays opaque while it is dragged over', () => {
+  const js = read('web/sequence-add.js');
+  assert.match(js, /backdrop\.addEventListener\('drop', function \(event\)/);
+  // the drop stops at the dialog: the list behind it would make one entry per file
+  assert.match(js, /event\.preventDefault\(\);\s*event\.stopPropagation\(\);\s*dialog\.classList\.remove\('sa-drop-target'\);/);
+  assert.match(js, /radios\.file\.checked = true;\s*showChoice\(\);/);
+  assert.match(js, /is not a sequence file \(GenBank, FASTA or SnapGene\)/);
+  const css = read('web/sequence-add.css');
+  // the general drop tint is see-through: on the dialog it would replace the white of the popup
+  assert.match(css, /\.sa-dialog\.sa-drop-target \{[^}]*, #fff;/);
+});

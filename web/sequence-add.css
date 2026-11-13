@@ -229,3 +229,5 @@
 }
 
 .sa-drop-target { outline: 2px dashed #5b8def; outline-offset: -2px; background: rgba(91, 141, 239, 0.08); }
+/* the dialog of a new entry keeps its solid white while a file is dragged over it: only a tint and the dashed outline show it takes the file */
+.sa-dialog.sa-drop-target { background: linear-gradient(rgba(91, 141, 239, 0.1), rgba(91, 141, 239, 0.1)), #fff; outline-offset: -6px; }
