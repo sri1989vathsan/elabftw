@@ -320,8 +320,24 @@
         return !item.inDatabase && tools.clean(item.bases).length >= tools.minLength;
       });
 
+      // the primers of the file that are in the database (found by their letters, as when the primer list of the file was imported) but
+      // are not attached to this plasmid yet: the plasmid and the primer of the database are linked with one click
+      const matchedOnly = [];
+      own.forEach(function (primer) {
+        const forward = primer.forward !== false && primer.strand !== -1;
+        const bases = basesOf(now.sequence, primer.start, primer.end, forward);
+        const inDb = known(bases);
+        if (inDb && !attachedPrimers.some(function (a) {
+          return Number(a.id) === Number(inDb.id);
+        }) && !matchedOnly.some(function (m) {
+          return m.primer.id === inDb.id;
+        })) {
+          matchedOnly.push({ primer: inDb, fileName: primer.name || 'primer' });
+        }
+      });
+
       sectionAttached.append(element('h4', '', 'On this sequence'));
-      if (attachedPrimers.length === 0 && fileOnly.length === 0) {
+      if (attachedPrimers.length === 0 && fileOnly.length === 0 && matchedOnly.length === 0) {
         sectionAttached.append(element('p', 'primers-muted', entryId ? 'No primer is attached yet. Use the Find and add tab.' : 'Open a plasmid of the database to attach primers to it.'));
       }
       // what is ticked, to be sent to an order, added to the database or detached together
@@ -516,6 +532,31 @@
           sectionAttached.append(holder);
         });
         refreshTicked();
+      }
+      if (entryId && matchedOnly.length > 0) {
+        sectionAttached.append(element('h4', '', 'In the database, not attached to this plasmid'));
+        sectionAttached.append(element('p', 'primers-muted', 'These primers of the file are in the database. Attach them to link this plasmid with the primer of the database.'));
+        const attachAll = action('Attach all ' + matchedOnly.length, async function () {
+          attachAll.disabled = true;
+          try {
+            for (const item of matchedOnly) {
+              await tools.attach(entryId, item.primer.id);
+            }
+            await loadAttached();
+            await render();
+            say(matchedOnly.length + ' primer' + (matchedOnly.length === 1 ? '' : 's') + ' attached.');
+          } catch (error) {
+            say(error.message || String(error), true);
+            attachAll.disabled = false;
+          }
+        }, 'primary');
+        sectionAttached.append(attachAll);
+        matchedOnly.forEach(function (item) {
+          const one = action('Attach', function () {
+            attach(item.primer);
+          }, 'primary');
+          sectionAttached.append(compactRow({ title: item.primer.title, category: 'In the database', sequence: item.primer.sequence }, findSitesCached(now.sequence, item.primer.sequence, now.circular), [one], 'matched' + item.primer.id));
+        });
       }
 
       // search the database: by name or sequence, and by where the primers bind relative to the selection

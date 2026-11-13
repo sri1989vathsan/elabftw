@@ -37,3 +37,11 @@ test('the Align tab shows the sequencing files inside the bubbles of the alignme
   // a file taken out of the entry is not brought back by the saved alignment
   assert.match(js, /a file that was taken out of the entry since is not shown from the saved alignment/);
 });
+
+test('the Primers tab offers to attach the primers of the file that are in the database but not linked to the plasmid', () => {
+  const js = read('web/sequence-viewer/primers-panel.js');
+  assert.match(js, /const matchedOnly = \[\];/);
+  assert.match(js, /In the database, not attached to this plasmid/);
+  assert.match(js, /action\('Attach all ' \+ matchedOnly\.length/);
+  assert.match(js, /tools\.attach\(entryId, item\.primer\.id\)/);
+});
