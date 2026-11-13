@@ -22,3 +22,8 @@
   justify-content: flex-end;
   gap: 0.5rem;
 }
+
+/* the d-block of Bootstrap (display: block !important) would show what is hidden in the import dialog (the options of a zip, the numbers to keep) */
+.planned-dialog [hidden] {
+  display: none !important;
+}

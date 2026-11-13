@@ -681,7 +681,7 @@
       button.textContent = error.message || String(error);
     }
   });
-  function toast(text, failed) {
+  function toast(text, failed, seconds) {
     const note = element('div', 'sa-toast', text);
     note.setAttribute('role', 'status');
     if (failed) {
@@ -690,21 +690,28 @@
     document.body.append(note);
     window.setTimeout(function () {
       note.remove();
-    }, 6000);
+    }, (seconds || 6) * 1000);
   }
 
   // files given to a module: one new entry each (named by the GenBank file, with what it says), or all of them to one entry that is there.
   // The GenBank files can carry primers: one question for all of them. Used by the drop on the list and by the Import dialog.
-  async function addFiles(files, entry, category) {
+  async function addFiles(files, entry, category, register) {
     toast('Adding ' + files.length + (files.length === 1 ? ' file' : ' files') + '...');
     let done = 0;
     const failed = [];
     const withPrimers = [];
+    const made = [];
+    // where the new entries go: 'both' the lab database (with the number of the lab), 'personal' the own database of the user (My entries,
+    // private), 'none' no number yet (My entries)
+    const where = register || 'personal';
     for (const file of files) {
       try {
         const details = await summaryOf(file);
         const named = (details && details.name) || file.name.replace(/\.[^.]+$/, '');
-        const target = entry > 0 ? entry : await createEntry(category, named, 'personal');
+        const target = entry > 0 ? entry : await createEntry(category, named, where);
+        if (entry === 0) {
+          made.push(target);
+        }
         await uploadFile(target, file);
         done += 1;
         // a new entry takes the name and the resistance the GenBank file carries; an entry that is there keeps what it has
@@ -722,15 +729,21 @@
     if (withPrimers.length > 0) {
       await offerPrimers(withPrimers);
     }
-    toast((entry > 0 ? done + ' attached to the entry.' : done + ' new in your database, one entry per file.') + (failed.length ? ' Not added: ' + failed.join('; ') : ''), failed.length > 0);
+    // a new entry that is one, with nothing that failed, is opened (like the dialog of a new entry does)
+    if (entry === 0 && made.length === 1 && done === 1 && failed.length === 0) {
+      window.location.href = 'registry.php?mode=edit&id=' + made[0];
+      return;
+    }
+    const placed = where === 'both' || where === 'lab' ? 'in the lab database' : where === 'none' ? 'in My entries, without a number yet' : 'in My entries, in your own database (private)';
+    toast((entry > 0 ? done + ' attached to the entry.' : done + ' new ' + (done === 1 ? 'entry' : 'entries') + ' ' + placed + ', one per file.') + (failed.length ? ' Not added: ' + failed.join('; ') : ''), failed.length > 0, 10);
     if (done > 0) {
       window.setTimeout(function () {
         window.location.reload();
-      }, 1500);
+      }, 4000);
     }
   }
 
-  window.SequenceAdd = { addFiles: function (category, files) { return addFiles(files, 0, category); } };
+  window.SequenceAdd = { addFiles: function (category, files, register) { return addFiles(files, 0, category, register); } };
 
   // ---- drag and drop of files on the list of a module: a file dropped on a row is attached to that entry (a sequence file opens in
   // the sequence editor); files dropped elsewhere on the list make one entry each in the module that is open, in your own database

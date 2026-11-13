@@ -147,13 +147,36 @@ test('dropping or choosing a GenBank file fills the name and the fields; the imp
   assert.match(js, /title = \(found && found\.name\) \|\| sequenceFile\.name/);
   assert.match(js, /await applyDetails\(id, await summaryOf\(sequenceFile\)\);/);
   // one function adds files to a module: the drop on the list and the import dialog use it
-  assert.match(js, /async function addFiles\(files, entry, category\)/);
+  assert.match(js, /async function addFiles\(files, entry, category, register\)/);
   assert.match(js, /await addFiles\(files, entry, category\);/);
   assert.match(js, /window\.SequenceAdd = \{ addFiles:/);
   const planned = read('web/planned.js');
   assert.match(planned, /back\.addEventListener\('drop', function \(event\)/);
-  assert.match(planned, /window\.SequenceAdd\.addFiles\(category, sequences\.slice\(0, 50\)\);/);
+  assert.match(planned, /useSequences\(sequences\.slice\(0, 50\)\);/);
   // the dialog keeps its own background while a file is over it (an outline only)
   assert.match(planned, /box\.style\.outline = on \? '2px dashed #5b8def' : '';/);
   assert.doesNotMatch(planned, /box\.style\.background/);
+});
+
+test('sequence files dropped on the import dialog wait for "Where the entries go", and a single new entry is opened', () => {
+  const planned = read('web/planned.js');
+  // the drop chooses the files, it does not import them
+  assert.match(planned, /useSequences\(sequences\.slice\(0, 50\)\);/);
+  assert.doesNotMatch(planned, /back\.remove\(\);\s*window\.SequenceAdd\.addFiles\(category, sequences/);
+  // Import takes the destination of the dialog: the lab database, My database, or no number yet
+  assert.match(planned, /window\.SequenceAdd\.addFiles\(category, chosen, destination\.value\);/);
+  // the lab database is possible for these (the file is the sequence) even in a module that needs a sequence file
+  assert.match(planned, /bothOption\.disabled = !on;/);
+  // choosing a csv or a zip leaves the sequence mode
+  assert.match(planned, /file\.addEventListener\('change', async function \(\) \{\s*setSequenceMode\(false\);/);
+  // the label with d-block would show although it is hidden: the stylesheet says hidden wins, and has a version in its address
+  assert.match(read('web/planned.css'), /\.planned-dialog \[hidden\] \{\s*display: none !important;/);
+  assert.match(planned, /link\.href = 'planned\.css\?v=' \+ Math\.floor\(Date\.now\(\) \/ 3600000\);/);
+  const js = read('web/sequence-add.js');
+  assert.match(js, /async function addFiles\(files, entry, category, register\)/);
+  assert.match(js, /createEntry\(category, named, where\)/);
+  // one new entry made without a failure is opened, like the dialog of a new entry; else a message says where they are, and stays long enough
+  assert.match(js, /window\.location\.href = 'registry\.php\?mode=edit&id=' \+ made\[0\];/);
+  assert.match(js, /in My entries, in your own database \(private\)/);
+  assert.match(js, /failed\.length > 0, 10\);/);
 });

@@ -8,7 +8,8 @@
   if (!document.querySelector('link[href^="planned.css"]')) {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
-    link.href = 'planned.css';
+    // a version in the address: the browser asks again when the file changes (the hour is enough for a stylesheet)
+    link.href = 'planned.css?v=' + Math.floor(Date.now() / 3600000);
     document.head.append(link);
   }
   const token = function () {
@@ -214,9 +215,14 @@
     box.append(file);
     const mapping = element('div');
     const destination = element('select', 'form-control form-control-sm w-auto mb-2');
+    let bothOption = null;
     [['personal', 'My database: only me, my own numbers'], ['both', 'The lab database: everyone sees them, with the lab number'], ['none', 'No database yet: private, no numbers until registered']].forEach(function (item) {
       const option = element('option', '', item[1]);
       option.value = item[0];
+      if (item[0] === 'both') {
+        bothOption = option;
+        option.dataset.plain = item[1];
+      }
       if (item[0] === 'both' && module.settings && module.settings.requires_sequence_file) {
         option.disabled = true;
         option.textContent += ' (this module needs a sequence file for each: not for an import)';
@@ -365,8 +371,8 @@
         return /\.(gb|gbk|gbff|genbank|fasta|fa|fna|dna)$/i.test(candidate.name);
       });
       if (sequences.length > 0 && window.SequenceAdd) {
-        back.remove();
-        window.SequenceAdd.addFiles(category, sequences.slice(0, 50));
+        // the files are chosen, not imported yet: "Where the entries go" is asked first (the lab database, My database or no number yet)
+        useSequences(sequences.slice(0, 50));
         return;
       }
       if (!/\.(csv|tsv|txt|zip)$/i.test(dropped.name)) {
@@ -387,7 +393,46 @@
     let table = [];
     let zipMode = false;
     const choices = [];
+    // sequence files dropped on the dialog: one entry each. A module that needs a sequence file can be registered in the lab with these
+    // (they are the file), and what is asked for a csv (numbers, owners, the primers of a zip) is not.
+    let sequenceFiles = [];
+    const setSequenceMode = function (on) {
+      sequenceFiles = on ? sequenceFiles : [];
+      // the numbers to keep and the owners are for a csv or a zip; display with !important like the d-block that the label has
+      if (on) {
+        keepLabel.style.setProperty('display', 'none', 'important');
+      } else {
+        keepLabel.style.removeProperty('display');
+      }
+      ownerBox.style.display = on ? 'none' : '';
+      if (bothOption && module.settings && module.settings.requires_sequence_file) {
+        bothOption.disabled = !on;
+        bothOption.textContent = on ? bothOption.dataset.plain : bothOption.dataset.plain + ' (this module needs a sequence file for each: not for an import)';
+      }
+    };
+    const useSequences = function (list) {
+      mapping.textContent = '';
+      choices.length = 0;
+      zipMode = false;
+      storageLabel.hidden = true;
+      primersLabel.hidden = true;
+      file.value = '';
+      sequenceFiles = list;
+      setSequenceMode(true);
+      message.textContent = '';
+      mapping.append(element('p', 'small mb-1', list.length + (list.length === 1 ? ' sequence file' : ' sequence files') + ': one entry each, named from the file (a GenBank file gives its name and what else it says). Choose where they go, then Import.'));
+      const names = element('ul', 'small text-muted mb-2');
+      list.slice(0, 8).forEach(function (item) {
+        names.append(element('li', '', item.name));
+      });
+      if (list.length > 8) {
+        names.append(element('li', '', 'and ' + (list.length - 8) + ' more'));
+      }
+      mapping.append(names);
+      run.disabled = false;
+    };
     file.addEventListener('change', async function () {
+      setSequenceMode(false);
       mapping.textContent = '';
       choices.length = 0;
       run.disabled = true;
@@ -455,6 +500,13 @@
 
     run.addEventListener('click', async function () {
       saveDefault();
+      if (sequenceFiles.length > 0) {
+        // the files become entries where the user chose; a GenBank file then asks about its primers (sequence-add.js)
+        const chosen = sequenceFiles;
+        back.remove();
+        window.SequenceAdd.addFiles(category, chosen, destination.value);
+        return;
+      }
       if (zipMode) {
         run.disabled = true;
         message.className = 'small mb-2';
