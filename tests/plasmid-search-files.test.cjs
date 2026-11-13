@@ -257,3 +257,11 @@ test('an item ordered from the database (an antibody, a reagent) is not linked t
   assert.doesNotMatch(planned, /action: 'order', primers: \[entry\.id\]/);
   assert.match(planned, /the entry is not linked to the order: the order has no chip/);
 });
+
+test('the files attached to an order are a soft card with the icon of their kind, and the sheet button says what it does', () => {
+  const js = read('web/order-primers.js');
+  assert.match(js, /li\.orders-upload\.op-row \{/);
+  assert.match(js, /\['fa-file-excel'|'fa-file-excel'/);
+  assert.match(js, /document\.createTextNode\('Add to database'\)/);
+  assert.doesNotMatch(js, /fa-plus/);
+});

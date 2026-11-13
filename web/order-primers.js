@@ -210,9 +210,59 @@
     });
   }
 
+  // the look of the files attached to an order: a soft card, the icon of the kind of file, the size as a small pill (the styles are
+  // here, not in the orders page: the page is not changed)
+  function ensureRowStyles() {
+    if (document.getElementById('op-row-styles')) {
+      return;
+    }
+    const style = document.createElement('style');
+    style.id = 'op-row-styles';
+    style.textContent = [
+      'li.orders-upload.op-row { align-items: center; background: rgba(127, 127, 127, 0.07); border: 1px solid rgba(127, 127, 127, 0.22); border-radius: 8px; column-gap: 0.15rem; padding: 0.3rem 0.4rem 0.3rem 0.6rem; }',
+      'li.orders-upload.op-row:hover { background: rgba(127, 127, 127, 0.12); }',
+      'li.orders-upload.op-row > a:first-of-type { font-weight: 600; text-decoration: none; }',
+      'li.orders-upload.op-row > a:first-of-type:hover { text-decoration: underline; }',
+      'li.orders-upload.op-row .op-icon { font-size: 1.15rem; margin-right: 0.5rem !important; }',
+      'li.orders-upload.op-row .op-size { background: rgba(127, 127, 127, 0.16); border-radius: 999px; font-size: 0.72rem; margin-left: 0.5rem !important; padding: 0.05rem 0.5rem; white-space: nowrap; }',
+      'li.orders-upload.op-row .op-add { align-items: center; border: 1px solid #1a9bb0; border-radius: 999px; color: #1a9bb0; display: inline-flex; font-size: 0.78rem; gap: 0.35rem; line-height: 1.2; margin-left: auto; padding: 0.2rem 0.7rem; white-space: nowrap; }',
+      'li.orders-upload.op-row .op-add:hover:not(:disabled) { background: #1a9bb0; color: #fff; }',
+    ].join('\n');
+    document.head.append(style);
+  }
+
+  // the icon of a file by its kind
+  const KINDS = [
+    [/\.(xlsx|xls|csv|tsv)$/i, 'fa-file-excel', '#1d8348'],
+    [/\.pdf$/i, 'fa-file-pdf', '#c0392b'],
+    [/\.(docx?|rtf|odt)$/i, 'fa-file-word', '#2b6cb0'],
+    [/\.(png|jpe?g|gif|svg|tiff?)$/i, 'fa-file-image', '#8e44ad'],
+    [/\.(zip|7z|gz|tar)$/i, 'fa-file-zipper', '#b9770e'],
+  ];
+
   // a button on each sheet (.xlsx) attached to an order
   function enhance() {
+    ensureRowStyles();
     document.querySelectorAll('li.orders-upload').forEach(function (item) {
+      if (!item.classList.contains('op-row')) {
+        item.classList.add('op-row');
+        const name = (item.querySelector('a') || { textContent: '' }).textContent.trim();
+        const icon = item.querySelector('i.fa-file');
+        if (icon) {
+          icon.classList.add('op-icon');
+          const kind = KINDS.find(function (entry) {
+            return entry[0].test(name);
+          });
+          if (kind) {
+            icon.classList.replace('fa-file', kind[1]);
+            icon.style.color = kind[2];
+          }
+        }
+        const size = item.querySelector('span.orders-muted');
+        if (size) {
+          size.classList.add('op-size');
+        }
+      }
       if (item.querySelector('.op-add')) {
         return;
       }
@@ -232,11 +282,11 @@
         return;
       }
       const orderId = Number(found[1]);
-      const button = element('button', 'btn btn-ghost btn-sm orders-icon-button op-add');
+      const button = element('button', 'btn btn-sm op-add');
       button.type = 'button';
       button.title = 'Add the primers of this sheet to the database';
       button.setAttribute('aria-label', 'Add the primers of this sheet to the database');
-      button.append(element('i', 'fas fa-plus fa-fw'));
+      button.append(element('i', 'fas fa-database fa-fw'), document.createTextNode('Add to database'));
       button.addEventListener('click', function () {
         button.disabled = true;
         openSheet(orderId, fileName, longName).catch(function (error) {
@@ -247,6 +297,8 @@
       });
       const first = item.querySelector('.orders-icon-button');
       if (first) {
+        // the button takes the free space of the row (to the right), the icon buttons follow it
+        first.style.setProperty('margin-left', '0.4rem', 'important');
         first.before(button);
       } else {
         item.append(button);
