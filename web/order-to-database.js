@@ -297,88 +297,60 @@
     }
   }
 
-  // ---- the details of a vendor page. The server has no internet and a page cannot read a page of another site, so a script is run in a
-  // tab of the vendor (where the browser may read its pages), saves a file, and the file is chosen in the window (like the Addgene sequences).
-  // This function is sent as text to the console of the vendor: it has to stay self-contained (nothing of this file can be used in it).
-  function pageReader(pairs) {
-    const text = function (node) {
-      return node ? node.textContent.replace(/\s+/g, ' ').trim() : '';
-    };
-    (async function () {
-      const out = {};
-      for (const pair of pairs) {
-        const d = { url: pair[1], name: '', brand: '', sku: '', mpn: '', description: '', props: {} };
-        try {
-          const html = await (await fetch(pair[1], { credentials: 'include' })).text();
-          const doc = new DOMParser().parseFromString(html, 'text/html');
-          // the data of the product that the page gives to the search engines
-          const walk = function (value) {
-            if (Array.isArray(value)) {
-              value.forEach(walk);
-            } else if (value && typeof value === 'object') {
-              if (/Product/.test([].concat(value['@type'] || []).join(','))) {
-                d.name = d.name || value.name || '';
-                d.brand = d.brand || (value.brand && (value.brand.name || value.brand)) || '';
-                d.sku = d.sku || value.sku || '';
-                d.mpn = d.mpn || value.mpn || '';
-                d.description = d.description || value.description || '';
-              }
-              Object.keys(value).forEach(function (key) {
-                walk(value[key]);
-              });
-            }
-          };
-          doc.querySelectorAll('script[type="application/ld+json"]').forEach(function (node) {
-            try {
-              walk(JSON.parse(node.textContent));
-            } catch (error) {
-              // not a product
-            }
-          });
-          const meta = function (name) {
-            const node = doc.querySelector('meta[property="' + name + '"],meta[name="' + name + '"]');
-            return node ? node.getAttribute('content') || '' : '';
-          };
-          d.name = d.name || meta('og:title') || text(doc.querySelector('h1'));
-          d.description = d.description || meta('og:description') || meta('description');
-          // the "label: value" lines of the specification tables and lists
-          const add = function (key, value) {
-            key = key.replace(/[:：]\s*$/, '').trim();
-            value = value.trim();
-            if (key && value && key.length < 60 && value.length < 300 && !(key in d.props) && Object.keys(d.props).length < 120) {
-              d.props[key] = value;
-            }
-          };
-          doc.querySelectorAll('tr').forEach(function (row) {
-            if (row.children.length === 2) {
-              add(text(row.children[0]), text(row.children[1]));
-            }
-          });
-          doc.querySelectorAll('dl').forEach(function (list) {
-            let key = '';
-            Array.from(list.children).forEach(function (node) {
-              if (node.tagName === 'DT') {
-                key = text(node);
-              } else if (node.tagName === 'DD' && key) {
-                add(key, text(node));
-                key = '';
-              }
-            });
-          });
-        } catch (error) {
-          d.error = String(error);
+  // ---- the details of a vendor page. The server has no internet and the browser cannot read the page of another site, so the user copies
+  // the page (select everything, copy) and pastes it here: the text is read in the browser, nothing is sent anywhere.
+  const TEXT_LABELS = [
+    ['Catalog number', 'catalog(?:ue)? (?:number|no\\.?|#)|catalog(?:ue)?|cat\\.? ?(?:no\\.?|#)|product (?:code|number)|item (?:number|no\\.?)|part (?:number|no\\.?)|sku'],
+    ['Clone number', 'clone (?:number|name|id)|clone'],
+    ['Host species', 'host species|host'],
+    ['Isotype', 'isotype'],
+    ['Reacts with', 'reacts with|species reactivity|tested reactivity|reactivity'],
+    ['Applications', 'tested applications|applications|suitable for'],
+    ['Conjugate', 'conjugated to|conjugation|conjugate|dye'],
+    ['Target', 'target|gene name|antigen'],
+    ['Concentration', 'concentration'],
+    ['Pack size', 'pack size|unit size|size'],
+  ];
+
+  // {name, sku, brand, description, props} from the text of a product page
+  function readPageText(text, link) {
+    const lines = String(text || '').split(/\r\n|\r|\n/).map(function (line) {
+      return line.replace(/\s+/g, ' ').trim();
+    }).filter(Boolean);
+    const page = { name: '', sku: '', brand: vendorOfLink(link || ''), description: '', props: {} };
+    // the name is the first line that looks like the title of a product
+    page.name = (lines.find(function (line) {
+      return line.length >= 6 && line.length <= 200 && (/antibod|\bab\d{4,7}\b|\[[^\]]+\]/i.test(line));
+    }) || lines.find(function (line) {
+      return line.length >= 6 && line.length <= 200;
+    }) || '');
+    TEXT_LABELS.forEach(function (entry) {
+      const label = entry[1];
+      const same = new RegExp('^(?:' + label + ')\\s*[:\\-]\\s*(.+)$|^(?:' + label + ')\\s+(.+)$', 'i');
+      const alone = new RegExp('^(?:' + label + ')\\s*:?$', 'i');
+      for (let i = 0; i < lines.length; i++) {
+        let value = '';
+        // the label alone on its line: the value is the next line (checked first: "Clone number" is not the label "Clone" with "number")
+        if (alone.test(lines[i])) {
+          value = lines[i + 1] || '';
+        } else {
+          const found = same.exec(lines[i]);
+          value = found ? (found[1] || found[2] || '').trim() : '';
         }
-        out[pair[0]] = d;
-        await new Promise(function (resolve) {
-          setTimeout(resolve, 1200);
-        });
+        // a pages repeats the label in the value ("Suitable for: IHC-P, WB"): the label is taken off
+        value = value.replace(/^(?:suitable for|reacts with|tested applications|species reactivity)\s*:\s*/i, '');
+        // a value is short: a long line is a sentence that starts with the word
+        if (value !== '' && value.length <= 120 && !/^(is|are|of|for|to|and|the|in|with)\b/i.test(value)) {
+          page.props[entry[0]] = value;
+          break;
+        }
       }
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(new Blob([JSON.stringify(out)], { type: 'application/json' }));
-      link.download = 'vendor-details.json';
-      link.click();
-      console.log('done', Object.keys(out).length);
-    })();
+    });
+    // the catalog number of a product that has it in its title (Abcam: "... (ab105389)")
+    const inTitle = /\((ab\d{4,7})\)|\b(ab\d{4,7})\b/i.exec(lines.slice(0, 12).join(' '));
+    page.sku = page.props['Catalog number'] || (inTitle ? (inTitle[1] || inTitle[2]) : '');
+    page.description = lines.slice(0, 12).join(' ').slice(0, 600);
+    return page;
   }
 
   // what a label of a page means for a line of the order
@@ -417,7 +389,12 @@
       row.name = String(page.name).trim();
     }
     const said = [page.name, page.description].join(' ');
-    row.clone = row.clone || ((/\bclone\s*(?:no\.?\s*)?[:#]?\s*([A-Za-z0-9-]{2,})/i.exec(said) || [])[1] || '');
+    row.clone = row.clone || ((/\bclone\s*(?:no\.?\s*)?[:#]?\s*([A-Za-z0-9-]{2,})/i.exec(said) || [])[1] || '') || ((/\[([A-Za-z0-9-]{2,})\]/.exec(page.name || '') || [])[1] || '');
+    // the target of an antibody is in its name: "Anti-Nestin antibody"
+    if (!row.target && /antibod/i.test(said)) {
+      const target = /\banti[- ]\s*(?:mouse|rabbit|rat|goat|human)?\s*([A-Za-z0-9-]{2,})/i.exec(page.name || row.name || '');
+      row.target = target ? target[1] : '';
+    }
     if (row.host) {
       const known = HOSTS.find(function (name) {
         return new RegExp('\\b' + name + '\\b', 'i').test(row.host);
@@ -771,69 +748,54 @@
         helper.append(copy, load);
         tableBox.append(helper);
       }
-      // the lines with a link of a vendor: their details (catalog number, clone, host, target...) are read from the pages of the vendor
-      const hostOf = function (link) {
-        try {
-          return new URL(link).hostname.replace(/^www\./, '');
-        } catch (error) {
-          return '';
-        }
-      };
-      const byHost = new Map();
-      rows.forEach(function (r, index) {
-        const host = hostOf(r.link);
-        if (r.ticked && host !== '' && !/addgene\.org$/i.test(host) && !r.pageRead) {
-          byHost.set(host, (byHost.get(host) || []).concat([[index, r.link]]));
-        }
+      // the lines with a link: the page of the product is opened, copied (Ctrl+A, Ctrl+C) and pasted here; its details (catalog number,
+      // clone, host, target...) are read from the text, in the browser (the server has no internet)
+      const withLink = rows.map(function (r, index) {
+        return { row: r, index: index };
+      }).filter(function (item) {
+        return item.row.ticked && /^https?:\/\//i.test(item.row.link || '') && !/addgene\.org/i.test(item.row.link);
       });
-      byHost.forEach(function (pairs, host) {
+      if (withLink.length > 0) {
         const helper = element('div', 'small border rounded p-2 mt-2');
-        helper.append(element('div', 'font-weight-bold', 'Details from ' + host + ' (' + pairs.length + (pairs.length === 1 ? ' line' : ' lines') + ')'));
-        helper.append(element('div', 'text-muted mb-1', 'The server cannot reach the internet, so your browser reads the pages: open ' + host + ' in a tab, press F12, open the console, paste the script and press Enter. It saves a file; choose it here and the catalog number, clone, host, target and the other columns are filled in.'));
-        const open = element('a', 'btn btn-secondary btn-sm mr-2', 'Open ' + host);
-        open.href = pairs[0][1];
+        helper.append(element('div', 'font-weight-bold', 'Fill in from the page of the vendor'));
+        helper.append(element('div', 'text-muted mb-1', 'Open the page, select everything (Ctrl+A), copy it (Ctrl+C) and paste it in the box. The catalog number, clone, host, target and the other columns are read from it, here in your browser.'));
+        const which = element('select', 'form-control form-control-sm mb-1', '', 'width:auto;max-width:100%');
+        withLink.forEach(function (item) {
+          const option = element('option', '', (item.row.name || 'line ' + (item.index + 1)) + ' (' + item.row.link.replace(/^https?:\/\/(www\.)?/, '').slice(0, 40) + ')');
+          option.value = String(item.index);
+          which.append(option);
+        });
+        const open = element('a', 'btn btn-secondary btn-sm mr-2 mb-1', 'Open the page');
         open.target = '_blank';
         open.rel = 'noopener';
-        const copy = element('button', 'btn btn-secondary btn-sm mr-2', 'Copy the script');
-        copy.type = 'button';
-        copy.addEventListener('click', async function () {
-          const script = '(' + pageReader.toString() + ')(' + JSON.stringify(pairs) + ');';
-          try {
-            await navigator.clipboard.writeText(script);
-            copy.textContent = 'Copied';
-          } catch (error) {
-            window.prompt('Copy this script', script);
-          }
-        });
-        const load = element('input', 'form-control-file d-inline-block', '', 'width:auto');
-        load.type = 'file';
-        load.accept = '.json';
-        load.setAttribute('aria-label', 'The file the script saved');
-        load.addEventListener('change', async function () {
-          if (!load.files || !load.files[0]) {
+        const sync = function () {
+          open.href = rows[Number(which.value)].link;
+        };
+        which.addEventListener('change', sync);
+        sync();
+        const paste = element('textarea', 'form-control form-control-sm mb-1', '', 'min-height:5rem');
+        paste.placeholder = 'Paste the text of the page here';
+        const fill = element('button', 'btn btn-primary btn-sm mb-1', 'Fill in');
+        fill.type = 'button';
+        fill.addEventListener('click', function () {
+          const target = rows[Number(which.value)];
+          const page = readPageText(paste.value, target.link);
+          const found = Object.keys(page.props).length + (page.sku ? 1 : 0);
+          if (paste.value.trim() === '' || found === 0) {
+            message.className = 'small mb-2 text-danger';
+            message.textContent = 'Nothing could be read from this text. Copy the whole page (Ctrl+A, Ctrl+C) of the product and paste it again.';
             return;
           }
-          try {
-            const found = JSON.parse(await load.files[0].text());
-            let filled = 0;
-            Object.keys(found).forEach(function (key) {
-              const r = rows[Number(key)];
-              if (r && applyPage(r, found[key])) {
-                r.pageRead = true;
-                filled += 1;
-              }
-            });
-            draw();
-            message.className = 'small mb-2';
-            message.textContent = filled + (filled === 1 ? ' line' : ' lines') + ' filled in from the pages of ' + host + '. Details... shows the columns.';
-          } catch (error) {
-            message.className = 'small mb-2 text-danger';
-            message.textContent = 'This is not the file of the script.';
-          }
+          applyPage(target, page);
+          draw();
+          message.className = 'small mb-2';
+          message.textContent = 'Filled in from the page: ' + [target.catalog ? 'catalog ' + target.catalog : '', target.clone ? 'clone ' + target.clone : '', target.host ? 'host ' + target.host : '', target.target ? 'target ' + target.target : ''].filter(Boolean).join(', ') + '. Details... shows all the columns.';
         });
-        helper.append(open, copy, load);
+        const pick = element('div', 'd-flex flex-wrap align-items-center');
+        pick.append(open, which);
+        helper.append(pick, paste, fill);
         tableBox.append(helper);
-      });
+      }
       const ticked = rows.filter(function (r) {
         return r.ticked && r.name.trim() !== '';
       });
@@ -1149,7 +1111,7 @@
     });
   }
 
-  window.OrderToDatabase = { open: open, parse: parseOrder, applyPage: applyPage, pageReader: pageReader };
+  window.OrderToDatabase = { open: open, parse: parseOrder, applyPage: applyPage, readPageText: readPageText };
 
   // on the orders page: a button under the title; an order opened there (?order=) is the one that is read
   if (/orders\.php$/.test(window.location.pathname)) {

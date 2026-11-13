@@ -288,14 +288,17 @@ test('the window of the primers of an order sheet says what it does, and links n
   assert.match(js, /tools\.destinationControl\(\)/);
 });
 
-test('the details of a vendor page are read by a script that the browser runs in a tab of the vendor, and an order that is in the database says so', () => {
+test('the details of a vendor page are read from the pasted text of the page, and an order that is in the database says so', () => {
   const js = read('web/order-to-database.js');
-  // the script is sent as text, so it is a function of its own; its file is chosen in the window (the server has no internet)
-  assert.match(js, /function pageReader\(pairs\) \{/);
-  assert.match(js, /'\(' \+ pageReader\.toString\(\) \+ '\)\(' \+ JSON\.stringify\(pairs\) \+ '\);'/);
+  // no script in the console of the vendor: the page is copied and pasted, and read in the browser
+  assert.doesNotMatch(js, /pageReader/);
+  assert.match(js, /function readPageText\(text, link\)/);
   assert.match(js, /function applyPage\(row, page\)/);
-  assert.match(js, /'Details from ' \+ host/);
-  assert.match(js, /applyPage: applyPage, pageReader: pageReader/);
+  assert.match(js, /'Fill in from the page of the vendor'/);
+  assert.match(js, /placeholder = 'Paste the text of the page here'/);
+  assert.match(js, /applyPage: applyPage, readPageText: readPageText/);
+  // a label alone on its line takes the next line (otherwise "Clone number" would be the label "Clone" with the value "number")
+  assert.match(js, /if \(alone\.test\(lines\[i\]\)\) \{/);
   // the button of an order whose lines are in the database already says so; only the same name or the same catalog number counts
   assert.match(js, /document\.createTextNode\('In the database'\)/);
   assert.match(js, /return have === wanted \|\| \(catalog\.length >= 4/);
