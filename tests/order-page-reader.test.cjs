@@ -147,3 +147,12 @@ test('the conjugate of the page replaces a shorter one of the name, and "Conjuga
   assert.strictEqual(row.conjugate, 'Spark Blue 574');
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'web', 'order-to-database.js'), 'utf8'), /\/\^\(conjugate\(\?!d\)\|dye\)\/i/);
 });
+
+test('"Target retrieval" (the staining conditions) is not the target; the target of an antibody comes from its name', () => {
+  const row = read(`Anti-vimentin antibody - rabbit polyclonal (ab137321) | Abcam
+Target retrieval : Citrate buffer, pH 6.0, 15 min
+Antigen retrieval Heat mediated
+Host species Rabbit`, 'https://www.abcam.com/en-us/products/primary-antibodies/vimentin-antibody-ab137321', 'Vimentin antibody');
+  assert.notStrictEqual(row.target, 'Retrieval : Citrate buffer, pH 6.0, 15 min');
+  assert.ok(!/retrieval/i.test(row.target || ''), row.target);
+});

@@ -408,7 +408,8 @@
     ['Reacts with', 'verified reactivity|reacts with|species reactivity|tested reactivity|reactivity'],
     ['Applications', 'tested applications|application\\(s\\)|technique\\(s\\)|applications?|suitable for'],
     ['Conjugate', 'conjugated to|conjugation|conjugate|dye'],
-    ['Target', 'target|gene name|antigen'],
+    // "Target retrieval: citrate buffer" and "Antigen retrieval" (the staining conditions) are not the target of the antibody
+    ['Target', 'target(?! (?:retrieval|site|region|cells?|species))|gene name|antigen(?! (?:retrieval|affinity|presentation))'],
     ['Label', 'label|format'],
     ['Concentration', 'igg concentration|approx\\.? protein concentrations?|concentration range|concentration'],
     ['Size / concentration', 'size ?/ ?concentration'],
@@ -782,9 +783,10 @@
   // ---- the page behind a link, read by the server when it can reach the internet (link-page.php): without internet it fails and is not asked
   // again for half an hour; the page and the pasted text, screenshot or PDF all go through readPageText
   const pagesOfLinks = new Map();
+  // not asked for 3 minutes after the server could not be reached (not after a page that could not be read: another page can be)
   function pagesDown() {
     try {
-      return Date.now() - Number(window.localStorage.getItem('otd-page-down') || 0) < 30 * 60 * 1000;
+      return Date.now() - Number(window.localStorage.getItem('otd-page-down-v2') || 0) < 3 * 60 * 1000;
     } catch (error) {
       return false;
     }
@@ -804,20 +806,27 @@
       const timer = window.setTimeout(function () {
         stop.abort();
       }, 9000);
+      let unreachable = false;
       try {
-        const answer = await (await fetch('link-page.php?url=' + encodeURIComponent(link), { credentials: 'same-origin', signal: stop.signal })).json();
-        if (answer && answer.ok && answer.text) {
-          return readPageText(answer.text, link);
+        const response = await fetch('link-page.php?url=' + encodeURIComponent(link), { credentials: 'same-origin', signal: stop.signal });
+        if (!response.ok) {
+          unreachable = true;
+        } else {
+          const answer = await response.json();
+          // the page of this link could not be read (a block, an error page): the other links are still asked
+          return answer && answer.ok && answer.text ? readPageText(answer.text, link) : null;
         }
       } catch (error) {
-        // no answer
+        unreachable = true;
       } finally {
         window.clearTimeout(timer);
       }
-      try {
-        window.localStorage.setItem('otd-page-down', String(Date.now()));
-      } catch (error) {
-        // asked again next time
+      if (unreachable) {
+        try {
+          window.localStorage.setItem('otd-page-down-v2', String(Date.now()));
+        } catch (error) {
+          // asked again next time
+        }
       }
       return null;
     }());
@@ -2362,6 +2371,7 @@
     };
     const nativeFetch = window.fetch;
     window.fetch = function (input, init) {
+      const args = Array.from(arguments);
       let made = null;
       try {
         const url = String(typeof input === 'string' ? input : (input && input.url) || '').split('?')[0];
@@ -2369,6 +2379,11 @@
         const form = orderForm();
         if (method === 'POST' && /api\/v2\/inventory\/?$/.test(url) && form && init && typeof init.body === 'string') {
           const body = JSON.parse(init.body);
+          // the form makes the entry without saying where it goes, and it would be in My entries (private, no number): the Database is where it
+          // goes, with the number of the lab
+          if (body.register === undefined) {
+            args[1] = Object.assign({}, init, { body: JSON.stringify(Object.assign({}, body, { register: 'lab' })) });
+          }
           made = { title: String(body.title || ''), category: body.category, orderTitle: form.title, notes: form.notes, values: null };
           // the columns that the person saw (and changed) under the row of the entry
           form.card.querySelectorAll('.orders-pending-resource').forEach(function (rowEl) {
@@ -2383,7 +2398,7 @@
       } catch (error) {
         made = null;
       }
-      const promise = nativeFetch.apply(this, arguments);
+      const promise = nativeFetch.apply(this, args);
       if (made && made.category) {
         promise.then(function (response) {
           const id = Number((response.headers.get('Location') || '').split('/').pop());

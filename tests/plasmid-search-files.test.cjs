@@ -422,3 +422,14 @@ test('placing an order: a link adds the new entry of the Database by itself, wit
   // the tags with the names of the linked entries are not shown
   assert.match(read('web/order-primers.js'), /\.orders-card \.orders-item-header a\.badge \{ display: none !important; \}/);
 });
+
+test('the entry of the order form goes into the lab database, and one page that cannot be read does not stop the others from being read', () => {
+  const js = read('web/order-to-database.js');
+  // the form makes the entry without saying where it goes (My entries, private, no number): the lab database is where it goes
+  assert.match(js, /args\[1\] = Object\.assign\(\{\}, init, \{ body: JSON\.stringify\(Object\.assign\(\{\}, body, \{ register: 'lab' \}\)\) \}\);/);
+  assert.match(js, /nativeFetch\.apply\(this, args\)/);
+  // the reader of links is switched off only when the server could not be reached, for 3 minutes (a block or an error page is not that)
+  assert.match(js, /'otd-page-down-v2'/);
+  assert.match(js, /3 \* 60 \* 1000/);
+  assert.match(js, /return answer && answer\.ok && answer\.text \? readPageText\(answer\.text, link\) : null;/);
+});
