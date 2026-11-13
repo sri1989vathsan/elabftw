@@ -1363,7 +1363,8 @@
   }
   const style = document.createElement('style');
   style.textContent = [
-    'section.otd-ownership { border-top: 1px solid rgba(127, 127, 127, 0.3); margin-top: 1.25rem; padding-top: 0.9rem; }',
+    // the content starts where the text of the headings starts (after the arrow of the heading: 28 px)
+    'section.otd-ownership { border-top: 1px solid rgba(127, 127, 127, 0.3); margin-top: 1.25rem; padding-left: 28px; padding-top: 0.9rem; }',
     'section.otd-ownership > hr { display: none; }',
     // "Owner" and "Team" are labels of one width, with a space before the name (the page gave them none in view mode)
     'section.otd-ownership .edit-mode-label { margin-right: 0.75rem; min-width: 6rem; }',

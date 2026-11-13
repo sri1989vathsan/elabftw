@@ -441,6 +441,13 @@ test('the page of an entry of a module has "Started on", owner and team at the b
   assert.match(js, /node\.textContent\.trim\(\) === 'Permissions'/);
   assert.match(js, /anchor\.after\(section\);/);
   assert.match(js, /section\.otd-ownership \.edit-mode-label \{ margin-right: 0\.75rem; min-width: 6rem; \}/);
+  // starting where the text of the headings starts
+  assert.match(js, /padding-left: 28px; padding-top: 0\.9rem;/);
+  // the button "Who can edit" is in the Permissions (next to "Select who can edit this entry"), not in the toolbar that floats over the page
+  const permissions = read('web/registry-permissions.js');
+  assert.match(permissions, /Select who can edit this entry/);
+  assert.match(permissions, /heading\.after\(button\);/);
+  assert.doesNotMatch(permissions, /target\.append\(button\)/);
   // it applies to the view and the edit page of the Database only
   assert.match(js, /mode=\(view\|edit\)/);
 });

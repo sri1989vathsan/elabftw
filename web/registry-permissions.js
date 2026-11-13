@@ -339,9 +339,33 @@
           openBox([entryId], 'This entry is owned by ' + (now.owner || 'someone') + ' and stays theirs.', now, null);
         });
       });
-      const target = document.getElementById('entityToolbar') || document.querySelector('h1, h2, .page-title');
-      if (target) {
-        target.append(button);
+      // The button is in the Permissions of the page, next to "Select who can edit this entry" (it is not in the toolbar that floats over the page).
+      // The permissions can come after the script: tried again for some seconds; at last it goes to the block of the owner, or the toolbar.
+      button.className = 'btn btn-secondary btn-sm mt-1 mb-2';
+      let tries = 0;
+      const put = function () {
+        const heading = Array.from(document.querySelectorAll('h5')).find(function (node) {
+          return /Select who can edit this entry/.test(node.textContent);
+        });
+        if (heading) {
+          heading.after(button);
+          return true;
+        }
+        return false;
+      };
+      if (!put()) {
+        const timer = setInterval(function () {
+          tries += 1;
+          if (put()) {
+            clearInterval(timer);
+          } else if (tries > 16) {
+            clearInterval(timer);
+            const fallback = document.querySelector('section.otd-ownership') || document.getElementById('entityToolbar') || document.querySelector('h1, h2, .page-title');
+            if (fallback) {
+              fallback.append(button);
+            }
+          }
+        }, 300);
       }
     });
   };
