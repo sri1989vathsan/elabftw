@@ -250,8 +250,10 @@
                 {% set isActive = scriptName == 'syc.php' %}
                 <a class='dropdown-item {{ not envAsBool('USE_OPENCLONING') ? 'disabled' }} {{ isActive ? 'active' }}' href='syc.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-dna fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'OpenCloning'|trans }}</a>
                 #}
+                {# "Inventory" hidden from the Tools menu (the Database is used instead). Left in place, not deleted, so it is easy to bring back:
                 {% set isActive = scriptName == 'inventory.php' %}
                 <a class='dropdown-item {{ isActive ? 'active' }}' href='inventory.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-warehouse fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Inventory'|trans }}</a>
+                #}
                 {% set isActive = scriptName == 'tool.php' %}
                 <a class='dropdown-item {{ isActive ? 'active' }}' href='sequence-viewer/tool.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-dna fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Sequence editor'|trans }}</a>
                 {# "LabCollector" disabled placeholder hidden from the Tools
