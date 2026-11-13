@@ -501,7 +501,7 @@ test('the oligo drawing does not delete nodes that the editor draws: "Edit Prime
 
 test('two primers ticked in the Primers tab give their PCR product, which can be saved as a new entry (a linear sequence made from the plasmid, with the two primers on it and attached)', () => {
   const panel = read('web/sequence-viewer/primers-panel.js');
-  assert.match(panel, /action\('PCR product of the 2'/);
+  assert.match(panel, /action\('PCR product'/);
   assert.match(panel, /window\.ToolsPcr\.show\(picked\[0\]\.sequence, picked\[1\]\.sequence\);/);
   assert.match(panel, /pcrTicked\.hidden = tickedDb\.size !== 2;/);
   assert.match(panel, /orderTicked, pcrTicked, addTicked/);
@@ -535,4 +535,15 @@ test('the oligo of a primer of the file: "Edit oligo" is in the menu of the edit
   assert.match(oligo, /fetch\('\.\.\/registry-lock\.php'/);
   // the lock call also locks an entry of My database
   assert.match(read('web/registry-lock.php'), /\(\$Entry->entityData\['personal_id'\] \?\? null\) === null/);
+});
+
+test('the buttons of the ticked primers are pills of one look that do not wrap: the main one filled, Detach in red, Expand at the right', () => {
+  const panel = read('web/sequence-viewer/primers-panel.js');
+  assert.match(panel, /action\('PCR product', function \(\) \{/);
+  assert.match(panel, /\}, 'danger'\);/);
+  const css = read('web/sequence-viewer/viewer.css');
+  assert.match(css, /#tool-sidebar \.primers-pickbar-compact \{\s*flex-wrap: wrap;/);
+  assert.match(css, /primers-pickbar-compact \.primers-btn \{\s*white-space: nowrap;/);
+  assert.match(css, /\.primers-btn-danger \{\s*border-color: #e3b5b0;\s*color: #b42318;/);
+  assert.match(css, /primers-btn-quiet:last-child \{\s*margin-left: auto;/);
 });

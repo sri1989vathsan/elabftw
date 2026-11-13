@@ -355,6 +355,31 @@ body {
   color: #b42318;
 }
 
+/* the buttons of the ticked primers: pills of one look, the main one filled, Detach in red, Expand at the right; a long label does not wrap, the
+   bar goes onto a second line instead */
+#tool-sidebar .primers-pickbar-compact {
+  flex-wrap: wrap;
+  row-gap: 0.3rem;
+}
+
+#tool-sidebar .primers-pickbar-compact .primers-btn {
+  white-space: nowrap;
+}
+
+#tool-sidebar .tool-content .primers-btn-danger {
+  border-color: #e3b5b0;
+  color: #b42318;
+}
+
+#tool-sidebar .tool-content .primers-btn-danger:hover:not(:disabled) {
+  border-color: #b42318;
+  background: #fdecea;
+}
+
+#tool-sidebar .primers-pickbar-compact > .primers-btn-quiet:last-child {
+  margin-left: auto;
+}
+
 #tool-sidebar .tool-content button:disabled {
   opacity: 0.55;
   cursor: default;

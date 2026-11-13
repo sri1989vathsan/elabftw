@@ -463,16 +463,16 @@
           }
           await loadAttached();
           await render();
-        }, 'quiet');
+        }, 'danger');
         // two primers ticked: the PCR product they make on this sequence (the PCR section of the Tools panel, with the two in it)
-        const pcrTicked = action('PCR product of the 2', function () {
+        const pcrTicked = action('PCR product', function () {
           const picked = attachedPrimers.filter(function (primer) {
             return tickedDb.has(primer.id);
           });
           if (picked.length === 2 && window.ToolsPcr && window.ToolsPcr.show) {
             window.ToolsPcr.show(picked[0].sequence, picked[1].sequence);
           }
-        }, 'quiet');
+        });
         pcrTicked.title = 'The product of these two primers on this sequence; it can be saved as a new entry';
         pcrTicked.hidden = true;
         const refreshTicked = function () {
