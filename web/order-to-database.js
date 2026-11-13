@@ -779,6 +779,67 @@
     return true;
   }
 
+  // ---- an item is added once. The lines of an order that are in the Database already are found (a primer by its letters, on either strand;
+  // the other items by the same name or the same catalog number: a similar name is another product), so that they are not added again.
+  let primerListPromise = null;
+  function primersOnce() {
+    if (!primerListPromise) {
+      primerListPromise = window.PrimerTools.allPrimers().catch(function () {
+        primerListPromise = null;
+        return [];
+      });
+    }
+    return primerListPromise;
+  }
+  function forgetPrimers() {
+    primerListPromise = null;
+  }
+  function normalName(text) {
+    return String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  }
+  // {id, title} of the entry that is there, or null
+  async function findExisting(row) {
+    if (row.sequence) {
+      await loadPrimerTools();
+      const tools = window.PrimerTools;
+      if (!tools) {
+        return null;
+      }
+      const forward = tools.clean(row.sequence);
+      const reverse = tools.reverseComplement(forward);
+      const found = (await primersOnce()).find(function (primer) {
+        return primer.sequence === forward || primer.sequence === reverse;
+      });
+      return found ? { id: found.id, title: found.title } : null;
+    }
+    const term = String(row.name || '').trim();
+    if (term === '') {
+      return null;
+    }
+    const response = await fetch('api/v2/inventory?limit=20&q=' + encodeURIComponent(term), { credentials: 'same-origin' });
+    const entries = response.ok ? await response.json().catch(function () {
+      return [];
+    }) : [];
+    const wanted = normalName(term);
+    const catalog = String(row.catalog || '').toLowerCase();
+    const same = (Array.isArray(entries) ? entries : []).find(function (entry) {
+      return normalName(entry.title) === wanted || (catalog.length >= 4 && String(entry.metadata || '').toLowerCase().indexOf(catalog) !== -1);
+    });
+    return same ? { id: same.id, title: same.title } : null;
+  }
+  async function markExisting(list) {
+    for (const row of list) {
+      try {
+        row.existing = await findExisting(row);
+      } catch (error) {
+        row.existing = null;
+      }
+      if (row.existing) {
+        row.ticked = false;
+      }
+    }
+  }
+
   // ---- the window
   function open(options) {
     const settings = options || {};
@@ -998,12 +1059,12 @@
       const all = element('input');
       all.type = 'checkbox';
       all.checked = rows.every(function (r) {
-        return r.ticked;
+        return r.ticked || r.existing;
       });
       all.setAttribute('aria-label', 'Select all');
       all.addEventListener('change', function () {
         rows.forEach(function (r) {
-          r.ticked = all.checked && r.name.trim() !== '';
+          r.ticked = all.checked && r.name.trim() !== '' && !r.existing;
         });
         draw();
       });
@@ -1014,6 +1075,9 @@
         const tick = element('input');
         tick.type = 'checkbox';
         tick.checked = row.ticked;
+        // an item that is in the Database already is not added again
+        tick.disabled = Boolean(row.existing);
+        tick.title = row.existing ? 'This is in the Database already' : '';
         tick.setAttribute('aria-label', 'Add this row');
         tick.addEventListener('change', function () {
           row.ticked = tick.checked;
@@ -1064,6 +1128,15 @@
           detail(row);
         });
         const hint = element('div', 'small text-muted', [row.catalog ? 'cat. ' + row.catalog : '', row.link ? 'link' : 'no link', row.sequenceFile ? 'sequence' : ''].filter(Boolean).join(' · '));
+        if (row.existing) {
+          const link = element('a', '', row.existing.title);
+          link.href = 'registry.php?mode=view&id=' + row.existing.id;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.style.fontSize = 'inherit';
+          hint.textContent = '';
+          hint.append(document.createTextNode('In the Database: '), link);
+        }
         const c4 = element('td');
         c4.append(more, hint);
         tr.append(c0, c1, c2, c3, c4);
@@ -1216,9 +1289,12 @@
         tableBox.append(helper);
       }
       const ticked = rows.filter(function (r) {
-        return r.ticked && r.name.trim() !== '';
+        return r.ticked && r.name.trim() !== '' && !r.existing;
       });
-      info.textContent = rows.length + (rows.length === 1 ? ' line' : ' lines') + ' read, ' + ticked.length + ' ticked. Untick a row to leave it out. Details... shows the other columns.';
+      const already = rows.filter(function (r) {
+        return r.existing;
+      }).length;
+      info.textContent = (already > 0 ? already + ' of the lines ' + (already === 1 ? 'is' : 'are') + ' in the Database already (not added again). ' : '') + rows.length + (rows.length === 1 ? ' line' : ' lines') + ' read, ' + ticked.length + ' ticked. Untick a row to leave it out. Details... shows the other columns.';
       buttons.replaceChildren();
       const cancel = element('button', 'btn btn-secondary btn-sm', 'Close');
       cancel.type = 'button';
@@ -1238,9 +1314,47 @@
       buttons.append(cancel, mine, lab);
     };
 
+    // one add at a time (a second click while it works would add everything twice)
+    let adding = false;
     const add = async function (ticked, register) {
+      if (adding) {
+        return;
+      }
+      adding = true;
       message.className = 'small mb-2';
       message.textContent = 'Adding...';
+      // what is in the Database already is left out, also what the same ticks say twice; each is looked for again just before it is added
+      const seen = new Set();
+      const unique = [];
+      for (const row of ticked) {
+        if (row.existing) {
+          continue;
+        }
+        const tools = window.PrimerTools;
+        const letters = row.sequence && tools ? [tools.clean(row.sequence), tools.reverseComplement(tools.clean(row.sequence))].sort()[0] : '';
+        const key = row.sequence ? 'seq:' + letters : 'name:' + normalName(row.moduleTitle + ' ' + row.name);
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        try {
+          row.existing = await findExisting(row);
+        } catch (error) {
+          row.existing = null;
+        }
+        if (!row.existing) {
+          unique.push(row);
+        }
+      }
+      const skipped = ticked.length - unique.length;
+      ticked = unique;
+      if (ticked.length === 0) {
+        message.className = 'small mb-2 text-danger';
+        message.textContent = 'Nothing was added: ' + (skipped === 1 ? 'it is' : 'they are') + ' in the Database already.';
+        draw();
+        adding = false;
+        return;
+      }
       const groups = {};
       ticked.forEach(function (row) {
         const module = moduleByTitle(row.moduleTitle);
@@ -1306,8 +1420,14 @@
             problems.push(group.rows[Number(s.row.replace(/\D+/g, '').slice(0, 3)) - 1] ? s.reason : s.reason);
           });
         }
+        const text = made + (made === 1 ? ' entry' : ' entries') + ' added.' + (skipped > 0 ? ' ' + skipped + (skipped === 1 ? ' was' : ' were') + ' in the Database already: not added again.' : '') + (problems.length > 0 ? ' Not added: ' + problems.join(' ') : '');
+        // what was added is looked for again: its lines show that it is in the Database now, and the cards of the orders say so
+        forgetPrimers();
+        await markExisting(rows);
+        draw();
+        window.dispatchEvent(new CustomEvent('otd:added'));
         message.className = problems.length > 0 ? 'small mb-2 text-danger' : 'small mb-2 text-success';
-        message.textContent = made + (made === 1 ? ' entry' : ' entries') + ' added.' + (problems.length > 0 ? ' Not added: ' + problems.join(' ') : '');
+        message.textContent = text;
         if (made > 0 && /registry\.php/.test(window.location.pathname)) {
           window.setTimeout(function () {
             window.location.reload();
@@ -1316,6 +1436,8 @@
       } catch (error) {
         message.className = 'small mb-2 text-danger';
         message.textContent = error.message;
+      } finally {
+        adding = false;
       }
     };
 
@@ -1482,6 +1604,8 @@
       info.textContent = 'Reading the order...';
       const order = await (await fetch('api/v2/orders/' + orderId, { credentials: 'same-origin' })).json();
       rows = await enrich(order, parseOrder(order));
+      info.textContent = 'Looking for what is in the Database already...';
+      await markExisting(rows);
       draw();
     };
 
@@ -1616,16 +1740,7 @@
     };
     const checked = new Map();
     // the primers of the database are asked once for all the cards, and the checks go one after the other (not all at once)
-    let primerList = null;
-    const allPrimersOnce = function () {
-      if (!primerList) {
-        primerList = window.PrimerTools.allPrimers().catch(function () {
-          primerList = null;
-          return [];
-        });
-      }
-      return primerList;
-    };
+    const allPrimersOnce = primersOnce;
     let line = Promise.resolve();
     const inDatabase = function (card, kind, orderId) {
       if (checked.has(orderId)) {
@@ -1699,6 +1814,20 @@
           const distinct = Array.from(new Set(sequences.map(function (sequence) {
             return tools.clean(sequence);
           })));
+          // the entries of the primers that are there (to link to them)
+          const items = [];
+          distinct.forEach(function (sequence) {
+            const forward = tools.clean(sequence);
+            const reverse = tools.reverseComplement(forward);
+            const found = database.find(function (primer) {
+              return primer.sequence === forward || primer.sequence === reverse;
+            });
+            if (found && !items.some(function (item) {
+              return item.id === found.id;
+            })) {
+              items.push({ id: found.id, title: found.title });
+            }
+          });
           const inDb = distinct.filter(function (sequence) {
             const forward = tools.clean(sequence);
             const reverse = tools.reverseComplement(forward);
@@ -1706,7 +1835,7 @@
               return primer.sequence === forward || primer.sequence === reverse;
             });
           }).length;
-          return { total: distinct.length, inDb: inDb };
+          return { total: distinct.length, inDb: inDb, items: items };
         }
         const named = rows.filter(function (row) {
           return row.name.trim() !== '';
@@ -1715,6 +1844,7 @@
           return null;
         }
         let inDb = 0;
+        const items = [];
         for (const row of named) {
           const term = row.name.trim();
           const response = await fetch('api/v2/inventory?limit=20&q=' + encodeURIComponent(term), { credentials: 'same-origin' });
@@ -1723,14 +1853,19 @@
           }) : [];
           const wanted = normal(term);
           const catalog = String(row.catalog || '').toLowerCase();
-          const same = (Array.isArray(entries) ? entries : []).some(function (entry) {
+          const same = (Array.isArray(entries) ? entries : []).find(function (entry) {
             const have = normal(entry.title);
             // the same name, or the same catalog number: a similar name (another product of the vendor) is not the same entry
             return have === wanted || (catalog.length >= 4 && String(entry.metadata || '').toLowerCase().indexOf(catalog) !== -1);
           });
           inDb += same ? 1 : 0;
+          if (same && !items.some(function (item) {
+            return item.id === same.id;
+          })) {
+            items.push({ id: same.id, title: same.title });
+          }
         }
-        return { total: named.length, inDb: inDb };
+        return { total: named.length, inDb: inDb, items: items };
       }());
     };
     const whenSeen = function (card, ask) {
@@ -1784,17 +1919,87 @@
           if (!state || state.total === 0 || state.inDb === 0) {
             return;
           }
-          if (state.inDb >= state.total) {
-            add.replaceChildren(element('i', 'fas fa-check fa-fw'), document.createTextNode('In the database'));
-            add.style.color = '#1d8348';
-            add.style.borderColor = '#1d8348';
-            add.title = 'All ' + state.total + (state.total === 1 ? ' line of this order is' : ' lines of this order are') + ' in the Database already. Click to look at them.';
+          // The state is shown in the header of the card, next to the "On LabCollector" pill and in its look (the classes are copied from the
+          // elements that are there; the file of the orders page is not changed and the LabCollector pill is left as it is): a pill "In the
+          // database" and a square button with the link to the entry. Several entries (the oligos of an order): the button opens a list.
+          const entries = state.items || [];
+          const labcollector = card.querySelector('.orders-labcollector-toggle');
+          const pillSource = labcollector && labcollector.querySelector('.orders-labcollector-pill');
+          const iconSource = labcollector && labcollector.querySelector('.orders-icon-button');
+          const pillClass = pillSource ? pillSource.className : 'btn btn-sm btn-outline-secondary';
+          const iconClass = iconSource ? iconSource.className : 'btn btn-sm btn-outline-secondary';
+          const all = state.inDb >= state.total;
+          const status = element('span', 'otd-status', '', 'align-items:center;display:inline-flex;gap:0.35rem;margin-left:0.4rem');
+          const pill = element('span', pillClass.replace(/\borders-labcollector-pill\b/, '').trim() + ' orders-labcollector-pill');
+          pill.setAttribute('role', 'status');
+          pill.style.cursor = 'default';
+          pill.style.color = '#1d8348';
+          pill.style.borderColor = '#1d8348';
+          pill.append(element('i', 'fas fa-database fa-fw'), document.createTextNode(' ' + (all ? 'In the database' : state.inDb + ' of ' + state.total + ' in the database')));
+          pill.title = all ? 'All ' + state.total + (state.total === 1 ? ' line of this order is' : ' lines of this order are') + ' in the Database already' : state.inDb + ' of ' + state.total + ' lines are in the Database already';
+          status.append(pill);
+          if (entries.length === 1) {
+            const open = element('a', iconClass);
+            open.href = 'registry.php?mode=view&id=' + entries[0].id;
+            open.target = '_blank';
+            open.rel = 'noopener';
+            open.title = 'Open ' + entries[0].title + ' in the Database';
+            open.setAttribute('aria-label', open.title);
+            open.append(element('i', 'fas fa-up-right-from-square fa-fw'));
+            status.append(open);
+          } else if (entries.length > 1) {
+            const list = element('ul', 'otd-list', '', 'display:none;font-size:0.85rem;list-style:none;margin:0.3rem 0;padding-left:0.2rem');
+            entries.forEach(function (item) {
+              const line = element('li');
+              const link = element('a', '', item.title);
+              link.href = 'registry.php?mode=view&id=' + item.id;
+              link.target = '_blank';
+              link.rel = 'noopener';
+              link.title = item.title + ' (open the entry in the Database)';
+              link.style.cssText = 'display:inline-block;font-size:inherit;max-width:40ch;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom;white-space:nowrap';
+              line.append(link);
+              list.append(line);
+            });
+            const toggle = element('button', iconClass);
+            toggle.type = 'button';
+            toggle.title = 'Show the ' + entries.length + ' entries in the Database';
+            toggle.setAttribute('aria-label', toggle.title);
+            toggle.setAttribute('aria-expanded', 'false');
+            toggle.append(element('i', 'fas fa-list fa-fw'));
+            toggle.addEventListener('click', function () {
+              const open = list.style.display === 'none';
+              list.style.display = open ? 'block' : 'none';
+              toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            });
+            status.append(toggle);
+            const metaLine = card.querySelector('.orders-item-meta');
+            if (metaLine) {
+              metaLine.after(list);
+            }
+          }
+          const header = card.querySelector('.orders-item-header');
+          if (labcollector) {
+            labcollector.after(status);
+          } else if (header) {
+            header.append(status);
+          }
+          if (all) {
+            // everything of the order is there: the button to add it is not needed
+            add.style.display = 'none';
           } else {
             add.title = state.inDb + ' of ' + state.total + ' lines are in the Database already. ' + add.title;
           }
         });
       });
     };
+    // after an add the cards are asked again
+    window.addEventListener('otd:added', function () {
+      checked.clear();
+      document.querySelectorAll('.otd-add, .otd-status, .otd-links, .otd-list').forEach(function (node) {
+        node.remove();
+      });
+      enhanceCards();
+    });
     let cardsPending = 0;
     new MutationObserver(function () {
       window.clearTimeout(cardsPending);

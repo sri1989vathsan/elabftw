@@ -300,8 +300,8 @@ test('the details of a vendor page are read from the pasted text of the page, an
   // a label alone on its line takes the next line (otherwise "Clone number" would be the label "Clone" with the value "number")
   assert.match(js, /if \(alone\.test\(lines\[i\]\)\) \{/);
   // the button of an order whose lines are in the database already says so; only the same name or the same catalog number counts
-  assert.match(js, /document\.createTextNode\('In the database'\)/);
-  assert.match(js, /return have === wanted \|\| \(catalog\.length >= 4/);
+  assert.match(js, /' in the database'/);
+  assert.match(js, /return normalName\(entry\.title\) === wanted \|\| \(catalog\.length >= 4/);
 });
 
 test('a screenshot of a vendor page is read in the browser (OCR files kept in the repo), and the order window is not slowed by a server without internet', () => {
@@ -328,7 +328,7 @@ test('a screenshot of a vendor page is read in the browser (OCR files kept in th
   assert.match(js, /stop\.abort\(\);\s*\}, 1500\)/);
   assert.match(js, /markPreviewDown\(\);/);
   // the cards: one list of primers, one check at a time, only the cards that are seen, the oligos of a sheet remembered
-  assert.match(js, /const allPrimersOnce = function/);
+  assert.match(js, /const allPrimersOnce = primersOnce;/);
   assert.match(js, /new IntersectionObserver/);
   assert.match(js, /'otd-sheet-' \+ longName/);
 });
@@ -361,4 +361,34 @@ test('the suppliers of the lab are known by their links and by their names (also
   assert.match(js, /\['CAS number', 'cas \(\?:number/);
   assert.match(js, /article \(\?:number/);
   assert.match(js, /carlroth\\\.com/);
+});
+
+test('an item is added once: what is in the Database is found, cannot be ticked, is linked, and is looked for again before the add', () => {
+  const js = read('web/order-to-database.js');
+  assert.match(js, /async function findExisting\(row\)/);
+  assert.match(js, /async function markExisting\(list\)/);
+  assert.match(js, /await markExisting\(rows\);\s*draw\(\);/);
+  assert.match(js, /tick\.disabled = Boolean\(row\.existing\);/);
+  assert.match(js, /document\.createTextNode\('In the Database: '\)/);
+  // a second click while it adds, the same item twice in one add, and a line that appeared in the meantime
+  assert.match(js, /let adding = false;/);
+  assert.match(js, /const key = row\.sequence \? 'seq:' \+ letters/);
+  assert.match(js, /row\.existing = await findExisting\(row\);/);
+  assert.match(js, /window\.dispatchEvent\(new CustomEvent\('otd:added'\)\)/);
+});
+
+test('the state of an order is in the header of its card, in the look of the LabCollector pill (copied, nothing of the orders page changed), which is hidden together with the resource fields', () => {
+  const js = read('web/order-to-database.js');
+  assert.match(js, /card\.querySelector\('\.orders-labcollector-toggle'\)/);
+  assert.match(js, /const pillClass = pillSource \? pillSource\.className/);
+  assert.match(js, /fas fa-up-right-from-square/);
+  assert.match(js, /'otd-status'/);
+  const primers = read('web/order-primers.js');
+  assert.match(primers, /\.orders-card \.orders-labcollector-toggle \{ display: none !important; \}/);
+  assert.match(primers, /function hideResourceLinking\(\)/);
+  assert.match(primers, /input\[placeholder\^="Link an existing resource"\]/);
+  // the orders component is not touched by these changes
+  const { execSync } = require('node:child_process');
+  const changed = execSync('git diff --name-only HEAD~1 HEAD || true', { cwd: require('node:path').join(__dirname, '..') }).toString();
+  assert.doesNotMatch(changed, /OrdersBoard\.svelte/);
 });

@@ -204,6 +204,9 @@
     style.id = 'op-row-styles';
     style.textContent = [
       'li.orders-upload.op-row { align-items: center; background: rgba(127, 127, 127, 0.07); border: 1px solid rgba(127, 127, 127, 0.22); border-radius: 8px; column-gap: 0.15rem; padding: 0.3rem 0.4rem 0.3rem 0.6rem; }',
+      // the "On LabCollector" pill and its button are not shown: the state "In the database" (order-to-database.js) is in their place. The
+      // elements stay in the page (hidden), so nothing of the orders page is changed
+      '.orders-card .orders-labcollector-toggle { display: none !important; }',
       // the rows of the filters (All, Requested, ... Archived) when they wrap onto a second line: a space between the lines, so the buttons do not touch
       '.orders-toolbar-row .btn-group { row-gap: 0.4rem; }',
       'li.orders-upload.op-row:hover { background: rgba(127, 127, 127, 0.12); }',
@@ -226,9 +229,55 @@
     [/\.(zip|7z|gz|tar)$/i, 'fa-file-zipper', '#b9770e'],
   ];
 
+  // The form of a new order: what links it to a resource of the old resources ("Link an existing resource...", the new resource title, the
+  // template and the category, "Add a new resource instead") is not shown: the entries of the Database take their place ("Link an entry of
+  // the database..."). The elements stay in the page, hidden, so nothing of the orders page is changed.
+  function hideResourceLinking() {
+    const firsts = Array.from(document.querySelectorAll('input[placeholder^="Link an existing resource"]'));
+    const lasts = Array.from(document.querySelectorAll('input[placeholder^="Link an entry of the database"]'));
+    firsts.forEach(function (first) {
+      if (first.dataset.otdHidden) {
+        return;
+      }
+      // the field of the entries of the Database that follows it (the form of a new order and the form that edits an order have both)
+      const last = lasts.find(function (candidate) {
+        return first.compareDocumentPosition(candidate) & Node.DOCUMENT_POSITION_FOLLOWING;
+      });
+      if (!last) {
+        return;
+      }
+      // the lowest element that holds both fields; what is between them in it is hidden
+      let common = first.parentElement;
+      while (common && !common.contains(last)) {
+        common = common.parentElement;
+      }
+      if (!common) {
+        return;
+      }
+      const branch = function (node) {
+        let child = node;
+        while (child && child.parentElement !== common) {
+          child = child.parentElement;
+        }
+        return child;
+      };
+      const from = branch(first);
+      const until = branch(last);
+      if (!from || !until || from === until) {
+        return;
+      }
+      for (let node = from; node && node !== until; node = node.nextElementSibling) {
+        node.style.setProperty('display', 'none', 'important');
+        node.dataset.otdHidden = '1';
+      }
+      first.dataset.otdHidden = '1';
+    });
+  }
+
   // a button on each sheet (.xlsx) attached to an order
   function enhance() {
     ensureRowStyles();
+    hideResourceLinking();
     document.querySelectorAll('li.orders-upload').forEach(function (item) {
       if (!item.classList.contains('op-row')) {
         item.classList.add('op-row');
