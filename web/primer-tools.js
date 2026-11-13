@@ -255,14 +255,14 @@
 
   // a new primer in the database, with its sequence, orientation and melting temperature
   // where the primers that are made go: 'none' My entries (private, no number yet), 'personal' My database (private, the own number of the user),
-  // 'lab' the lab database (the number of the lab) or 'both' (the lab database and My database). The choice is remembered by the browser; My entries is the start.
-  const DESTINATIONS = [['none', 'My entries (private, no number yet)'], ['personal', 'My database (private, with my own number)'], ['lab', 'The lab database (everyone sees them, with the lab number)'], ['both', 'Both: the lab database and My database']];
+  // 'lab' the lab database (the number of the lab) or 'both' (the lab database and My database). The choice is remembered by the browser; the lab database is the start.
+  const DESTINATIONS = [['lab', 'The lab database (everyone sees them, with the lab number)'], ['both', 'Both: the lab database and My database'], ['personal', 'My database (private, with my own number)'], ['none', 'My entries (private, no number yet)']];
   function destination() {
     try {
       const saved = window.localStorage.getItem('primerDestination');
-      return DESTINATIONS.some(function (item) { return item[0] === saved; }) ? saved : 'none';
+      return DESTINATIONS.some(function (item) { return item[0] === saved; }) ? saved : 'lab';
     } catch (error) {
-      return 'none';
+      return 'lab';
     }
   }
 
@@ -281,6 +281,9 @@
     wrap.append(document.createTextNode('New primers go to: '));
     const select = document.createElement('select');
     select.className = 'primer-destination-select';
+    // room for the arrow of the list on the right (it covered the end of the text)
+    select.style.padding = '0.2rem 2rem 0.2rem 0.5rem';
+    select.style.maxWidth = '100%';
     DESTINATIONS.forEach(function (item) {
       const option = document.createElement('option');
       option.value = item[0];
