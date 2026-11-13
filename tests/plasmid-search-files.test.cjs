@@ -330,3 +330,16 @@ test('a screenshot of a vendor page is read in the browser (OCR files kept in th
 test('the filter buttons of the orders page keep a space between their lines when they wrap', () => {
   assert.match(read('web/order-primers.js'), /\.orders-toolbar-row \.btn-group \{ row-gap: 0\.4rem; \}/);
 });
+
+test('the page reader knows the layout of BioLegend and Abcam pages (verified reactivity, application notes with the clone, RRID catalog numbers, sentences)', () => {
+  const js = read('web/order-to-database.js');
+  assert.match(js, /verified reactivity\|reacts with/);
+  assert.match(js, /applications\?\|suitable for/);
+  // the clone is also found in a sentence of the notes ("Clone 30-F11 reacts with..."), the conjugate in "conjugated with X under..."
+  assert.match(js, /\\bclone\\s\*\(\?:no\\\.\?\|number\|name\)\?\\s\*\[:#\]\?\\s\*\(\[A-Za-z0-9\]\*\\d\[A-Za-z0-9-\]\*\)/);
+  assert.match(js, /conjugated\\s\+\(\?:with\|to\)/);
+  // the catalog numbers of the RRID lines come first; a number in a sentence is another product, and the one in the link decides
+  assert.match(js, /RRID\\b\|\\bAB_/);
+  assert.match(js, /String\(row\.link \|\| ''\)\.indexOf\(number\) !== -1/);
+  assert.match(js, /see \(\?:reactivity\|application\|all\) \(\?:data\|images\?\)/);
+});

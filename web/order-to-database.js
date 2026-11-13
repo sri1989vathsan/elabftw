@@ -267,6 +267,8 @@
         value = row.applications || '';
       } else if (/^(conjugate|dye)/i.test(f.name)) {
         value = row.conjugate || '';
+      } else if (/^conjugated$/i.test(f.name)) {
+        value = row.conjugate ? (/^(un|none|no\b)/i.test(row.conjugate) ? 'No' : 'Yes') : '';
       }
       if (f.type === 'select' && value !== '') {
         const match = (f.options || []).find(function (o) {
@@ -304,8 +306,8 @@
     ['Clone number', 'clone (?:number|name|id)|clone'],
     ['Host species', 'host species|host'],
     ['Isotype', 'isotype'],
-    ['Reacts with', 'reacts with|species reactivity|tested reactivity|reactivity'],
-    ['Applications', 'tested applications|applications|suitable for'],
+    ['Reacts with', 'verified reactivity|reacts with|species reactivity|tested reactivity|reactivity'],
+    ['Applications', 'tested applications|applications?|suitable for'],
     ['Conjugate', 'conjugated to|conjugation|conjugate|dye'],
     ['Target', 'target|gene name|antigen'],
     ['Concentration', 'concentration'],
@@ -386,6 +388,42 @@
         }
       }
     });
+    const whole = lines.join('\n');
+    // what is written in a sentence of the page: the application is "FC - Quality tested" (the application is FC), the clone in the notes
+    // ("Clone 30-F11 reacts with..."), the conjugate in the preparation ("conjugated with Spark Blue 574 under...")
+    if (page.props.Applications) {
+      page.props.Applications = page.props.Applications.replace(/\s*[-\u2013]\s*quality tested/i, '').replace(/\s*see (?:reactivity|application|all) (?:data|images?).*$/i, '').trim();
+    }
+    if (!page.props['Clone number']) {
+      const clone = /\bclone\s*(?:no\.?|number|name)?\s*[:#]?\s*([A-Za-z0-9]*\d[A-Za-z0-9-]*)/i.exec(whole);
+      if (clone) {
+        page.props['Clone number'] = clone[1];
+      }
+    }
+    if (!page.props.Conjugate) {
+      const conjugate = /\bconjugated\s+(?:with|to)\s+([A-Za-z0-9\u2122\u00AE\- ]{2,40}?)(?=\s+(?:under|and|at|in|by|using)\b|[.,;]|$)/i.exec(whole);
+      if (conjugate) {
+        page.props.Conjugate = conjugate[1].replace(/[\u2122\u00AE]/g, '').trim();
+      }
+    }
+    // the catalog numbers written as "Cat. No. 103183" (there can be several: the line decides, by its link, which one is the product)
+    // the numbers of the lines of the RRID (the identifier of the product itself) come first: a number in a sentence ("recommended for...
+    // (Cat. No. 103163)") is another product
+    const cats = [];
+    const addCats = function (text) {
+      const pattern = /\bcat(?:alog(?:ue)?)?\.?\s*(?:no\.?|number|#)\s*[:.]?\s*([A-Za-z0-9][A-Za-z0-9-]{2,})/gi;
+      let found;
+      while ((found = pattern.exec(text)) !== null) {
+        if (cats.indexOf(found[1]) === -1) {
+          cats.push(found[1]);
+        }
+      }
+    };
+    addCats(lines.filter(function (line) {
+      return /\bRRID\b|\bAB_\d{5,}/.test(line);
+    }).join('\n'));
+    addCats(whole);
+    page.cats = cats;
     // the catalog number of a product that has it in its title (Abcam: "... (ab105389)")
     const inTitle = /\((ab\d{4,7})\)|\b(ab\d{4,7})\b/i.exec(lines.slice(0, 12).join(' '));
     page.sku = page.props['Catalog number'] || (inTitle ? (inTitle[1] || inTitle[2]) : '');
@@ -422,17 +460,21 @@
         row[entry[0]] = props[label];
       }
     });
-    row.catalog = row.catalog || page.sku || page.mpn || '';
+    // several catalog numbers on the page: the one that is in the link is the product
+    const inLink = (page.cats || []).find(function (number) {
+      return String(row.link || '').indexOf(number) !== -1;
+    });
+    row.catalog = row.catalog || inLink || page.sku || (page.cats || [])[0] || page.mpn || '';
     row.vendor = row.vendor || String(page.brand || '');
     // the name of the page is used for a line that has no name of its own
-    if (row.name.trim() === '' && page.name) {
+    if (row.name.trim() === '' && page.name && !/^(product )?(details|information|overview|description)$/i.test(String(page.name).trim())) {
       row.name = String(page.name).trim();
     }
     const said = [page.name, page.description].join(' ');
     row.clone = row.clone || ((/\bclone\s*(?:no\.?\s*)?[:#]?\s*([A-Za-z0-9-]{2,})/i.exec(said) || [])[1] || '') || ((/\[([A-Za-z0-9-]{2,})\]/.exec(page.name || '') || [])[1] || '');
     // the target of an antibody is in its name: "Anti-Nestin antibody"
-    if (!row.target && /antibod/i.test(said)) {
-      const target = /\banti[- ]\s*(?:mouse|rabbit|rat|goat|human)?\s*([A-Za-z0-9-]{2,})/i.exec(page.name || row.name || '');
+    if (!row.target && /antibod|\banti[- ]/i.test(said + ' ' + row.name)) {
+      const target = /\banti[- ]\s*(?:mouse|rabbit|rat|goat|human)?\s*([A-Za-z0-9-]{2,})/i.exec(row.name || '') || /\banti[- ]\s*(?:mouse|rabbit|rat|goat|human)?\s*([A-Za-z0-9-]{2,})/i.exec(page.name || '');
       row.target = target ? target[1] : '';
     }
     if (row.host) {
