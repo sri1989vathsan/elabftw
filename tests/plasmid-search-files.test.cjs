@@ -599,6 +599,8 @@ test('the edit page: the fields of Details are one line each (name, value, small
   assert.match(planned, /display: contents !important/);
   assert.match(planned, /grid-template-columns: minmax\(7rem, 11rem\) minmax\(0, 1fr\) auto/);
   assert.match(planned, /@media \(max-width: 700px\)/);
+  // a space between the buttons Add field / Load fields and the heading that follows
+  assert.match(planned, /\[data-save-hidden="metadataDiv"\] \{ margin-bottom: 1\.75rem; \}/);
   // only on the edit page, only the fields that have their tools
   assert.match(planned, /\[\?&\]mode=edit\\b/);
   assert.match(planned, /:has\(\[data-action="metadata-edit-field"\]\)/);

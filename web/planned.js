@@ -1481,6 +1481,8 @@
     field + ' .badge { font-size: 0.65rem; font-weight: 500; margin-right: 0.35rem !important; }',
     field + ' .btn { font-size: 0.75rem; line-height: 1; margin: 0 !important; padding: 0.3rem 0.4rem; }',
     field + ':not(:hover):not(:focus-within) > .d-flex:first-child > .d-flex { opacity: 0.3; }',
+    // a space between the buttons "Add field" and "Load fields" and the heading that follows (Storage)
+    '[data-save-hidden="metadataDiv"] { margin-bottom: 1.75rem; }',
     '@media (max-width: 700px) {',
     '  ' + field + ' { grid-template-columns: minmax(0, 1fr) auto; }',
     '  ' + field + ' > .d-flex:first-child > label { grid-column: 1; grid-row: 1; }',
