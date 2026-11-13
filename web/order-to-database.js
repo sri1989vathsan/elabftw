@@ -2097,6 +2097,8 @@
     };
     // after an add the cards are asked again
     window.addEventListener('otd:added', function () {
+      // the primers that were just added are asked again (the list of the primers is kept for the cards)
+      forgetPrimers();
       checked.clear();
       document.querySelectorAll('.otd-add, .otd-status, .otd-links, .otd-list').forEach(function (node) {
         node.remove();

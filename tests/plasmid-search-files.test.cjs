@@ -557,3 +557,24 @@ test('the buttons of the ticked primers are pills of one look that do not wrap: 
   assert.match(css, /\.primers-btn-danger \{\s*border-color: #e3b5b0;\s*color: #b42318;/);
   assert.match(css, /primers-btn-quiet:last-child \{\s*margin-left: auto;/);
 });
+
+test('orders: a name with "/" or "(" is searched by its longest plain part, so an added entry is found again and not added twice', () => {
+  const source = read('web/order-to-database.js');
+  const found = /function searchTerm\(name\) \{[\s\S]*?\n  \}\n/.exec(source);
+  assert.ok(found, 'searchTerm is there');
+  const searchTerm = new Function(found[0] + '\nreturn searchTerm;')();
+  assert.strictEqual(searchTerm('Ampicillin 100 mg/ml'), 'Ampicillin 100 mg');
+  assert.strictEqual(searchTerm('Anti-GFP antibody (clone 3E6)'), 'Anti-GFP antibody');
+  assert.strictEqual(searchTerm('Anti-GFP antibody'), 'Anti-GFP antibody');
+  assert.strictEqual(searchTerm('50% glycerol'), 'glycerol');
+  // both searches (the window and the cards) use it
+  assert.strictEqual(source.split('encodeURIComponent(searchTerm(term))').length - 1, 2);
+});
+
+test('orders: the card of an order with primers has one button (the one of the sheet is hidden) and it is refreshed after the primers of the sheet are added', () => {
+  assert.match(read('web/order-to-database.js'), /add\.classList\.add\('otd-add-primers'\);/);
+  const primers = read('web/order-primers.js');
+  assert.match(primers, /li\.orders-card:has\(\.otd-add-primers\) \.op-add \{ display: none !important; \}/);
+  assert.match(primers, /window\.dispatchEvent\(new CustomEvent\('otd:added'\)\);/);
+  assert.match(read('web/order-to-database.js'), /window\.addEventListener\('otd:added', function \(\) \{\n      \/\/ the primers that were just added are asked again[^\n]*\n      forgetPrimers\(\);/);
+});

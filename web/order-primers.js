@@ -186,6 +186,8 @@
         }
         close();
         say(created + ' primer' + (created === 1 ? '' : 's') + ' added to the database.');
+        // the cards of the orders are told: "3 of 4 in the database" becomes "In the database" and the button goes
+        window.dispatchEvent(new CustomEvent('otd:added'));
       } catch (error) {
         message.textContent = error.message || String(error);
         message.className = 'sa-message error';
