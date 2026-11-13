@@ -433,3 +433,14 @@ test('the entry of the order form goes into the lab database, and one page that 
   assert.match(js, /3 \* 60 \* 1000/);
   assert.match(js, /return answer && answer\.ok && answer\.text \? readPageText\(answer\.text, link\) : null;/);
 });
+
+test('the page of an entry of a module has "Started on", owner and team at the bottom, under the permissions, with a space between label and name', () => {
+  const js = read('web/planned.js');
+  assert.match(js, /Moved here\s+\* in the browser: the template of the page is not changed/);
+  assert.match(js, /\/\^\\s\*Started on\\b\/\.test\(node\.textContent\)/);
+  assert.match(js, /node\.textContent\.trim\(\) === 'Permissions'/);
+  assert.match(js, /anchor\.after\(section\);/);
+  assert.match(js, /section\.otd-ownership \.edit-mode-label \{ margin-right: 0\.75rem; min-width: 6rem; \}/);
+  // it applies to the view and the edit page of the Database only
+  assert.match(js, /mode=\(view\|edit\)/);
+});

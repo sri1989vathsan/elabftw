@@ -1350,3 +1350,64 @@
     }
   });
 })();
+
+/**
+ * The page of an entry of a module (view and edit): "Started on", the owner and the team are at the bottom, under the permissions (who owns the
+ * entry and who can see and edit it are together), not above the details. The label and the value have a space between them. Moved here
+ * in the browser: the template of the page is not changed.
+ */
+(function () {
+  'use strict';
+  if (!/registry\.php$/.test(window.location.pathname) || !/[?&]mode=(view|edit)\b/.test(window.location.search)) {
+    return;
+  }
+  const style = document.createElement('style');
+  style.textContent = [
+    'section.otd-ownership { border-top: 1px solid rgba(127, 127, 127, 0.3); margin-top: 1.25rem; padding-top: 0.9rem; }',
+    'section.otd-ownership > hr { display: none; }',
+    // "Owner" and "Team" are labels of one width, with a space before the name (the page gave them none in view mode)
+    'section.otd-ownership .edit-mode-label { margin-right: 0.75rem; min-width: 6rem; }',
+  ].join('\n');
+  document.head.append(style);
+
+  const place = function () {
+    const started = Array.from(document.querySelectorAll('section > .mb-2')).find(function (node) {
+      return /^\s*Started on\b/.test(node.textContent);
+    });
+    if (!started) {
+      return false;
+    }
+    const section = started.parentElement;
+    if (section.dataset.otdMoved) {
+      return true;
+    }
+    const parent = section.parentElement;
+    // the permissions of the entry: the block that holds the heading "Permissions" (a direct child of the same element as the section)
+    const heading = Array.from(document.querySelectorAll('h3')).find(function (node) {
+      return node.textContent.trim() === 'Permissions' && parent.contains(node);
+    });
+    let anchor = heading;
+    while (anchor && anchor.parentElement !== parent) {
+      anchor = anchor.parentElement;
+    }
+    // without the permissions on the page: after the details
+    anchor = anchor || document.getElementById('extraFieldsSection');
+    if (!anchor || anchor === section) {
+      return false;
+    }
+    section.dataset.otdMoved = '1';
+    section.classList.add('otd-ownership');
+    anchor.after(section);
+    return true;
+  };
+  if (!place()) {
+    // the sections of the page can come after the script: tried again for some seconds
+    let tries = 0;
+    const timer = window.setInterval(function () {
+      tries += 1;
+      if (place() || tries > 20) {
+        window.clearInterval(timer);
+      }
+    }, 300);
+  }
+})();
