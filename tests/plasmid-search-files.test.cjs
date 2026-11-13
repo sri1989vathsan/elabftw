@@ -535,12 +535,12 @@ test('the oligo of a primer of the file: "Edit oligo" is in the menu of the edit
   assert.match(read('web/sequence-viewer/oligo-editor.js'), /wrong \? 'oligo-mismatch-text' : 'oligo-binding-text'/);
   assert.match(style, /const outside = p < info\.boundStart \|\| p > info\.boundEnd \|\| wrongAt\(p\);/);
   assert.match(style, /if \(wrongAt\(p\)\) \{\s*continue;/);
+  // a locked primer of its owner: "Unlock and update primer", locked again after the update (also when it failed)
+  const oligo = read('web/sequence-viewer/oligo-editor.js');
   // the length of the overhang is a field: giving it moves the window of the binding part (its 3' end stays) and draws the oligo again
   assert.match(oligo, /const overhangInput = numberInput\(\);/);
   assert.match(oligo, /overhangInput\.addEventListener\('input', function \(\) \{/);
   assert.match(oligo, /row\('Overhang \(bases\)', overhangInput\)/);
-  // a locked primer of its owner: "Unlock and update primer", locked again after the update (also when it failed)
-  const oligo = read('web/sequence-viewer/oligo-editor.js');
   assert.match(oligo, /save\.textContent = 'Unlock and update primer';/);
   assert.match(oligo, /fetch\('\.\.\/registry-lock\.php'/);
   // the unlock asks first: the first click shows "Yes, unlock and update" and Cancel, only the second click unlocks
