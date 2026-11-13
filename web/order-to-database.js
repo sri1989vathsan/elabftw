@@ -1999,6 +1999,10 @@
         const kind = kindOf(card);
         const add = element('button', 'btn btn-sm otd-add', '', 'align-items:center;background:transparent;border:1px solid #1a9bb0;border-radius:999px;color:#1a9bb0;display:inline-flex;font-size:0.78rem;gap:0.35rem;line-height:1.2;margin-left:0.6rem;padding:0.15rem 0.7rem;vertical-align:middle;white-space:nowrap');
         add.type = 'button';
+        if (kind === 'Primers') {
+          // the button of the card does the work of the one on the sheet: that one is hidden (order-primers.js), it is clicked from here
+          add.classList.add('otd-add-primers');
+        }
         add.append(element('i', 'fas fa-database fa-fw'), document.createTextNode('Add ' + (NOUNS[kind] || 'entry') + ' to database'));
         add.title = 'This order looks like ' + (NOUNS[kind] || 'an item') + ': read its lines and add them to the Database (you can change the module in the window)';
         add.addEventListener('click', function () {
@@ -2010,10 +2014,6 @@
           }
           open({ orderId: orderId });
         });
-        if (kind === 'Primers') {
-          // the button of the card does the work of the one on the sheet: that one is hidden (order-primers.js), it is clicked from here
-          add.classList.add('otd-add-primers');
-        }
         meta.append(add);
         // when the lines of the order are in the Database already, the button says so; asked when the card is seen, not for all the cards at once
         whenSeen(card, function () {

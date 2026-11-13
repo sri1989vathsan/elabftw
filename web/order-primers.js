@@ -221,10 +221,10 @@
       'li.orders-upload.op-row .op-size { background: rgba(127, 127, 127, 0.16); border-radius: 999px; font-size: 0.72rem; margin-left: 0.5rem !important; padding: 0.05rem 0.5rem; white-space: nowrap; }',
       'li.orders-upload.op-row .op-add { align-items: center; border: 1px solid #1a9bb0; border-radius: 999px; color: #1a9bb0; display: inline-flex; font-size: 0.78rem; gap: 0.35rem; line-height: 1.2; margin-left: auto; padding: 0.2rem 0.7rem; white-space: nowrap; }',
       'li.orders-upload.op-row .op-add:hover:not(:disabled) { background: #1a9bb0; color: #fff; }',
-    ].join('\n');
-    document.head.append(style);
       // a card with "Add primers to database" has one button for the sheet: the one of the sheet is not shown twice (the card button clicks it)
       'li.orders-card:has(.otd-add-primers) .op-add { display: none !important; }',
+    ].join('\n');
+    document.head.append(style);
   }
 
   // the icon of a file by its kind
