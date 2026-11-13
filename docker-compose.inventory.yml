@@ -34,6 +34,7 @@ services:
       - ./src/Models/StorageUnits.php:/elabftw/src/Models/StorageUnits.php:ro
       - ./src/Elabftw/EntitySqlBuilder.php:/elabftw/src/Elabftw/EntitySqlBuilder.php:ro
       - ./web/order-primers.js:/elabftw/web/order-primers.js:ro
+      - ./web/link-page.php:/elabftw/web/link-page.php:ro
       - ./web/ocr:/elabftw/web/ocr:ro
       - ./web/registry-folders.php:/elabftw/web/registry-folders.php:ro
       - ./web/registry-folders.js:/elabftw/web/registry-folders.js:ro

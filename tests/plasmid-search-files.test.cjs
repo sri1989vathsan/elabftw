@@ -392,3 +392,28 @@ test('the state of an order is in the header of its card, in the look of the Lab
   const changed = execSync('git diff --name-only HEAD~1 HEAD || true', { cwd: require('node:path').join(__dirname, '..') }).toString();
   assert.doesNotMatch(changed, /OrdersBoard\.svelte/);
 });
+
+test('placing an order: a link adds the new entry of the Database by itself, with its module and its columns (shown and editable), read from the page of the link when the server has internet', () => {
+  const js = read('web/order-to-database.js');
+  // the form of a new order: title and module filled in, the row added by itself for an order with a link (not for an item that is there already)
+  assert.match(js, /const autoAddEntry = function \(\)/);
+  assert.match(js, /\/Add a new entry of the database instead\/\.test\(candidate\.textContent\)/);
+  assert.match(js, /findExisting\(\{ name: row\.name, catalog: row\.catalog, sequence: '' \}\)/);
+  // the columns of the module under the row, and what the person sees is what the entry gets
+  assert.match(js, /const refreshPanel = async function \(rowEl\)/);
+  assert.match(js, /made\.values\[key\] = panel\.inputs\[key\]\.value;/);
+  assert.match(js, /window\.fetch = function \(input, init\)/);
+  // the page behind the link, asked of the server (link-page.php), once, with a short wait and a breaker; also used by the window of an order
+  assert.match(js, /fetch\('link-page\.php\?url=' \+ encodeURIComponent\(link\)/);
+  assert.match(js, /const read = await pageFromLink\(r\.link\);/);
+  // the endpoint and its safety, and the mount
+  const php = read('web/link-page.php');
+  assert.match(php, /function safeTarget\(string \$url\): \?array/);
+  assert.match(php, /FILTER_FLAG_NO_PRIV_RANGE \| FILTER_FLAG_NO_RES_RANGE/);
+  assert.match(php, /CURLOPT_RESOLVE/);
+  assert.match(php, /CURLOPT_FOLLOWLOCATION => false/);
+  assert.match(php, /isAnonymous\(\)/);
+  assert.match(read('docker-compose.inventory.yml'), /\.\/web\/link-page\.php:\/elabftw\/web\/link-page\.php:ro/);
+  // the tags with the names of the linked entries are not shown
+  assert.match(read('web/order-primers.js'), /\.orders-card \.orders-item-header a\.badge \{ display: none !important; \}/);
+});

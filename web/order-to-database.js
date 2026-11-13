@@ -779,6 +779,52 @@
     return true;
   }
 
+  // ---- the page behind a link, read by the server when it can reach the internet (link-page.php): without internet it fails and is not asked
+  // again for half an hour; the page and the pasted text, screenshot or PDF all go through readPageText
+  const pagesOfLinks = new Map();
+  function pagesDown() {
+    try {
+      return Date.now() - Number(window.localStorage.getItem('otd-page-down') || 0) < 30 * 60 * 1000;
+    } catch (error) {
+      return false;
+    }
+  }
+  function pageFromLink(link) {
+    if (!/^https?:\/\//i.test(link || '')) {
+      return Promise.resolve(null);
+    }
+    if (pagesOfLinks.has(link)) {
+      return pagesOfLinks.get(link);
+    }
+    const work = (async function () {
+      if (pagesDown()) {
+        return null;
+      }
+      const stop = new AbortController();
+      const timer = window.setTimeout(function () {
+        stop.abort();
+      }, 9000);
+      try {
+        const answer = await (await fetch('link-page.php?url=' + encodeURIComponent(link), { credentials: 'same-origin', signal: stop.signal })).json();
+        if (answer && answer.ok && answer.text) {
+          return readPageText(answer.text, link);
+        }
+      } catch (error) {
+        // no answer
+      } finally {
+        window.clearTimeout(timer);
+      }
+      try {
+        window.localStorage.setItem('otd-page-down', String(Date.now()));
+      } catch (error) {
+        // asked again next time
+      }
+      return null;
+    }());
+    pagesOfLinks.set(link, work);
+    return work;
+  }
+
   // ---- an item is added once. The lines of an order that are in the Database already are found (a primer by its letters, on either strand;
   // the other items by the same name or the same catalog number: a similar name is another product), so that they are not added again.
   let primerListPromise = null;
@@ -1531,6 +1577,13 @@
         return /^https?:\/\//i.test(r.link || '');
       }).map(async function (r) {
         try {
+          // the page itself, when the server can read it: all the columns, like a pasted page
+          const read = await pageFromLink(r.link);
+          if (read) {
+            applyPage(r, read);
+            r.pageRead = true;
+            return;
+          }
           if (previewDown()) {
             return;
           }
@@ -2000,10 +2053,276 @@
       });
       enhanceCards();
     });
+    // ---- placing an order: the new entry of the Database is found from what the order says.
+    // The form of a new order has "Add a new entry of the database instead": a title and a module. Here the title and the module are filled
+    // in from the order (its title, its notes, its link), when the order has a link the row is added by itself (it can be removed with the
+    // bin; it is made only when the order is requested), and when the entry is made its columns are filled in like the lines of an order.
+    const orderForm = function () {
+      const card = document.querySelector('.orders-new-card');
+      if (!card) {
+        return null;
+      }
+      const title = card.querySelector('input[placeholder="What do you need ordered?"]');
+      const notes = card.querySelector('.orders-notes-editor');
+      return { card: card, title: title ? title.value.trim() : '', notes: notes ? notes.innerHTML : '', notesText: notes ? notes.textContent : '' };
+    };
+    // under each new entry of the form: the columns of its module, filled in from the order and, when the server can read it, from the page of
+    // the link; the person sees them and can change them, and what is there is what the entry gets when it is made
+    const panels = new WeakMap();
+    let moduleListPromise = null;
+    const moduleList = function () {
+      if (!moduleListPromise) {
+        moduleListPromise = fetch('registry-modules.php', { credentials: 'same-origin' }).then(function (response) {
+          return response.json();
+        }).then(function (loaded) {
+          return loaded.modules || [];
+        }).catch(function () {
+          moduleListPromise = null;
+          return [];
+        });
+      }
+      return moduleListPromise;
+    };
+    const refreshPanel = async function (rowEl) {
+      const form = orderForm();
+      const input = rowEl.querySelector('input[placeholder^="New entry title"]');
+      const select = rowEl.querySelector('select.orders-category-select');
+      if (!form || !input || !select) {
+        return;
+      }
+      const modules = await moduleList();
+      const module = modules.find(function (candidate) {
+        return Number(candidate.id) === Number(select.value);
+      });
+      let panel = panels.get(rowEl);
+      if (!module || input.value.trim() === '') {
+        if (panel) {
+          panel.box.style.display = 'none';
+        }
+        return;
+      }
+      if (!panel || panel.moduleId !== module.id) {
+        if (panel) {
+          panel.box.remove();
+        }
+        const box = element('details', 'otd-columns', '', 'font-size:0.85rem;margin:0.2rem 0 0.6rem 0');
+        box.open = true;
+        const summary = element('summary', '', 'Columns of ' + module.title);
+        const grid = element('div', '', '', 'display:grid;gap:0.3rem 0.6rem;grid-template-columns:repeat(auto-fill,minmax(14rem,1fr));margin-top:0.3rem');
+        box.append(summary, grid);
+        const inputs = {};
+        const dirty = {};
+        (module.fields || []).forEach(function (f) {
+          const label = element('label', 'd-block mb-1');
+          label.append(element('span', 'd-block text-muted', f.name));
+          let control;
+          if (f.type === 'select') {
+            control = element('select', 'form-control form-control-sm');
+            const blank = element('option', '', '');
+            blank.value = '';
+            control.append(blank);
+            (f.options || []).forEach(function (o) {
+              const option = element('option', '', o);
+              option.value = o;
+              control.append(option);
+            });
+          } else {
+            control = element('input', 'form-control form-control-sm');
+            control.type = f.type === 'number' ? 'number' : (f.type === 'date' ? 'date' : 'text');
+          }
+          control.addEventListener('input', function () {
+            dirty[f.name] = true;
+          });
+          control.addEventListener('change', function () {
+            dirty[f.name] = true;
+          });
+          inputs[f.name] = control;
+          label.append(control);
+          grid.append(label);
+        });
+        rowEl.after(box);
+        panel = { box: box, summary: summary, inputs: inputs, dirty: dirty, moduleId: module.id, page: null, link: '' };
+        panels.set(rowEl, panel);
+      }
+      panel.box.style.display = '';
+      const vendorPart = form.title.indexOf(';') !== -1 ? form.title.slice(form.title.indexOf(';')) : '';
+      const row = parseOrder({ title: input.value.trim() + vendorPart, notes: form.notes })[0];
+      row.moduleTitle = module.title;
+      // the page behind the link: asked once for a link, and the panel is drawn again when it has come
+      if (row.link && panel.link !== row.link) {
+        panel.link = row.link;
+        pageFromLink(row.link).then(function (read) {
+          if (read) {
+            panel.page = read;
+            refreshPanel(rowEl);
+          }
+        });
+      }
+      if (panel.page) {
+        applyPage(row, panel.page);
+      }
+      row.fields = null;
+      const values = defaultsFor(module, row);
+      Object.keys(panel.inputs).forEach(function (key) {
+        if (!panel.dirty[key] && values[key] !== undefined) {
+          panel.inputs[key].value = values[key];
+        }
+      });
+      panel.summary.textContent = 'Columns of ' + module.title + (panel.page ? ' (read from the link)' : '');
+    };
+    const prefillNewEntries = function () {
+      const form = orderForm();
+      if (!form || form.title === '') {
+        return;
+      }
+      const row = parseOrder({ title: form.title, notes: form.notes })[0];
+      form.card.querySelectorAll('.orders-pending-resource').forEach(function (rowEl) {
+        refreshPanel(rowEl);
+      });
+      form.card.querySelectorAll('.orders-pending-resource input[placeholder^="New entry title"]').forEach(function (input) {
+        if (input.dataset.otdPrefilled || input.value.trim() !== '' || document.activeElement === input) {
+          return;
+        }
+        input.dataset.otdPrefilled = '1';
+        // the title and the module of Svelte are set the way a person sets them (the input and change events)
+        input.value = row.name;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        const select = input.parentElement.querySelector('select.orders-category-select');
+        const option = select && Array.from(select.options).find(function (candidate) {
+          return candidate.textContent.trim() === row.moduleTitle;
+        });
+        if (option) {
+          select.value = option.value;
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+    };
+    // an order with a link adds its entry of the Database by itself, once for each link, unless the item is there already
+    let autoTimer = 0;
+    const autoAddEntry = function () {
+      const form = orderForm();
+      if (!form || form.title === '') {
+        return;
+      }
+      const found = /https?:\/\/[^\s"'<>)]+/.exec(form.notes.replace(/&amp;/g, '&')) || /https?:\/\/[^\s"'<>)]+/.exec(form.title);
+      if (!found || form.card.dataset.otdAuto === found[0]) {
+        return;
+      }
+      // something is linked or added already: nothing is added by itself
+      if (form.card.querySelector('.orders-pending-resource input[placeholder^="New entry title"]') || form.card.querySelector('.orders-resource-badge')) {
+        return;
+      }
+      form.card.dataset.otdAuto = found[0];
+      const row = parseOrder({ title: form.title, notes: form.notes })[0];
+      findExisting({ name: row.name, catalog: row.catalog, sequence: '' }).catch(function () {
+        return null;
+      }).then(function (existing) {
+        if (existing) {
+          return;
+        }
+        const button = Array.from(form.card.querySelectorAll('button')).find(function (candidate) {
+          return /Add a new entry of the database instead/.test(candidate.textContent);
+        });
+        if (button) {
+          button.click();
+          window.setTimeout(prefillNewEntries, 100);
+        }
+      });
+    };
+    document.addEventListener('input', function (event) {
+      if (event.target && event.target.closest && event.target.closest('.orders-new-card')) {
+        window.clearTimeout(autoTimer);
+        autoTimer = window.setTimeout(function () {
+          autoAddEntry();
+          prefillNewEntries();
+        }, 900);
+      }
+    }, true);
+
+    // when the entry of the form is made, its columns are filled in from the order (vendor, catalog number from the link, link, clone, host...)
+    const fillMade = async function (id, made) {
+      const loaded = await (await fetch('registry-modules.php', { credentials: 'same-origin' })).json();
+      const module = (loaded.modules || []).find(function (candidate) {
+        return Number(candidate.id) === Number(made.category);
+      });
+      if (!module) {
+        return;
+      }
+      let values = made.values;
+      if (!values) {
+        const vendorPart = made.orderTitle.indexOf(';') !== -1 ? made.orderTitle.slice(made.orderTitle.indexOf(';')) : '';
+        const row = parseOrder({ title: made.title + vendorPart, notes: made.notes })[0];
+        row.moduleTitle = module.title;
+        row.fields = null;
+        values = defaultsFor(module, row);
+      }
+      const entry = await (await fetch('api/v2/inventory/' + id, { credentials: 'same-origin' })).json();
+      const metadata = JSON.parse(entry.metadata || '{"extra_fields":{}}');
+      metadata.extra_fields = metadata.extra_fields || {};
+      let changed = false;
+      Object.keys(values).forEach(function (key) {
+        if (values[key] !== '' && metadata.extra_fields[key] && !metadata.extra_fields[key].value) {
+          metadata.extra_fields[key].value = values[key];
+          changed = true;
+        }
+      });
+      if (changed) {
+        await fetch('api/v2/inventory/' + id, {
+          method: 'PATCH',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() },
+          body: JSON.stringify({ metadata: JSON.stringify(metadata) }),
+        });
+      }
+    };
+    const nativeFetch = window.fetch;
+    window.fetch = function (input, init) {
+      let made = null;
+      try {
+        const url = String(typeof input === 'string' ? input : (input && input.url) || '').split('?')[0];
+        const method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+        const form = orderForm();
+        if (method === 'POST' && /api\/v2\/inventory\/?$/.test(url) && form && init && typeof init.body === 'string') {
+          const body = JSON.parse(init.body);
+          made = { title: String(body.title || ''), category: body.category, orderTitle: form.title, notes: form.notes, values: null };
+          // the columns that the person saw (and changed) under the row of the entry
+          form.card.querySelectorAll('.orders-pending-resource').forEach(function (rowEl) {
+            const typed = rowEl.querySelector('input[placeholder^="New entry title"]');
+            const chosen = rowEl.querySelector('select.orders-category-select');
+            const panel = panels.get(rowEl);
+            if (panel && typed && chosen && typed.value.trim() === made.title && Number(chosen.value) === Number(made.category)) {
+              made.values = {};
+              Object.keys(panel.inputs).forEach(function (key) {
+                made.values[key] = panel.inputs[key].value;
+              });
+            }
+          });
+        }
+      } catch (error) {
+        made = null;
+      }
+      const promise = nativeFetch.apply(this, arguments);
+      if (made && made.category) {
+        promise.then(function (response) {
+          const id = Number((response.headers.get('Location') || '').split('/').pop());
+          if (response.ok && id > 0) {
+            fillMade(id, made).catch(function () {
+              // the entry stays as it was made
+            });
+          }
+        }).catch(function () {
+          // the entry was not made
+        });
+      }
+      return promise;
+    };
     let cardsPending = 0;
     new MutationObserver(function () {
       window.clearTimeout(cardsPending);
-      cardsPending = window.setTimeout(enhanceCards, 150);
+      cardsPending = window.setTimeout(function () {
+        enhanceCards();
+        prefillNewEntries();
+      }, 150);
     }).observe(document.body, { childList: true, subtree: true });
     enhanceCards();
   }

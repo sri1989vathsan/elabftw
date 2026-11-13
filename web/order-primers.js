@@ -207,6 +207,9 @@
       // the "On LabCollector" pill and its button are not shown: the state "In the database" (order-to-database.js) is in their place. The
       // elements stay in the page (hidden), so nothing of the orders page is changed
       '.orders-card .orders-labcollector-toggle { display: none !important; }',
+      // the entries and resources that the order is linked to are shown as tags with their names in the title row: not shown (the state "In the database"
+      // and its link are in the header); the links are kept
+      '.orders-card .orders-item-header a.badge { display: none !important; }',
       // the rows of the filters (All, Requested, ... Archived) when they wrap onto a second line: a space between the lines, so the buttons do not touch
       '.orders-toolbar-row .btn-group { row-gap: 0.4rem; }',
       'li.orders-upload.op-row:hover { background: rgba(127, 127, 127, 0.12); }',
