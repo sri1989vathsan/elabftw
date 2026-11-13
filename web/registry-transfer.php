@@ -22,6 +22,7 @@ use Elabftw\Enums\Storage;
 use Elabftw\Hash\FileHash;
 use Elabftw\Models\Inventory;
 use Elabftw\Models\Users\Users;
+use ZipStream\ZipStream;
 use PDO;
 use Throwable;
 use ZipArchive;
@@ -332,6 +333,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     $heading = array_merge(array('ID', 'My ID', 'Title', 'Date', 'Owner', 'Owner e-mail'), array_keys($names), $asZip ? array('Key', 'Files') : array());
     $rows = array();
     $zipFiles = array();
+    // one query for the files of all entries (it was one per entry)
+    $uploadsByEntry = array();
+    if ($asZip && $entries !== array()) {
+        $entryIds = implode(',', array_map('intval', array_column($entries, 'id')));
+        $uploadsReq = $pdo->query("SELECT item_id, real_name, long_name, storage FROM uploads WHERE type = 'inventory' AND state = 1 AND item_id IN ($entryIds) ORDER BY id");
+        foreach ($uploadsReq->fetchAll() as $upload) {
+            $uploadsByEntry[(int) $upload['item_id']][] = $upload;
+        }
+    }
     foreach ($entries as $index => $entry) {
         $row = array((string) ($entry['custom_id'] ?? ''), (string) ($entry['personal_id'] ?? ''), (string) $entry['title'], (string) $entry['date'], (string) $entry['owner'], (string) ($entry['owner_email'] ?? ''));
         foreach (array_keys($names) as $name) {
@@ -339,15 +349,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
             $row[] = is_array($value) ? implode(', ', array_map('strval', $value)) : (string) $value;
         }
         if ($asZip) {
-            // the attached files go in the folder files/<key>/ of the zip
+            // the attached files go in the folder files/<key>/ of the zip (their list was read for all entries at once above)
             $key = (string) ($index + 1);
-            $uploads = $pdo->prepare("SELECT real_name, long_name, storage FROM uploads WHERE item_id = :id AND type = 'inventory' AND state = 1 ORDER BY id");
-            $uploads->bindValue(':id', (int) $entry['id'], PDO::PARAM_INT);
-            $pdo->execute($uploads);
             $fileNames = array();
-            foreach ($uploads->fetchAll() as $upload) {
+            foreach ($uploadsByEntry[(int) $entry['id']] ?? array() as $upload) {
                 $real = (string) preg_replace('/[\/\\\\]+/', '_', (string) $upload['real_name']);
-                $zipFiles[] = array('path' => 'files/' . $key . '/' . $real, 'long_name' => (string) $upload['long_name'], 'storage' => (int) $upload['storage']);
+                // a name used twice in one entry: the later file replaces the earlier one, as before
+                $zipFiles['files/' . $key . '/' . $real] = array('long_name' => (string) $upload['long_name'], 'storage' => (int) $upload['storage']);
                 $fileNames[] = $real;
             }
             $row[] = $key;
@@ -366,7 +374,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
         }
         exit;
     }
-    // a zip: entries.csv and the files of the entries
+    // a zip: entries.csv and the files of the entries. It is streamed to the browser, one file at a time, so that memory does not grow with the size of the files
     $csv = fopen('php://temp', 'w+b');
     fwrite($csv, "\xEF\xBB\xBF");
     fputcsv($csv, $heading, ',', '"', '');
@@ -374,23 +382,19 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
         fputcsv($csv, $row, ',', '"', '');
     }
     rewind($csv);
-    $zipPath = (string) tempnam(sys_get_temp_dir(), 'regzip');
-    $zip = new ZipArchive();
-    $zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
-    $zip->addFromString('entries.csv', (string) stream_get_contents($csv));
-    foreach ($zipFiles as $file) {
+    @set_time_limit(0);
+    $zip = new ZipStream(sendHttpHeaders: true, outputName: $fileName . '.zip', contentType: 'application/zip');
+    $zip->addFileFromStream('entries.csv', $csv);
+    foreach ($zipFiles as $path => $file) {
         try {
-            $zip->addFromString($file['path'], Storage::from($file['storage'])->getStorage()->getFs()->read($file['long_name']));
+            $stream = Storage::from($file['storage'])->getStorage()->getFs()->readStream($file['long_name']);
+            $zip->addFileFromStream($path, $stream);
+            fclose($stream);
         } catch (Throwable) {
             // a file that cannot be read is left out
         }
     }
-    $zip->close();
-    header('Content-Type: application/zip');
-    header('Content-Disposition: attachment; filename="' . $fileName . '.zip"');
-    header('Content-Length: ' . filesize($zipPath));
-    readfile($zipPath);
-    unlink($zipPath);
+    $zip->finish();
     exit;
 }
 
