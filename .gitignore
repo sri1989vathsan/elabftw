@@ -11,6 +11,8 @@ config.php*
 *.min.css
 *.css.map
 *.min.js
+# but the files of the OCR and PDF readers of the order window (web/ocr) are kept: they are not built, they are copied from their packages
+!web/ocr/*.min.js
 *.js.map
 *.bundle.js
 .pnp.*
