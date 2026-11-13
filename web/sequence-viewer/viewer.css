@@ -2155,3 +2155,9 @@ body[data-map-style="dark"] .own-map-scale-out {
 
 /* in a tab (tabs.js) the bar of the tabs has the way back */
 body.embedded #back { display: none; }
+
+/* the primers of the Database that are like the bases of the Edit primer panel */
+#tool-sidebar .oligo-similar-line {
+  font-size: 0.82rem;
+  margin: 0.1rem 0 0.15rem;
+}

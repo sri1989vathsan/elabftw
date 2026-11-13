@@ -44,9 +44,14 @@
     host.append(element('p', 'tool-muted', 'Loading the primer...'));
     let entry;
     let me = null;
+    let database = [];
     try {
       entry = await tools.getPrimer(target.id);
       me = await tools.currentUserId();
+      // the primers of the Database, to show the ones that are like the bases here
+      database = await tools.allPrimers().catch(function () {
+        return [];
+      });
     } catch (error) {
       host.textContent = '';
       host.append(element('p', 'tool-message error', error.message || String(error)));
@@ -84,6 +89,7 @@
     const shown = element('div', 'oligo-shown');
     const facts = element('table', 'tools-table');
     const where = element('div', 'tool-tags');
+    const similarBox = element('div', 'oligo-similar');
     const message = element('p', 'tool-message');
 
     // where the bases bind best on this sequence: the start of the binding window, its end and the strand
@@ -187,6 +193,23 @@
         });
         where.append(b);
       });
+      // the primers of the Database that are like these bases (another tail, a few bases that differ): the primer itself is not one of them
+      similarBox.textContent = '';
+      const alike = tools.findSimilar(now.sequence, database.filter(function (primer) {
+        return primer.id !== target.id;
+      }), 4);
+      if (alike.length > 0) {
+        similarBox.append(element('div', 'oligo-field-label', 'Similar primers in the Database'));
+        alike.forEach(function (item) {
+          const line = element('div', 'oligo-similar-line');
+          const link = element('a', '', item.primer.title);
+          link.href = '../registry.php?mode=view&id=' + item.primer.id;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          line.append(link, document.createTextNode(' (' + item.text + ')'));
+          similarBox.append(line);
+        });
+      }
       // drawn on the map where it would bind
       if (window.PrimerPanel && window.PrimerPanel.setEdit) {
         window.PrimerPanel.setEdit(now.sequence.length >= 4 ? { name: name.value || 'oligo', start: now.start - 1, end: now.end - 1, forward: now.forward, tail: now.tail, bases: now.sequence } : null);
@@ -407,6 +430,7 @@
       overhangRow,
       element('div', 'oligo-field-label', 'Binds this sequence at (click to move it there)'),
       where,
+      similarBox,
       facts,
       element('div', 'tool-actions'),
       message

@@ -91,7 +91,11 @@
     dialog.setAttribute('role', 'dialog');
     dialog.append(element('h4', '', 'Primers of ' + fileName));
     const rows = oligos.map(function (oligo, index) {
-      return { oligo: oligo, existing: known(oligo.sequence), chosen: true, index: index };
+      const existing = known(oligo.sequence);
+      // a primer that is not there but is like one that is (the same 3' end, another tail; a base or two that differ) is shown with it and is not
+      // ticked: it is added only when it is wanted
+      const similar = existing ? [] : tools.findSimilar(oligo.sequence, database, 3);
+      return { oligo: oligo, existing: existing, similar: similar, chosen: similar.length === 0, index: index };
     });
     const table = element('table', 'table table-sm op-table');
     const head = element('tr');
@@ -117,7 +121,7 @@
       const tick = element('td');
       const box = element('input');
       box.type = 'checkbox';
-      box.checked = true;
+      box.checked = row.chosen;
       box.setAttribute('aria-label', 'Select ' + row.oligo.name);
       box.addEventListener('change', function () {
         row.chosen = box.checked;
@@ -145,7 +149,16 @@
         link.rel = 'noopener';
         state.append(link);
       } else {
-        state.append(element('span', 'text-muted', 'new'));
+        state.append(element('span', 'text-muted', row.similar.length > 0 ? 'new, but like:' : 'new'));
+        row.similar.forEach(function (item) {
+          const line = element('div', 'op-similar');
+          const link = element('a', '', item.primer.title);
+          link.href = 'registry.php?mode=view&id=' + item.primer.id;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          line.append(link, document.createTextNode(' (' + item.text + ')'));
+          state.append(line);
+        });
       }
       tr.append(tick, nameCell, sequence, element('td', '', String(row.oligo.sequence.length)), element('td', '', tools.tm(row.oligo.sequence) === null ? '' : tools.tm(row.oligo.sequence) + '°C'), state);
       body.append(tr);
@@ -157,7 +170,7 @@
     const cancel = element('button', 'btn btn-secondary', 'Cancel');
     cancel.type = 'button';
     actions.append(cancel, send);
-    dialog.append(element('p', 'text-muted', 'Primers marked "new" are not in the database yet: ticked ones are added to it. Primers that are in the database already are left as they are.'), wrap, tools.destinationControl(), message, actions);
+    dialog.append(element('p', 'text-muted', 'Primers marked "new" are not in the database yet: ticked ones are added to it. Primers that are in the database already are left as they are. A new primer that is like one of the database (the same 3′ end with another tail, or a few bases that differ) is shown with it and is not ticked.'), wrap, tools.destinationControl(), message, actions);
     backdrop.append(dialog);
     document.body.append(backdrop);
     const close = function () {

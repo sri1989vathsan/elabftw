@@ -582,3 +582,13 @@ test('orders: the card of an order with primers has one button (the one of the s
   assert.match(primers, /window\.dispatchEvent\(new CustomEvent\('otd:added'\)\);/);
   assert.match(read('web/order-to-database.js'), /window\.addEventListener\('otd:added', function \(\) \{\n      \/\/ the primers that were just added are asked again[^\n]*\n      forgetPrimers\(\);/);
 });
+
+test('similar primers are shown in the sheet dialog (new, but like..., not ticked) and in the Edit primer panel', () => {
+  const sheet = read('web/order-primers.js');
+  assert.match(sheet, /tools\.findSimilar\(oligo\.sequence, database, 3\)/);
+  assert.match(sheet, /chosen: similar\.length === 0/);
+  assert.match(sheet, /'new, but like:'/);
+  const panel = read('web/sequence-viewer/oligo-editor.js');
+  assert.match(panel, /tools\.findSimilar\(now\.sequence, database\.filter\(/);
+  assert.match(panel, /'Similar primers in the Database'/);
+});
