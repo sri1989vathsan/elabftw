@@ -14,6 +14,7 @@ namespace Elabftw\Elabftw;
 use Elabftw\Enums\Action;
 use Elabftw\Models\Inventory;
 use PDO;
+use Throwable;
 
 use function array_flip;
 use function array_key_first;
@@ -147,22 +148,60 @@ final class Backbone
         return sys_get_temp_dir() . '/elab-backbone-' . $name . '-' . $this->team . '.ser';
     }
 
+    /**
+     * What was kept before: the file of the temporary folder (quick), else the table backbone_cache (it survives a restart of the container; its
+     * content is put back in the file). Without the table everything still works, only a restart costs a new reading of the files.
+     */
     private function readCache(string $name, string $key): ?array
     {
         $file = $this->cacheFile($name);
-        if (!is_file($file)) {
+        if (is_file($file)) {
+            $stored = @unserialize((string) file_get_contents($file), array('allowed_classes' => false));
+            if (is_array($stored) && ($stored['key'] ?? '') === $key) {
+                return $stored['data'];
+            }
+        }
+        try {
+            $req = $this->pdo->prepare('SELECT ckey, data FROM backbone_cache WHERE team = :team AND name = :name');
+            $req->bindValue(':team', $this->team, PDO::PARAM_INT);
+            $req->bindValue(':name', $name);
+            $req->execute();
+            $row = $req->fetch(PDO::FETCH_ASSOC);
+        } catch (Throwable) {
             return null;
         }
-        $stored = @unserialize((string) file_get_contents($file), array('allowed_classes' => false));
-        return is_array($stored) && ($stored['key'] ?? '') === $key ? $stored['data'] : null;
+        if (!is_array($row) || $row['ckey'] !== $key) {
+            return null;
+        }
+        $data = @unserialize((string) $row['data'], array('allowed_classes' => false));
+        if (!is_array($data)) {
+            return null;
+        }
+        $this->writeFile($name, $key, $data);
+        return $data;
     }
 
-    private function writeCache(string $name, string $key, array $data): void
+    private function writeFile(string $name, string $key, array $data): void
     {
         $file = $this->cacheFile($name);
         $tmp = $file . '.' . uniqid('', true);
         if (@file_put_contents($tmp, serialize(array('key' => $key, 'data' => $data))) !== false) {
             @rename($tmp, $file);
+        }
+    }
+
+    private function writeCache(string $name, string $key, array $data): void
+    {
+        $this->writeFile($name, $key, $data);
+        try {
+            $req = $this->pdo->prepare('REPLACE INTO backbone_cache (team, name, ckey, data) VALUES (:team, :name, :ckey, :data)');
+            $req->bindValue(':team', $this->team, PDO::PARAM_INT);
+            $req->bindValue(':name', $name);
+            $req->bindValue(':ckey', $key);
+            $req->bindValue(':data', serialize($data), PDO::PARAM_LOB);
+            $req->execute();
+        } catch (Throwable) {
+            // the table is not there yet, or the packet is too large: the file alone is kept, as before
         }
     }
 

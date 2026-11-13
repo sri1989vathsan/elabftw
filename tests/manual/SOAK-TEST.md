@@ -259,6 +259,7 @@ Checks that run outside `node --test`:
   the Edit primer panel with the unlock confirmation and the overhang field, similar primers in the panel and in the sheet dialog, matching bases and mismatches on the
   map, the compact Details fields at a narrow and a wide window, and the order of the sections on the edit page.
 - `zip-export-check.php` (the ZIP export of the Database streams its files: peak PHP memory has to stay under 64 MB however large the attachments are; run it in the web container, see its header).
+- `backbone-cache-check.php` (the Backbone finder's cache survives a restart: the table `backbone_cache` of migration 152 gives the same answer when the temporary file is gone; run it in the web container, see its header).
 
 Not covered by any scripted run yet: adding an order line to the Database from a link while the server has internet (checked with a stub only), the edit page re-locking
 on leaving, PCR products with tails or a wrapped sequence, the wide-window primer alignment.

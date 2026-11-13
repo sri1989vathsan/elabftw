@@ -187,6 +187,7 @@ final class CustomMigrationRunner
         '149_personal_entries_admins.sql',
         '150_personal_module_views_closed.sql',
         '151_personal_module_views_module.sql',
+        '152_backbone_cache.sql',
     );
 
     private Db $Db;
