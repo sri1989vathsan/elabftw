@@ -246,3 +246,8 @@ test('several sequence files dropped on the new entry dialog make one entry each
   assert.match(js, /if \(sequences\.length > 1\) \{\s*close\(\);\s*addFiles\(sequences\.slice\(0, 50\), 0, categoryId, 'both'\);/);
   assert.doesNotMatch(js, /the others were left out/);
 });
+
+test('ordering primers from the editor attaches the order sheet only: the primers are not linked to the order as chips', () => {
+  assert.match(read('web/primer-tools.js'), /action: 'order', primers: primerIds, order: orderId, link: false/);
+  assert.match(read('web/primers.php'), /\$linkPrimers = \(\$payload\['link'\] \?\? true\) !== false;/);
+});

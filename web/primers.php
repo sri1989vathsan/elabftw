@@ -134,7 +134,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         if (!is_array($order)) {
             respond(404, array('error' => 'Order not found in this team.'));
         }
-        foreach ($primerIds as $primerId) {
+        // with link: false the primers are not linked to the order (no chip with each primer name on the order: only the order sheet is attached)
+        $linkPrimers = ($payload['link'] ?? true) !== false;
+        foreach ($linkPrimers ? $primerIds : array() as $primerId) {
             if (describe($App, $primerId) === null) {
                 continue;
             }
@@ -144,7 +146,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $link->bindValue(':order', $orderId, PDO::PARAM_INT);
             $pdo->execute($link);
         }
-        respond(200, array('ok' => true, 'linked' => count($primerIds), 'order' => array('id' => $orderId, 'title' => (string) $order['title'])));
+        respond(200, array('ok' => true, 'linked' => $linkPrimers ? count($primerIds) : 0, 'order' => array('id' => $orderId, 'title' => (string) $order['title'])));
     }
     if ($action === 'file') {
         // a primer designed in the editor is filed in the folder of its plasmid, in a subfolder "Primers"

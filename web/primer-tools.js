@@ -563,7 +563,7 @@
         } else {
           orderId = Number(select.value);
         }
-        const result = await json('primers.php', { method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ action: 'order', primers: primerIds, order: orderId }) });
+        const result = await json('primers.php', { method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ action: 'order', primers: primerIds, order: orderId, link: false }) });
         let done = 'Sent to the order "' + result.order.title + '".';
         try {
           window.localStorage.setItem('order-sheet-vendor', vendor.value || 'none');
