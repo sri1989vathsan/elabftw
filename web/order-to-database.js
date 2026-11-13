@@ -2443,6 +2443,16 @@
       delete form.card.dataset.otdAutoBadge;
       delete form.card.dataset.otdLinked;
     };
+    // "Add a new entry of the database instead" of the form of a new order is not shown: the box "Add it to the Database too" does its work (it presses the
+    // button, which stays in the page, hidden), and the button "Add ... to database" of the card of a placed order opens the window where the lines of the
+    // order are ticked one by one (all or some). The form that edits an order keeps its button.
+    const hideAddNewButton = function () {
+      document.querySelectorAll('.orders-new-card button').forEach(function (button) {
+        if (/Add a new entry of the database instead/.test(button.textContent)) {
+          button.style.setProperty('display', 'none', 'important');
+        }
+      });
+    };
     const drawState = function (form, state) {
       const box = stateBox(form);
       if (!box) {
@@ -2657,9 +2667,11 @@
       window.clearTimeout(cardsPending);
       cardsPending = window.setTimeout(function () {
         enhanceCards();
+        hideAddNewButton();
         prefillNewEntries();
       }, 150);
     }).observe(document.body, { childList: true, subtree: true });
     enhanceCards();
+    hideAddNewButton();
   }
 })();

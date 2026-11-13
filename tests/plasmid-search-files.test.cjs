@@ -639,3 +639,9 @@ test('placing an order: nothing is added to the Database by itself; a known item
   assert.match(order, /const dropAutoLink = function \(form\)/);
   assert.match(order, /dropAutoLink\(form\);\n        delete form\.card\.dataset\.otdState;/);
 });
+
+test('placing an order: the button "Add a new entry of the database instead" of the form of a new order is hidden (the box does its work); the form that edits an order keeps it', () => {
+  const order = read('web/order-to-database.js');
+  assert.match(order, /const hideAddNewButton = function \(\) \{\s*document\.querySelectorAll\('\.orders-new-card button'\)/);
+  assert.match(order, /enhanceCards\(\);\n        hideAddNewButton\(\);/);
+});
