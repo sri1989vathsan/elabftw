@@ -1,7 +1,6 @@
 /* The cloning panel of the tab page (cloning-panel.js). The rules of the tool texts, cards and buttons are those of the editor sidebar (viewer.css). */
-/* the panel lies over the editor (like the tools of the editor sidebar): it takes no room from the sequence */
-#main { position: relative; }
-#cloning-panel { position: absolute; z-index: 30; top: 0.5rem; right: 0.5rem; bottom: 0.5rem; width: min(27rem, calc(100% - 1rem)); display: flex; flex-direction: column; min-height: 0; background: #f6f8fa; border: 1px solid #d0d4d9; border-radius: 0.8rem; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.22); overflow: hidden; box-sizing: border-box; }
+/* the panel sits beside the editor, which stays usable (select a digest fragment, a region ...) while it is open */
+#cloning-panel { width: 27rem; flex: none; display: flex; flex-direction: column; min-height: 0; background: #f6f8fa; border-left: 1px solid #c7ccd3; box-sizing: border-box; }
 #cloning-panel[hidden] { display: none; }
 #cloning-panel .cloning-head { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.8rem; border-bottom: 1px solid #dde2e8; background: #fff; }
 #cloning-panel .cloning-close { border: 0; background: none; font-size: 20px; cursor: pointer; }
