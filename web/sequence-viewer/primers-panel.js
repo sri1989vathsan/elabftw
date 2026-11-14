@@ -133,7 +133,11 @@
       }));
       attachedPrimers.slice(0, drawLimit).forEach(function (primer) {
         findSitesCached(now.sequence, primer.sequence, now.circular).forEach(function (site, index) {
-          if (!site.tail && drawnByFile.has(site.start + ':' + (site.end - 1) + ':' + (site.forward ? 1 : -1))) {
+          // the place of the whole oligo: a primer with a tail also covers the places of its tail (see annotation())
+          const length = now.sequence.length;
+          const first = site.tail && site.forward ? (site.start - site.tail + length) % length : site.start;
+          const last = site.tail && !site.forward ? (site.end - 1 + site.tail) % length : site.end - 1;
+          if (drawnByFile.has(first + ':' + last + ':' + (site.forward ? 1 : -1))) {
             return;
           }
           const id = 'dbprimer-' + primer.id + '-' + index;
