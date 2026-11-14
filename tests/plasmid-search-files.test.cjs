@@ -658,7 +658,8 @@ test('placing an order with several links: a line for each item (a known one lin
   assert.match(order, /grid-template-columns:1\.25rem minmax\(0,1fr\)/);
   assert.match(order, /an item that is there has nothing to edit/);
   // each new row of the form knows its link, and is given it before anything is written in it
-  assert.match(order, /fresh\.dataset\.otdLink = form\.card\.dataset\.otdAssigning;/);
+  // (a queue: "Add all" asks for several rows at once, each gets the link that was asked for in its turn)
+  assert.match(order, /rowEl\.dataset\.otdLink = waiting\.shift\(\);/);
   assert.match(order, /const rowForPending = function \(rowEl, rows\)/);
   // the rows of the form are hidden; the name, the module and the columns are edited in the slot under the item
   assert.match(order, /const syncEditors = function \(\)/);
@@ -667,4 +668,12 @@ test('placing an order with several links: a line for each item (a known one lin
   // the same items are checked once at a time; a title is made for an order of links that has none
   assert.match(order, /the check of these items is still running/);
   assert.match(order, / more items'/);
+});
+
+test('the card of an order: an item is also in the Database when an entry linked to the order has its name (the page may name the entry otherwise than the link does); a check that fails says why in the console', () => {
+  const order = read('web/order-to-database.js');
+  assert.match(order, /const linkedEntries = Array\.from\(card\.querySelectorAll\('\.orders-item-header a\.badge\[href\*="registry\.php\?mode=view&id="\]'\)\)/);
+  assert.match(order, /have\.indexOf\(wanted\) !== -1 \|\| wanted\.indexOf\(have\) !== -1/);
+  assert.match(order, /could not be read:/);
+  assert.doesNotMatch(order, /DEBUGSTATE/);
 });

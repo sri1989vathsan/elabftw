@@ -1901,7 +1901,11 @@
       const work = new Promise(function (resolve) {
         line = line.then(function () {
           return check(card, kind, orderId);
-        }).then(resolve, function () {
+        }).then(resolve, function (error) {
+          // the state of the order cannot be told: the card shows only its button (the reason is in the console)
+          if (window.console && window.console.warn) {
+            window.console.warn('The state of order #' + orderId + ' in the Database could not be read:', error);
+          }
           resolve(null);
         });
       });
@@ -1997,6 +2001,13 @@
         }
         let inDb = 0;
         const items = [];
+        // the entries that are linked to the order (the badges of its header: they are in the page, hidden): an item of the order that has the name of one of them is
+        // in the Database, even when the page gave the entry another name than the link does
+        const linkedEntries = Array.from(card.querySelectorAll('.orders-item-header a.badge[href*="registry.php?mode=view&id="]')).map(function (badge) {
+          return { id: Number((/id=(\d+)/.exec(badge.getAttribute('href')) || [])[1]), title: badge.textContent.trim() };
+        }).filter(function (entry) {
+          return entry.id > 0 && entry.title !== '';
+        });
         for (const row of named) {
           const term = row.name.trim();
           const response = await fetch('api/v2/inventory?limit=50&q=' + encodeURIComponent(searchTerm(term)), { credentials: 'same-origin' });
@@ -2010,11 +2021,17 @@
             // the same name, or the same catalog number: a similar name (another product of the vendor) is not the same entry
             return have === wanted || (catalog.length >= 4 && String(entry.metadata || '').toLowerCase().indexOf(catalog) !== -1);
           });
-          inDb += same ? 1 : 0;
-          if (same && !items.some(function (item) {
-            return item.id === same.id;
+          // not found by its name: an entry that is linked to the order and whose name holds this name (or the other way round)
+          const linked = same ? null : linkedEntries.find(function (entry) {
+            const have = normal(entry.title);
+            return wanted.length >= 6 && have.length >= 6 && (have.indexOf(wanted) !== -1 || wanted.indexOf(have) !== -1);
+          });
+          const found = same || linked;
+          inDb += found ? 1 : 0;
+          if (found && !items.some(function (item) {
+            return item.id === found.id;
           })) {
-            items.push({ id: same.id, title: same.title });
+            items.push({ id: found.id, title: found.title });
           }
         }
         return { total: named.length, inDb: inDb, items: items };
@@ -2362,14 +2379,22 @@
       window.setTimeout(syncEditors, 60);
       const rows = parseOrder({ title: form.title, notes: form.notes });
       // a row that was just added for an item of an order with several links is given its link before anything is written in it
-      if (form.card.dataset.otdAssigning) {
-        const fresh = Array.from(form.card.querySelectorAll('.orders-pending-resource')).find(function (rowEl) {
+      // (the links wait in the order in which the rows were asked for: "Add all" asks for several at once)
+      let waiting = [];
+      try {
+        waiting = JSON.parse(form.card.dataset.otdAssigning || '[]');
+      } catch (error) {
+        waiting = [];
+      }
+      if (waiting.length > 0) {
+        Array.from(form.card.querySelectorAll('.orders-pending-resource')).filter(function (rowEl) {
           return !rowEl.dataset.otdLink;
+        }).forEach(function (rowEl) {
+          if (waiting.length > 0) {
+            rowEl.dataset.otdLink = waiting.shift();
+          }
         });
-        if (fresh) {
-          fresh.dataset.otdLink = form.card.dataset.otdAssigning;
-          delete form.card.dataset.otdAssigning;
-        }
+        form.card.dataset.otdAssigning = JSON.stringify(waiting);
       }
       form.card.querySelectorAll('.orders-pending-resource').forEach(function (rowEl) {
         refreshPanel(rowEl);
@@ -2700,7 +2725,14 @@
         return;
       }
       // the row that is added now is the one without a link yet: prefillNewEntries gives it this item's link first
-      form.card.dataset.otdAssigning = item.row.link;
+      let queue = [];
+      try {
+        queue = JSON.parse(form.card.dataset.otdAssigning || '[]');
+      } catch (error) {
+        queue = [];
+      }
+      queue.push(item.row.link);
+      form.card.dataset.otdAssigning = JSON.stringify(queue);
       autoClicking = true;
       button.click();
       autoClicking = false;
