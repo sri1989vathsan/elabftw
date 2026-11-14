@@ -115,4 +115,33 @@ assert.throws(() => engine.designRestriction({ vector: { sequence: vector, circu
   assert.strictEqual(result.products.length, 1);
   assert.ok(sameCircle(result.products[0].sequence, v.slice(0, 800) + 'GGTACC' + gene + 'CCCGGG' + v.slice(800 + 6 + 40 + 6)));
 }
+
+// several inserts: the vector is cut with BamHI and XhoI, insert 1 with BamHI and EcoRI, insert 2 with EcoRI and XhoI; they chain in order
+{
+  const geneA = random(500);
+  const geneB = random(350);
+  const ins1 = 'AAAAAA' + 'GGATCC' + geneA + 'GAATTC' + 'TTTTTT';
+  const ins2 = 'AAAAAA' + 'GAATTC' + geneB + 'CTCGAG' + 'TTTTTT';
+  const expectedMulti = vector.slice(0, 1000) + 'GGATCC' + geneA + 'GAATTC' + geneB + 'CTCGAG' + vector.slice(1000 + 6 + 30 + 6);
+  const run = (inserts) => engine.designRestrictionMulti({ vector: { name: 'V', sequence: vector, circular: true, features: {} }, vectorEnzymes: [enz('BamHI'), enz('XhoI')], inserts });
+  const a = { name: 'A', sequence: ins1, circular: false, features: { g: { id: 'g', name: 'geneA', type: 'CDS', start: 12, end: 511, strand: 1 } }, enzymes: [enz('BamHI'), enz('EcoRI')] };
+  const b = { name: 'B', sequence: ins2, circular: false, features: {}, enzymes: [enz('EcoRI'), enz('XhoI')] };
+  [[a, b], [b, a]].forEach((order) => {
+    const result = run(order);
+    assert.strictEqual(result.assemblies.length, 1, 'one ring');
+    const ring = result.assemblies[0];
+    assert.ok(sameCircle(ring.sequence, expectedMulti), 'the vector with A then B in place of the stuffer');
+    assert.deepStrictEqual(ring.order.map((o) => o.name), ['V', 'A', 'B']);
+    const gene = Object.values(ring.features).find((f) => f.name === 'geneA');
+    assert.strictEqual(ring.sequence.slice(gene.start, gene.end + 1), ins1.slice(12, 512));
+    assert.deepStrictEqual(ring.junctions.map((j) => j.enzymes.join('/')), ['BamHI', 'EcoRI', 'XhoI'], 'the junctions');
+  });
+  // an insert that cannot join: the ends do not chain
+  const stray = engine.designRestrictionMulti({ vector: { name: 'V', sequence: vector, circular: true, features: {} }, vectorEnzymes: [enz('BamHI'), enz('XhoI')], inserts: [a] });
+  assert.strictEqual(stray.assemblies.length, 0);
+  assert.ok(stray.warnings.some((w) => /No assembly closes/.test(w)));
+  // the single insert of the old function gives the same plasmid
+  const one = engine.designRestrictionMulti({ vector: { name: 'V', sequence: vector, circular: true, features: {} }, vectorEnzymes: [enz('BamHI'), enz('XhoI')], inserts: [{ name: 'I', sequence: insert, circular: false, features: {} }] });
+  assert.ok(sameCircle(one.assemblies[0].sequence, vector.slice(0, 1000) + 'GGATCC' + gene + 'CTCGAG' + vector.slice(1000 + 6 + 30 + 6)));
+}
 console.log('restriction cloning: all checks pass');
