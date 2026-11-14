@@ -1,16 +1,18 @@
 /**
- * Restriction cloning part of the Tools panel (tools-tab.js): the sequence in the editor is the vector, the insert is a sequence of
- * the Database or typed bases. One or two enzymes cut the vector and the insert (other enzymes with fitting ends may cut the insert);
- * the tool lists the fragments, chooses the backbone and the piece of the insert, shows the plasmids the ends allow (one for each
- * direction of the insert), what the junctions look like, and can save a plasmid as an entry made from the vector and the insert.
- * Needs cloning-engine.js, cloning-insert.js, enzymes-library.js and tools-pcr.js (the save form).
+ * Restriction cloning part of the Tools panel: a vector and one or several inserts, each the whole of an open plasmid or its selected bases
+ * (or a file, an example, typed bases). One or two enzymes cut the vector; each insert is cut with the same enzymes or with enzymes of its own
+ * (other enzymes with fitting ends, or the enzyme of the junction between two inserts): a virtual digest and ligation. One insert: the tool
+ * lists the fragments, chooses the backbone and the piece of the insert and shows the plasmid for each direction. Several inserts: they are
+ * chained by their ends, in the order the ends fit. A plasmid is offered as a new tab made from the vector and the inserts.
+ * Needs cloning-engine.js, cloning-source.js, enzymes-library.js and cloning-output.js.
  */
 (function () {
   'use strict';
-  if (!window.ToolsTab || !window.CloningEngine || !window.CloningInsert || !window.ToolsPcr) {
+  if (!window.ToolsTab || !window.CloningEngine || !window.CloningSource || !window.CloningOutput) {
     return;
   }
   const engine = window.CloningEngine;
+  const source = window.CloningSource;
 
   function element(tag, className, text) {
     const node = document.createElement(tag);
@@ -23,74 +25,44 @@
     return node;
   }
 
-  // the enzymes of the commercial library, by name, for the choice lists
-  function library() {
-    return window.EnzymeLibrary || { enzymes: {} };
-  }
-
-  function enzymeList(editor) {
-    const all = library().enzymes;
-    const names = Object.keys(all).map(function (key) {
-      return all[key].name;
-    }).sort(function (a, b) {
-      return a.localeCompare(b);
-    });
-    // the enzymes that cut the vector once come first (they are the ones that open it in one place)
-    const vector = editor.getState().sequenceData;
-    const once = names.filter(function (name) {
-      return engine.findCuts(vector.sequence, !!vector.circular, all[name.toLowerCase()] || engine.findEnzyme(library(), name)).cuts.length === 1;
-    });
-    return { once: once, rest: names.filter(function (name) {
-      return once.indexOf(name) < 0;
-    }) };
-  }
-
-  function chooser(label, list, optional) {
-    const select = element('select', 'tools-select');
-    select.title = label;
-    if (optional) {
-      select.append(Object.assign(element('option', '', label + ': none'), { value: '' }));
+  const safeGet = function (chooser) {
+    try {
+      return chooser.get();
+    } catch (error) {
+      return null;
     }
-    const group = function (title, names) {
-      const holder = element('optgroup');
-      holder.label = title;
-      names.forEach(function (name) {
-        holder.append(Object.assign(element('option', '', name), { value: name }));
-      });
-      select.append(holder);
-    };
-    group('Cut the vector once', list.once);
-    group('Others', list.rest);
-    if (!optional && list.once.length > 0) {
-      select.value = list.once[0];
-    } else if (optional) {
-      select.value = '';
-    }
-    return select;
-  }
+  };
 
-  function build(editor, context) {
+  function build() {
     const box = element('div', 'tools-block');
-    box.append(element('p', 'tool-muted', 'Cuts the vector (the sequence in the editor) and an insert with one or two enzymes and joins them. The enzymes that cut the vector once are listed first. If the ends of the insert were made by other enzymes with the same overhang (BamHI and BglII), choose them for the insert.'));
-    const list = enzymeList(editor);
-    const one = chooser('Enzyme 1', list, false);
-    const two = chooser('Enzyme 2', list, true);
-    const insertDiffers = element('label', 'tool-muted');
-    const differs = element('input');
-    differs.type = 'checkbox';
-    insertDiffers.append(differs, document.createTextNode(' The insert is cut by other enzymes'));
-    const insertOne = chooser('Insert enzyme 1', list, true);
-    const insertTwo = chooser('Insert enzyme 2', list, true);
-    const insertEnzymes = element('div');
-    insertEnzymes.hidden = true;
-    insertEnzymes.append(insertOne, insertTwo);
-    differs.addEventListener('change', function () {
-      insertEnzymes.hidden = !differs.checked;
-    });
-    const picker = window.CloningInsert.create();
+        box.append(element('p', 'tool-muted', 'Cut a vector and one or more inserts with enzymes and join them. Open a plasmid in the editor and click This plasmid (or select bases and click Selection) under Vector; do the same for each insert. Give an insert enzymes of its own when its ends were made by others.'));
+    const vector = source.create({ label: 'Vector', ring: true });
+    const one = element('select', 'tools-select');
+    const two = element('select', 'tools-select');
+    const fillVector = function () {
+      const chosen = safeGet(vector);
+      const names = chosen ? source.enzymeNames(chosen.data) : { once: [], more: [] };
+      source.fillEnzymeSelect(one, names, false, 'Enzyme 1');
+      source.fillEnzymeSelect(two, names, true, 'Enzyme 2');
+      if (one.value === '' && names.once.length > 0) {
+        one.value = names.once[0];
+      }
+    };
+    vector.node.addEventListener('change', fillVector);
+    fillVector();
+
+    // the inserts: one is added for each click; each can be cut with enzymes of its own (default: the vector's enzymes)
+    const inserts = source.createList({ label: 'Inserts', single: 'Insert', onAdd: function (item) {
+      item.one = element('select', 'tools-select');
+      item.two = element('select', 'tools-select');
+      const names = source.enzymeNames(item.captured.data);
+      source.fillEnzymeSelect(item.one, names, true, 'Cut with (default: the vector\'s enzymes)');
+      source.fillEnzymeSelect(item.two, names, true, 'and with');
+      item.node.append(item.one, item.two);
+    } });
+
     const result = element('div');
     let picks = { backbone: undefined, insertFragment: undefined };
-
     const fragmentSelect = function (title, fragments, chosen, onChange) {
       const select = element('select', 'tools-select');
       select.title = title;
@@ -103,54 +75,102 @@
       });
       return select;
     };
+    const toGenbank = function (sequence, features) {
+      return function (fileName) {
+        return window.bioParsers.jsonToGenbank({ name: fileName, circular: true, sequence: sequence, features: features, primers: {}, parts: {}, translations: {} });
+      };
+    };
 
     const run = function () {
       result.textContent = '';
       const fail = function (text) {
         result.append(element('p', 'tool-message error', text));
       };
-      const chosenInsert = picker.get();
-      if (!chosenInsert) {
-        fail('Choose the insert: search the Database or type its bases.');
-        return;
-      }
-      const state = editor.getState();
-      const vectorData = state.sequenceData;
-      const find = function (select) {
-        return select.value ? engine.findEnzyme(library(), select.value) : null;
-      };
-      const vectorEnzymes = [find(one), find(two)];
-      const options = {
-        vector: { sequence: vectorData.sequence, features: vectorData.features, circular: !!vectorData.circular },
-        insert: { sequence: chosenInsert.data.sequence, features: chosenInsert.data.features, circular: !!chosenInsert.data.circular },
-        vectorEnzymes: vectorEnzymes,
-        insertEnzymes: differs.checked ? [find(insertOne), find(insertTwo)] : vectorEnzymes,
-        backbone: picks.backbone,
-        insertFragment: picks.insertFragment,
-      };
-      let design;
+      let v;
+      let chosen;
       try {
-        design = engine.designRestriction(options);
+        v = vector.get();
+        chosen = inserts.get();
       } catch (error) {
         fail(error.message || String(error));
         return;
       }
-      const again = function () {
-        run();
+      const find = function (select) {
+        return select.value ? engine.findEnzyme(window.EnzymeLibrary || { enzymes: {} }, select.value) : null;
       };
+      const vectorEnzymes = [find(one), find(two)];
+      const ownEnzymes = inserts.items().map(function (item) {
+        return [find(item.one), find(item.two)].filter(Boolean);
+      });
+      const parents = [v].concat(chosen).map(function (item) {
+        return { id: item.id, name: item.name };
+      });
+      const names = [one.value, two.value].filter(Boolean).join(' + ');
+      const vectorData = { name: v.name, sequence: v.data.sequence, features: v.data.features, circular: !!v.data.circular };
+      const insertData = chosen.map(function (item, index) {
+        return { name: item.name, sequence: item.data.sequence, features: item.data.features, circular: !!item.data.circular, enzymes: ownEnzymes[index] };
+      });
+
+      if (chosen.length > 1) {
+        let design;
+        try {
+          design = engine.designRestrictionMulti({ vector: vectorData, vectorEnzymes: vectorEnzymes, inserts: insertData });
+        } catch (error) {
+          fail(error.message || String(error));
+          return;
+        }
+        design.assemblies.forEach(function (assembly, index) {
+          const card = element('div', 'tool-card');
+          card.append(element('strong', '', (design.assemblies.length > 1 ? 'Plasmid ' + (index + 1) + ': ' : 'Plasmid: ') + assembly.length + ' bp'));
+          const list = element('div', 'tool-muted');
+          assembly.order.forEach(function (entry, k) {
+            list.append(element('div', '', (k + 1) + '. ' + entry.name + (k === 0 ? ' (backbone, ' : ' (') + entry.orientation + ', ' + entry.size + ' bp)'));
+            const joint = element('div', '', '→ ' + assembly.junctions[k].enzymes.join(' / ') + ' →');
+            joint.style.cssText = 'font-family:ui-monospace,Menlo,monospace;font-size:0.78rem;margin:0.15rem 0 0.15rem 1rem;color:var(--text-accent,#1a5fb4)';
+            list.append(joint);
+          });
+          card.append(list);
+          (assembly.warn || []).forEach(function (text) {
+            card.append(element('p', 'tool-message error', text));
+          });
+            window.CloningOutput.offer(card, { info: window.CloningOutput.info(assembly.sequence, assembly.features), name: v.name + ' + ' + chosen.map(function (item) {
+              return item.name;
+            }).join(' + ') + ' (' + names + ')', genbank: toGenbank(assembly.sequence, assembly.features), parents: parents });
+          result.append(card);
+        });
+        design.warnings.forEach(function (text) {
+          result.append(element('p', 'tool-message error', text));
+        });
+        return;
+      }
+
+      // one insert: the fragments, and the plasmid for each direction
+      let design;
+      try {
+        design = engine.designRestriction({
+          vector: vectorData,
+          insert: insertData[0],
+          vectorEnzymes: vectorEnzymes,
+          insertEnzymes: ownEnzymes[0].length > 0 ? ownEnzymes[0] : vectorEnzymes,
+          backbone: picks.backbone,
+          insertFragment: picks.insertFragment,
+        });
+      } catch (error) {
+        fail(error.message || String(error));
+        return;
+      }
       if (design.vectorFragments.length > 1) {
         result.append(fragmentSelect('Vector piece kept', design.vectorFragments, design.backbone, function (index) {
           picks.backbone = index;
-          again();
+          run();
         }));
       }
       if (design.insertFragments.length > 1) {
         result.append(fragmentSelect('Insert piece', design.insertFragments, design.insertFragment, function (index) {
           picks.insertFragment = index;
-          again();
+          run();
         }));
       }
-      const insertName = (chosenInsert.entry && chosenInsert.entry.title) || 'insert';
       if (design.products.length === 0) {
         fail('No plasmid: the ends of the vector and of the insert do not fit.');
       }
@@ -158,35 +178,13 @@
         const card = element('div', 'tool-card');
         card.append(element('strong', '', (design.products.length > 1 ? 'Plasmid ' + (index + 1) + ', insert ' + product.orientation + ': ' : 'Plasmid: ') + product.length + ' bp'));
         const joints = product.junctions.map(function (joint) {
-          const names = joint.enzymes.filter(function (name, i, all) {
-            return name && all.indexOf(name) === i;
+          const label = joint.enzymes.filter(function (name, k, all) {
+            return name && all.indexOf(name) === k;
           }).join(' / ');
-          return names + ' ' + (joint.restored.length > 0 ? '(site made again)' : '(scar, cut by neither)');
+          return label + ' ' + (joint.restored.length > 0 ? '(site made again)' : '(scar, cut by neither)');
         });
         card.append(element('div', 'tool-muted', 'Junctions: ' + joints.join(', ')));
-        const actions = element('div', 'tool-actions');
-        const save = element('button', 'tool-btn', 'Save the plasmid as a new entry');
-        save.type = 'button';
-        save.addEventListener('click', function () {
-          save.disabled = true;
-          const parents = [context.entryId, chosenInsert.entry && chosenInsert.entry.id].filter(function (id, i, all) {
-            return id && all.indexOf(id) === i;
-          });
-          const names = [one.value, two.value].filter(Boolean).join(' + ');
-          window.ToolsPcr.saveEntryForm(card, {
-            name: String(context.name || 'plasmid').replace(/\.[^.]+$/, '') + ' + ' + insertName + ' (' + names + ')',
-            genbank: function (fileName) {
-              return window.bioParsers.jsonToGenbank({ name: fileName, circular: true, sequence: product.sequence, features: product.features, primers: {}, parts: {}, translations: {} });
-            },
-            parents: parents,
-            parentLabel: 'Made from the vector' + (chosenInsert.entry ? ' and the insert' : ''),
-            primers: [],
-            primersLabel: 'No primers',
-            saveLabel: 'Save the plasmid',
-          });
-        });
-        actions.append(save);
-        card.append(actions);
+          window.CloningOutput.offer(card, { info: window.CloningOutput.info(product.sequence, product.features), name: v.name + ' + ' + chosen[0].name + ' (' + names + ')', genbank: toGenbank(product.sequence, product.features), parents: parents });
         result.append(card);
       });
       design.warnings.forEach(function (text) {
@@ -200,7 +198,7 @@
       picks = { backbone: undefined, insertFragment: undefined };
       run();
     });
-    box.append(one, two, insertDiffers, insertEnzymes, picker.node, go, result);
+    box.append(vector.node, one, two, inserts.node, go, result);
     return box;
   }
 

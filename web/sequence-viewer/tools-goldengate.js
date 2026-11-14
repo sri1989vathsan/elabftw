@@ -1,13 +1,13 @@
 /**
- * Golden Gate part of the Tools panel (tools-tab.js): the sequence in the editor is the destination vector; the parts are sequences of
- * the Database or typed bases. A Type IIS enzyme (BsaI, BsmBI, BbsI, SapI ...) cuts the vector and the parts, the overhangs chain the
- * pieces into a ring. The tool shows the assembly (the order of the parts, the overhang at each junction, warnings for overhangs that
- * repeat or are palindromic, sites that are left) and can save the plasmid as an entry made from the vector and the parts.
- * Needs cloning-engine.js, cloning-insert.js, enzymes-library.js and tools-pcr.js (the save form).
+ * Golden Gate part of the Tools panel: a destination vector (an open plasmid) and any number of parts, each the whole of an open plasmid,
+ * its selected bases, a file or typed bases. A Type IIS enzyme (BsaI, BsmBI, BbsI, SapI ...) cuts the vector and the parts (a virtual digest),
+ * the overhangs chain the pieces into a ring. The tool shows the assembly (the order of the parts, the overhang at each junction, warnings for
+ * overhangs that repeat or are palindromic, sites that are left) and offers the plasmid as a new tab made from the vector and the parts.
+ * Needs cloning-engine.js, cloning-source.js, enzymes-library.js and cloning-output.js.
  */
 (function () {
   'use strict';
-  if (!window.ToolsTab || !window.CloningEngine || !window.CloningInsert || !window.ToolsPcr) {
+  if (!window.ToolsTab || !window.CloningEngine || !window.CloningSource || !window.CloningOutput) {
     return;
   }
   const engine = window.CloningEngine;
@@ -54,37 +54,12 @@
     return select;
   }
 
-  function build(editor, context) {
+  function build() {
     const box = element('div', 'tools-block');
-    box.append(element('p', 'tool-muted', 'Assembles parts into this plasmid (the destination vector) with a type IIS enzyme. The parts are put in the order of their overhangs, whatever order or strand they are given in; a part may be a PCR product or sit in its own plasmid.'));
+        box.append(element('p', 'tool-muted', 'Assemble parts into a destination vector with a type IIS enzyme. Open a plasmid in the editor and click This plasmid under Destination vector; then, for each part, open its plasmid, select what you want and click Add the selection (or Add this plasmid). The parts are ordered by their overhangs.'));
     const enzyme = enzymeChooser();
-    const rows = element('div');
-    const pickers = [];
-    const addPart = function () {
-      const row = element('div', 'tool-card');
-      const head = element('div', 'tool-card-top');
-      const title = element('strong', '', 'Part ' + (pickers.length + 1));
-      const remove = element('button', 'tool-btn', 'Remove');
-      remove.type = 'button';
-      head.append(title, remove);
-      const picker = window.CloningInsert.create();
-      const item = { picker: picker, row: row };
-      pickers.push(item);
-      remove.addEventListener('click', function () {
-        pickers.splice(pickers.indexOf(item), 1);
-        row.remove();
-        pickers.forEach(function (other, index) {
-          other.row.querySelector('strong').textContent = 'Part ' + (index + 1);
-        });
-      });
-      row.append(head, picker.node);
-      rows.append(row);
-    };
-    addPart();
-    addPart();
-    const more = element('button', 'tool-btn', 'Add a part');
-    more.type = 'button';
-    more.addEventListener('click', addPart);
+    const vector = window.CloningSource.create({ label: 'Destination vector', ring: true });
+    const parts = window.CloningSource.createList({ label: 'Parts', single: 'Part' });
 
     const result = element('div');
     const go = element('button', 'tool-btn tool-btn-primary', 'Find the assembly');
@@ -94,27 +69,27 @@
       const fail = function (text) {
         result.append(element('p', 'tool-message error', text));
       };
-      const chosen = pickers.map(function (item) {
-        return item.picker.get();
-      });
-      if (chosen.length === 0 || chosen.some(function (entry) {
-        return !entry;
-      })) {
-        fail('Every part needs a sequence: search the Database or type its bases.');
+      let v;
+      let chosen;
+      try {
+        v = vector.get();
+        chosen = parts.get();
+      } catch (error) {
+        fail(error.message || String(error));
         return;
       }
-      const vector = editor.getState().sequenceData;
+      if (chosen.length === 0) {
+        fail('Add at least one part.');
+        return;
+      }
       const record = engine.findEnzyme(window.EnzymeLibrary || { enzymes: {} }, enzyme.value);
-      const names = chosen.map(function (entry, index) {
-        return (entry.entry && entry.entry.title) || 'Part ' + (index + 1);
-      });
       let design;
       try {
         design = engine.designGoldenGate({
           enzyme: record,
-          destination: { name: 'Destination vector', sequence: vector.sequence, features: vector.features, circular: !!vector.circular },
-          parts: chosen.map(function (entry, index) {
-            return { name: names[index], sequence: entry.data.sequence, features: entry.data.features, circular: !!entry.data.circular };
+          destination: { name: v.name, sequence: v.data.sequence, features: v.data.features, circular: !!v.data.circular },
+          parts: chosen.map(function (item) {
+            return { name: item.name, sequence: item.data.sequence, features: item.data.features, circular: !!item.data.circular };
           }),
         });
       } catch (error) {
@@ -135,35 +110,23 @@
         (assembly.warn || []).forEach(function (text) {
           card.append(element('p', 'tool-message error', text));
         });
-        const save = element('button', 'tool-btn', 'Save the plasmid as a new entry');
-        save.type = 'button';
-        save.addEventListener('click', function () {
-          save.disabled = true;
-          const parents = [context.entryId].concat(chosen.map(function (entry) {
-            return entry.entry && entry.entry.id;
-          })).filter(function (id, i, all) {
-            return id && all.indexOf(id) === i;
-          });
-          window.ToolsPcr.saveEntryForm(card, {
-            name: String(context.name || 'plasmid').replace(/\.[^.]+$/, '') + ' Golden Gate (' + enzyme.value + ', ' + chosen.length + ' parts)',
+          window.CloningOutput.offer(card, {
+            info: window.CloningOutput.info(assembly.sequence, assembly.features),
+            name: v.name + ' Golden Gate (' + enzyme.value + ', ' + chosen.length + ' parts)',
             genbank: function (fileName) {
               return window.bioParsers.jsonToGenbank({ name: fileName, circular: true, sequence: assembly.sequence, features: assembly.features, primers: {}, parts: {}, translations: {} });
             },
-            parents: parents,
-            parentLabel: 'Made from the vector and the parts',
-            primers: [],
-            primersLabel: 'No primers',
-            saveLabel: 'Save the plasmid',
+            parents: [v].concat(chosen).map(function (item) {
+              return { id: item.id, name: item.name };
+            }),
           });
-        });
-        card.append(save);
         result.append(card);
       });
       design.warnings.forEach(function (text) {
         result.append(element('p', 'tool-message error', text));
       });
     });
-    box.append(enzyme, rows, more, go, result);
+    box.append(enzyme, vector.node, parts.node, go, result);
     return box;
   }
 
