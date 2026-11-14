@@ -163,6 +163,13 @@
         }
       });
       form.querySelector('.tool-actions').prepend(send);
+      // the Assemble button of the panel asks for the plasmid to be added at once
+      if (window.CloningOutput.assembling) {
+        window.CloningOutput.assembling = false;
+        window.setTimeout(function () {
+          send.click();
+        }, 0);
+      }
     }
     card.append(form);
     // the new plasmid is shown at once, in its own tab, with its map, features and primers

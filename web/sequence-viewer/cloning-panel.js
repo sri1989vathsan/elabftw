@@ -260,6 +260,31 @@
     }
   };
 
+  // Assemble: next to the button that designs the assembly of a tool; it runs the design and adds the plasmid to the Database and opens it
+  const addAssemble = function () {
+    host.querySelectorAll('details.tools-part').forEach(function (part) {
+      const title = (part.querySelector('summary') || {}).textContent || '';
+      const design = part.querySelector('.tools-block > .tool-btn-primary');
+      if (!design || design.dataset.assemble || /primers$/i.test(title)) {
+        return;
+      }
+      design.dataset.assemble = '1';
+      const assemble = element('button', 'tool-btn tool-btn-primary', 'Assemble');
+      assemble.type = 'button';
+      assemble.title = 'Make the plasmid, add it to the Database (with its parents and primers) and open it';
+      assemble.addEventListener('click', function () {
+        window.CloningOutput.assembling = true;
+        design.click();
+        // a design that fails shows its message and makes no plasmid: the request ends
+        window.setTimeout(function () {
+          window.CloningOutput.assembling = false;
+        }, 4000);
+      });
+      design.after(' ', assemble);
+    });
+  };
+  new MutationObserver(addAssemble).observe(host, { childList: true, subtree: true });
+
   const button = element('button', 'cloning-open', 'Cloning');
   button.type = 'button';
   button.title = 'Gibson, In-Fusion, restriction, Golden Gate and Gateway cloning from the plasmids that are open';
