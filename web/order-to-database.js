@@ -2667,20 +2667,59 @@
       block.append(side, words, slot);
       return { block: block, side: side, words: words, slot: slot };
     };
-    const knownWords = function (parts, existing, linked) {
-      // an item that is there has nothing to edit
+    // is the entry linked to the order (a badge of the field "Link an entry of the database" has its name)
+    const isLinked = function (form, existing) {
+      return Array.from(form.card.querySelectorAll('.orders-resource-badge')).some(function (badge) {
+        return normalName(badge.textContent).indexOf(normalName(existing.title)) !== -1;
+      });
+    };
+    const unlinkFromOrder = function (form, existing) {
+      form.card.querySelectorAll('.orders-resource-badge').forEach(function (badge) {
+        const remove = badge.querySelector('button[title="Remove"]');
+        if (remove && normalName(badge.textContent).indexOf(normalName(existing.title)) !== -1) {
+          remove.click();
+        }
+      });
+    };
+    // an item that is there has a box too: ticked it is linked to the order, unticked it is not (nothing is edited for it)
+    const knownWords = function (parts, form, existing, linked) {
       parts.slot.remove();
-      parts.side.append(element('i', 'fas fa-database fa-fw', '', 'color:#1d8348'));
+      const tick = element('input', 'otd-known-tick');
+      tick.type = 'checkbox';
+      tick.style.margin = '0';
+      tick.checked = linked;
+      tick.title = 'Linked to this order';
+      parts.side.append(tick);
       parts.words.append(element('span', '', 'In the database: ', 'color:#1d8348;font-weight:600'));
       const link = element('a', '', existing.title);
       link.href = 'registry.php?mode=view&id=' + existing.id;
       link.target = '_blank';
       link.rel = 'noopener';
-      parts.words.append(link, element('span', 'text-muted', linked ? ' · linked to this order' : ' · not linked yet'));
+      const note = element('span', 'text-muted');
+      const say = function () {
+        note.textContent = tick.checked ? ' \u00b7 linked to this order' : ' \u00b7 not linked to this order';
+      };
+      say();
+      parts.words.append(link, note);
+      tick.addEventListener('change', async function () {
+        tick.disabled = true;
+        if (tick.checked) {
+          tick.checked = await linkToOrder(form, existing);
+        } else {
+          unlinkFromOrder(form, existing);
+        }
+        tick.disabled = false;
+        say();
+      });
+      // the box follows the field of the links when it is changed there (a link taken away or added by hand)
+      tick._follow = function () {
+        tick.checked = isLinked(form, existing);
+        say();
+      };
     };
     const newWords = function (parts, text) {
       const id = 'otd-tick-' + (++tickCounter);
-      const tick = element('input');
+      const tick = element('input', 'otd-new-tick');
       tick.type = 'checkbox';
       tick.id = id;
       tick.style.margin = '0';
@@ -2702,17 +2741,7 @@
       const parts = itemBlock();
       box.append(parts.block);
       if (state.existing) {
-        knownWords(parts, state.existing, state.linked);
-        if (!state.linked) {
-          const again = element('button', 'btn btn-ghost btn-sm', 'Link it', 'margin-left:0.5rem');
-          again.type = 'button';
-          again.addEventListener('click', async function () {
-            again.disabled = true;
-            state.linked = await linkToOrder(form, state.existing);
-            drawState(form, state);
-          });
-          parts.words.append(again);
-        }
+        knownWords(parts, form, state.existing, state.linked);
         return;
       }
       const tick = newWords(parts, 'Add it to the Database too');
@@ -2803,7 +2832,7 @@
       items.forEach(function (item) {
         const parts = itemBlock();
         if (item.existing) {
-          knownWords(parts, item.existing, item.linked);
+          knownWords(parts, form, item.existing, item.linked);
         } else {
           const tick = newWords(parts, 'Add "' + item.name + '" to the Database');
           tick.checked = hasRowFor(form, item);
@@ -2855,7 +2884,12 @@
         }
         // the same items: the boxes follow the rows of the form
         const items = form.card._otdItems || [];
-        box.querySelectorAll('input[type="checkbox"]').forEach(function (tick, index) {
+        box.querySelectorAll('.otd-known-tick').forEach(function (tick) {
+          if (tick._follow) {
+            tick._follow();
+          }
+        });
+        box.querySelectorAll('.otd-new-tick').forEach(function (tick, index) {
           const pending = items.filter(function (item) {
             return !item.existing;
           })[index];
@@ -2974,7 +3008,7 @@
       const box = form.card.querySelector('.otd-order-state');
       if (form.card.dataset.otdState === key && box) {
         // the same item: only the box of the row is kept in step with the form
-        const tick = box.querySelector('input[type="checkbox"]');
+        const tick = box.querySelector('.otd-new-tick');
         if (tick) {
           tick.checked = form.card.querySelector('.orders-pending-resource') !== null;
         }

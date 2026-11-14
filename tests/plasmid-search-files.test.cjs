@@ -656,7 +656,11 @@ test('placing an order with several links: a line for each item (a known one lin
   assert.match(order, /box\._follow = follow;/);
   // every item is a block of two columns (the box or the mark of the database, then the words and under them the editing)
   assert.match(order, /grid-template-columns:1\.25rem minmax\(0,1fr\)/);
-  assert.match(order, /an item that is there has nothing to edit/);
+  assert.match(order, /an item that is there has a box too/);
+  // every line has a box: new items (added to the Database when ticked) and known ones (linked to the order when ticked)
+  assert.match(order, /element\('input', 'otd-known-tick'\)/);
+  assert.match(order, /element\('input', 'otd-new-tick'\)/);
+  assert.match(order, /const unlinkFromOrder = function \(form, existing\)/);
   // each new row of the form knows its link, and is given it before anything is written in it
   // (a queue: "Add all" asks for several rows at once, each gets the link that was asked for in its turn)
   assert.match(order, /rowEl\.dataset\.otdLink = waiting\.shift\(\);/);
