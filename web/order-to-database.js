@@ -2571,6 +2571,29 @@
         rowEl.style.setProperty('display', 'none', 'important');
       });
     };
+    // The form empties itself when the order is requested (no key is pressed): what it said about the order is taken away with it.
+    const resetFormState = function () {
+      const form = orderForm();
+      if (!form || form.title !== '' || form.notesText.trim() !== '' || /<a\b/i.test(form.notes)) {
+        return;
+      }
+      const box = form.card.querySelector('.otd-order-state');
+      const keys = ['otdRows', 'otdState', 'otdLinked', 'otdTitling', 'otdAutoBadges', 'otdAssigning'];
+      const dirty = keys.some(function (key) {
+        return form.card.dataset[key] !== undefined;
+      });
+      if (!box && !dirty) {
+        return;
+      }
+      if (box) {
+        box.style.display = 'none';
+        box.textContent = '';
+      }
+      keys.forEach(function (key) {
+        delete form.card.dataset[key];
+      });
+      form.card._otdItems = [];
+    };
     // the editing of a new entry, under its line: the name, the module and the columns. It writes into the (hidden) row of the form.
     const buildEditor = function (rowEl) {
       const wrap = element('div', '', '', 'align-items:center;display:flex;flex-wrap:wrap;gap:0.4rem;margin:0.1rem 0 0.2rem;width:100%');
@@ -3092,6 +3115,7 @@
       cardsPending = window.setTimeout(function () {
         enhanceCards();
         hideAddNewButton();
+        resetFormState();
         prefillNewEntries();
       }, 150);
     }).observe(document.body, { childList: true, subtree: true });

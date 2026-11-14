@@ -677,3 +677,10 @@ test('the card of an order: an item is also in the Database when an entry linked
   assert.match(order, /could not be read:/);
   assert.doesNotMatch(order, /DEBUGSTATE/);
 });
+
+test('the form of a new order: when the order is requested and the form empties itself, the lines about the order and what was remembered for it are taken away', () => {
+  const order = read('web/order-to-database.js');
+  assert.match(order, /const resetFormState = function \(\)/);
+  assert.match(order, /\['otdRows', 'otdState', 'otdLinked', 'otdTitling', 'otdAutoBadges', 'otdAssigning'\]/);
+  assert.match(order, /hideAddNewButton\(\);\n        resetFormState\(\);/);
+});
