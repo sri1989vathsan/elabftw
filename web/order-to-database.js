@@ -2303,6 +2303,125 @@
       const card = element('div', '', '', 'background:var(--bg,#fff);border-radius:8px;max-width:560px;width:100%;padding:1rem 1.25rem;box-shadow:0 8px 30px rgba(0,0,0,.3)');
       layer.append(card);
       card.append(element('h6', '', (input && input.value.trim()) || 'New entry'), element('p', 'small text-muted', 'The columns of ' + module.title + ' that the entry gets. They are filled in from the order' + (panel.page ? ' and the page of its link' : ' and its link') + '; change what is not right.'));
+      // A screenshot (png, jpg), a PDF or a text (a file, or text dropped or pasted) is dropped on the zone, or anywhere on the window, and the columns are filled in
+      // from it, here in the browser (the same readers as the window of an order). What was typed in a column stays; the values read from it are put in the
+      // others and win over the ones read from the link.
+      const zone = element('div', 'small text-muted', '', 'border:2px dashed rgba(128,128,128,.55);border-radius:6px;padding:0.6rem 0.75rem;margin-bottom:0.75rem;text-align:center;outline:none');
+      zone.tabIndex = 0;
+      zone.title = 'Drop a screenshot, a PDF or a text here, or click it and paste';
+      const zoneText = element('div', '', 'Drop a screenshot (png, jpg), a PDF or a text file of the product here to fill in the columns');
+      const zoneState = element('div', '', 'You can also paste an image or text, or choose a file.', 'margin-top:0.2rem');
+      const choose = element('input', '', '', 'display:none');
+      choose.type = 'file';
+      choose.accept = 'image/*,application/pdf,.pdf,.txt,.md,.csv,.html,.htm,text/*';
+      const chooseButton = element('button', 'btn btn-secondary btn-sm', 'Choose a file…', 'margin-top:0.35rem');
+      chooseButton.type = 'button';
+      chooseButton.addEventListener('click', function () {
+        choose.click();
+      });
+      zone.append(zoneText, zoneState, chooseButton, choose);
+      card.append(zone);
+      const say = function (text, bad) {
+        zoneState.textContent = text;
+        zoneState.style.color = bad ? '#c0392b' : '';
+      };
+      const fillFrom = async function (text) {
+        const read = readPageText(text, (panel.page && panel.page.link) || panel.link || '');
+        const found = Object.keys(read.props).length + (read.sku ? 1 : 0) + (read.cats || []).length;
+        if (String(text).trim() === '' || found === 0) {
+          say('Nothing could be read from it. A page of the product, its datasheet or a screenshot of the details works best.', true);
+          return;
+        }
+        // what the file says wins over what the link said
+        const old = panel.page || { props: {} };
+        panel.page = Object.assign({}, old, read, {
+          props: Object.assign({}, old.props || {}, read.props),
+          sku: read.sku || old.sku || '',
+          brand: read.brand || old.brand || '',
+          name: read.name || old.name || '',
+        });
+        const before = Object.assign({}, panel.values);
+        await refreshPanel(rowEl);
+        const changed = Object.keys(panel.values).filter(function (key) {
+          return panel.values[key] !== before[key] && panel.values[key] !== '' && panel.values[key] !== undefined;
+        });
+        say(changed.length > 0 ? 'Filled in: ' + changed.join(', ') + '.' : 'Read, but nothing new for the columns (what is typed stays).');
+      };
+      const fromFile = async function (file) {
+        const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+        const isImage = /^image\//.test(file.type);
+        try {
+          if (isPdf || isImage) {
+            say('Reading the ' + (isPdf ? 'PDF' : 'image') + '… (the first time it takes a little longer)');
+            const text = await (isPdf ? readPdf : readImage)(file, function (percent) {
+              say('Reading the ' + (isPdf ? 'PDF' : 'image') + '… ' + percent + '%');
+            });
+            await fillFrom(text);
+          } else {
+            const raw = await file.text();
+            const text = /html?$/i.test(file.name || '') || /html/.test(file.type) ? (new DOMParser().parseFromString(raw, 'text/html').body.textContent || '') : raw;
+            await fillFrom(text);
+          }
+        } catch (error) {
+          say('The file could not be read: ' + (error.message || error), true);
+        }
+      };
+      const usable = function (list) {
+        return Array.from(list || []).find(function (file) {
+          return /^image\//.test(file.type) || file.type === 'application/pdf' || /\.(pdf|txt|md|csv|html?)$/i.test(file.name || '') || /^text\//.test(file.type);
+        });
+      };
+      const highlight = function (on) {
+        zone.style.borderColor = on ? '#1d8348' : 'rgba(128,128,128,.55)';
+        zone.style.background = on ? 'rgba(29,131,72,.08)' : '';
+      };
+      // the whole window takes a drop (so the browser does not open the file); a file or a text is read, a text dropped in a column is left to the column
+      layer.addEventListener('dragover', function (event) {
+        event.preventDefault();
+        highlight(true);
+      });
+      layer.addEventListener('dragleave', function (event) {
+        if (event.target === layer || event.target === zone) {
+          highlight(false);
+        }
+      });
+      layer.addEventListener('drop', function (event) {
+        highlight(false);
+        const file = usable(event.dataTransfer && event.dataTransfer.files);
+        if (file) {
+          event.preventDefault();
+          fromFile(file);
+          return;
+        }
+        const dropped = event.dataTransfer ? event.dataTransfer.getData('text/plain') : '';
+        if (event.target.closest && event.target.closest('input, select, textarea')) {
+          return;
+        }
+        event.preventDefault();
+        if (dropped.trim() !== '') {
+          fillFrom(dropped);
+        }
+      });
+      // an image or a file pasted anywhere in the window; pasted text is read when the zone has the focus (in a column it is just text)
+      const onPaste = function (event) {
+        const file = usable(event.clipboardData && event.clipboardData.files);
+        if (file) {
+          event.preventDefault();
+          fromFile(file);
+          return;
+        }
+        if (event.target === zone) {
+          event.preventDefault();
+          fillFrom(event.clipboardData ? event.clipboardData.getData('text/plain') : '');
+        }
+      };
+      document.addEventListener('paste', onPaste);
+      choose.addEventListener('change', function () {
+        if (choose.files && choose.files[0]) {
+          fromFile(choose.files[0]);
+          choose.value = '';
+        }
+      });
       const inputs = {};
       const touched = {};
       (module.fields || []).forEach(function (f) {
@@ -2338,6 +2457,7 @@
         panel.popup = null;
         layer.remove();
         document.removeEventListener('keydown', onKey);
+        document.removeEventListener('paste', onPaste);
       };
       const onKey = function (event) {
         if (event.key === 'Escape') {

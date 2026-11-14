@@ -661,6 +661,12 @@ test('placing an order with several links: a line for each item (a known one lin
   assert.match(order, /element\('input', 'otd-known-tick'\)/);
   assert.match(order, /element\('input', 'otd-new-tick'\)/);
   assert.match(order, /const unlinkFromOrder = function \(form, existing\)/);
+  // the window of the columns takes a screenshot, a PDF or a text (dropped, pasted or chosen) and fills the columns from it
+  assert.match(order, /const fillFrom = async function \(text\)/);
+  assert.match(order, /layer\.addEventListener\('drop'/);
+  assert.match(order, /document\.addEventListener\('paste', onPaste\)/);
+  assert.match(order, /document\.removeEventListener\('paste', onPaste\)/);
+  assert.match(order, /\(isPdf \? readPdf : readImage\)\(file, function \(percent\) \{\n\s+say\(/);
   // each new row of the form knows its link, and is given it before anything is written in it
   // (a queue: "Add all" asks for several rows at once, each gets the link that was asked for in its turn)
   assert.match(order, /rowEl\.dataset\.otdLink = waiting\.shift\(\);/);
