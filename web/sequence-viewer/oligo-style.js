@@ -40,7 +40,11 @@
   // which of those places match the sequence. An oligo without an overhang is just the bases it binds.
   function layout(primer, sequence) {
     const forward = primer.forward !== false && primer.strand !== -1;
-    const bound = sequence.slice(primer.start, primer.end + 1);
+    // positions may run past the end of the sequence: an oligo over the origin of a circular plasmid (see restyle)
+    let bound = '';
+    for (let i = primer.start; i <= primer.end; i++) {
+      bound += sequence[i % sequence.length];
+    }
     const oligo = String(primer.oligo || (forward ? bound : bound.split('').reverse().join('').replace(/[ACGT]/g, function (b) {
       return COMPLEMENT[b];
     })) || '').toUpperCase();
@@ -70,6 +74,31 @@
     }
   }
 
+  // Where the row starts in the sequence. The text of the row is looked for in the sequence; a text that is found in several places (a
+  // repeated region, a plasmid that holds a copy of itself) is told apart by the numbers of the ruler of the row.
+  function rowStartOf(rowEl, rowText, charWidth, sequence) {
+    const text = rowText.textContent.toUpperCase();
+    const found = [];
+    for (let at = sequence.indexOf(text); at >= 0 && found.length < 50; at = sequence.indexOf(text, at + 1)) {
+      found.push(at);
+    }
+    if (found.length <= 1) {
+      return found.length === 1 ? found[0] : -1;
+    }
+    const left = rowText.getBoundingClientRect().left;
+    const label = Array.from(rowEl.querySelectorAll('text')).find(function (node) {
+      return /^\d+$/.test(node.textContent.trim());
+    });
+    if (!label) {
+      return found[0];
+    }
+    const box = label.getBoundingClientRect();
+    const estimate = Number(label.textContent.trim()) - 1 - Math.round((box.left + box.width / 2 - left) / charWidth - 0.5);
+    return found.reduce(function (best, candidate) {
+      return Math.abs(candidate - estimate) < Math.abs(best - estimate) ? candidate : best;
+    }, found[0]);
+  }
+
   function restyle() {
     const editor = window.sequenceEditor;
     if (!editor) {
@@ -94,24 +123,33 @@
     }
     shapes.forEach(function (g) {
       const path = g.querySelector(':scope > path');
-      const primer = primers[g.dataset.id];
+      const given = primers[g.dataset.id];
       const rowEl = g.closest('.veRowItem');
-      if (!path || !primer || !rowEl || !(primer.end >= primer.start)) {
+      if (!path || !given || !rowEl || !(given.start >= 0) || !(given.end >= 0)) {
         return;
       }
+      const L = sequence.length;
+      // an oligo over the origin runs from its start to the end of the sequence and on from the beginning: it is laid out in
+      // positions that go past the end (start .. end + L); a piece of the row at the beginning of the sequence is shifted by L
+      const wraps = given.end < given.start;
+      const unwrap = function (position) {
+        return position !== undefined && wraps && position < given.start ? position + L : position;
+      };
+      const primer = Object.assign({}, given, { end: wraps ? given.end + L : given.end, boundStart: unwrap(given.boundStart), boundEnd: unwrap(given.boundEnd) });
       // the columns of the row this piece covers: the row starts where its sequence is found in the sequence, the piece where its
       // svg is
       const rowText = Array.from(rowEl.querySelectorAll('text.ve-monospace-font[textLength]')).find(function (node) {
         return node.textContent.length > 5 && !node.classList.contains('ve-sequence-reverse') && !node.classList.contains('veLabelText');
       });
-      const rowStart = rowText ? sequence.indexOf(rowText.textContent.toUpperCase()) : -1;
+      const rowStart = rowText ? rowStartOf(rowEl, rowText, charWidth, sequence) : -1;
       if (rowStart < 0) {
         return;
       }
       // the column is counted from the first letter of the sequence of the row, not from the left edge of the row: in a wide window the row has
       // a margin on its left, and counting from its edge put the oligo some columns too far to the right (letters and box shifted)
-      const first = rowStart + Math.round((g.parentNode.getBoundingClientRect().left - rowText.getBoundingClientRect().left) / charWidth);
-      const last = Math.min(primer.end, rowStart + rowText.textContent.length - 1);
+      const shift = wraps && rowStart <= given.end ? L : 0;
+      const first = rowStart + shift + Math.round((g.parentNode.getBoundingClientRect().left - rowText.getBoundingClientRect().left) / charWidth);
+      const last = Math.min(primer.end, rowStart + shift + rowText.textContent.length - 1);
       if (first < primer.start || first > last) {
         return;
       }
@@ -127,7 +165,7 @@
       const wrongAt = function (position) {
         const letter = info.at(position);
         const under = forward ? letter : COMPLEMENT[letter];
-        return letter !== '' && position < sequence.length && under !== sequence[position];
+        return letter !== '' && under !== sequence[position % L];
       };
       let d = '';
       for (let p = from; p <= to; p++) {
