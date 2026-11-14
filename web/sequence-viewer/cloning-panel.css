@@ -1,0 +1,113 @@
+/* The cloning panel of the tab page (cloning-panel.js). The rules of the tool texts, cards and buttons are those of the editor sidebar (viewer.css). */
+#cloning-panel { width: 27rem; flex: none; display: flex; flex-direction: column; min-height: 0; background: #f6f8fa; border-left: 1px solid #c7ccd3; box-sizing: border-box; }
+#cloning-panel[hidden] { display: none; }
+#cloning-panel .cloning-head { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.8rem; border-bottom: 1px solid #dde2e8; background: #fff; }
+#cloning-panel .cloning-close { border: 0; background: none; font-size: 20px; cursor: pointer; }
+#cloning-panel .cloning-host { flex: 1; overflow-y: auto; padding: 0.7rem; font-size: 0.85rem; }
+.cloning-open { margin: 4px 8px; padding: 0 14px; border: 1px solid #1f5fae; border-radius: 999px; background: #fff; color: #1f5fae; font: inherit; cursor: pointer; }
+.cloning-open:hover, .cloning-open.active { background: #1f5fae; color: #fff; }
+
+#cloning-panel .tool-muted {
+  margin: 0 0 0.6rem;
+  color: #6b7785;
+}
+
+#cloning-panel .tool-message {
+  margin: 0.5rem 0 0;
+}
+
+#cloning-panel .tool-message.error {
+  color: #b42318;
+}
+
+#cloning-panel .tool-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.6rem 0;
+}
+
+#cloning-panel .tool-btn {
+  padding: 0.3rem 0.9rem;
+  border: 1px solid #c3c8cf;
+  border-radius: 999px;
+  background: #fff;
+  color: #343a40;
+  font: inherit;
+  font-size: 0.8rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+#cloning-panel .tool-btn:hover {
+  border-color: #7b8794;
+}
+
+#cloning-panel .tool-btn-primary {
+  border-color: #1f5fae;
+  background: #1f5fae;
+  color: #fff;
+}
+
+#cloning-panel .tool-card {
+  margin-bottom: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid #dde2e8;
+  border-radius: 0.55rem;
+  background: #fafbfd;
+}
+
+#cloning-panel .tool-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.2rem 0.6rem;
+  margin-bottom: 0.35rem;
+}
+
+#cloning-panel .digest-help {
+  margin: 0 0 0.6rem;
+  color: #6b7785;
+}
+
+#cloning-panel .tools-part {
+  margin: 0 0 0.4rem;
+  border: 1px solid #e6e9ed;
+  border-radius: 0.6rem;
+  background: #fff;
+}
+
+#cloning-panel .tools-part > summary {
+  padding: 0.5rem 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#cloning-panel .tools-part > .tools-block {
+  padding: 0 0.7rem 0.7rem;
+}
+
+#cloning-panel .tools-select,
+#cloning-panel .tools-block input[type='text'],
+#cloning-panel .tools-block textarea {
+  width: 100%;
+  margin: 0 0 0.4rem;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid #ccd3da;
+  border-radius: 0.4rem;
+  font-size: 0.82rem;
+}
+
+#cloning-panel .tools-out {
+  width: 100%;
+  min-height: 4rem;
+  margin: 0.3rem 0;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid #dde2e8;
+  border-radius: 0.4rem;
+  background: #f6f8fa;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}

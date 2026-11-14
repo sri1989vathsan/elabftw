@@ -209,6 +209,13 @@
     }
   });
 
+  // what the cloning panel (cloning-panel.js) needs: the open plasmids, which one is in front, a way to open another
+  window.CloningTabs = { list: function () {
+    return tabs.slice();
+  }, current: function () {
+    return current;
+  }, frame: frameOf, add: add };
+
   const start = JSON.parse(document.getElementById('first-tab').textContent);
   add(start.entry, start.query, start.title);
 }());

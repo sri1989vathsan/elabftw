@@ -68,8 +68,9 @@ if (!isset($_GET['embedded'])) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sequence editor</title>
   <link rel="stylesheet" href="tabs.css?v=<?= (int) filemtime(__DIR__ . '/tabs.css') ?>">
+  <link rel="stylesheet" href="cloning-panel.css?v=<?= (int) filemtime(__DIR__ . '/cloning-panel.css') ?>">
 </head>
-<body>
+<body data-csrf="<?= htmlspecialchars((string) $App->Session->get('csrf'), ENT_QUOTES, 'UTF-8') ?>">
   <div id="tab-bar">
     <a id="tab-back" href="../registry.php?mode=view&amp;id=<?= $entryId ?>">&larr; Back to eLabFTW</a>
     <div id="tab-list"></div>
@@ -86,6 +87,20 @@ if (!isset($_GET['embedded'])) {
   </div>
   <script type="application/json" id="first-tab"><?= $first ?></script>
   <script src="tabs.js?v=<?= (int) filemtime(__DIR__ . '/tabs.js') ?>"></script>
+  <!-- the cloning panel: the tools work on the plasmids of all the tabs, so they are here and not in a frame -->
+  <script src="vendor/sequence-utils.umd.js"></script>
+  <script src="vendor/bio-parsers.umd.js"></script>
+  <script src="../primer-tools.js?v=<?= (int) filemtime(dirname(__DIR__) . '/primer-tools.js') ?>"></script>
+  <script src="enzymes-library.js?v=<?= (int) filemtime(__DIR__ . '/enzymes-library.js') ?>"></script>
+  <script src="tools-tab.js?v=<?= (int) filemtime(__DIR__ . '/tools-tab.js') ?>"></script>
+  <script src="cloning-engine.js?v=<?= (int) filemtime(__DIR__ . '/cloning-engine.js') ?>"></script>
+  <script src="cloning-source.js?v=<?= (int) filemtime(__DIR__ . '/cloning-source.js') ?>"></script>
+  <script src="cloning-output.js?v=<?= (int) filemtime(__DIR__ . '/cloning-output.js') ?>"></script>
+  <script src="tools-gibson.js?v=<?= (int) filemtime(__DIR__ . '/tools-gibson.js') ?>"></script>
+  <script src="tools-restriction.js?v=<?= (int) filemtime(__DIR__ . '/tools-restriction.js') ?>"></script>
+  <script src="tools-goldengate.js?v=<?= (int) filemtime(__DIR__ . '/tools-goldengate.js') ?>"></script>
+  <script src="tools-gateway.js?v=<?= (int) filemtime(__DIR__ . '/tools-gateway.js') ?>"></script>
+  <script src="cloning-panel.js?v=<?= (int) filemtime(__DIR__ . '/cloning-panel.js') ?>"></script>
 </body>
 </html>
     <?php
@@ -154,11 +169,6 @@ $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'U
   <script src="blast-tab.js?v=<?= (int) filemtime(__DIR__ . '/blast-tab.js') ?>"></script>
   <script src="tools-basic.js?v=<?= (int) filemtime(__DIR__ . '/tools-basic.js') ?>"></script>
   <script src="tools-pcr.js?v=<?= (int) filemtime(__DIR__ . '/tools-pcr.js') ?>"></script>
-  <script src="cloning-engine.js?v=<?= (int) filemtime(__DIR__ . '/cloning-engine.js') ?>"></script>
-  <script src="cloning-insert.js?v=<?= (int) filemtime(__DIR__ . '/cloning-insert.js') ?>"></script>
-  <script src="tools-gibson.js?v=<?= (int) filemtime(__DIR__ . '/tools-gibson.js') ?>"></script>
-  <script src="tools-restriction.js?v=<?= (int) filemtime(__DIR__ . '/tools-restriction.js') ?>"></script>
-  <script src="tools-goldengate.js?v=<?= (int) filemtime(__DIR__ . '/tools-goldengate.js') ?>"></script>
   <script src="open-menu.js?v=<?= (int) filemtime(__DIR__ . '/open-menu.js') ?>"></script>
   <script src="lineage-paste.js?v=<?= (int) filemtime(__DIR__ . '/lineage-paste.js') ?>"></script>
   <script src="primers-panel.js?v=<?= (int) filemtime(__DIR__ . '/primers-panel.js') ?>"></script>
