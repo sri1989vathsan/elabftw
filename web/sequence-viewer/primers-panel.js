@@ -131,7 +131,21 @@
       })).map(function (primer) {
         return primer.start + ':' + primer.end + ':' + (primer.forward !== false && primer.strand !== -1 ? 1 : -1);
       }));
+      // a primer that the file draws itself (the same bases) is not searched again: its other binding sites (a plasmid that holds a copy of
+      // a region of itself has two) would show it a second time, with a dangling tail
+      const inFile = new Set();
+      Object.values(now.data.primers || {}).concat(fileFeatures.filter(function (feature) {
+        return String(feature.type || '').toLowerCase() === 'primer_bind';
+      })).forEach(function (primer) {
+        const forward = primer.forward !== false && primer.strand !== -1;
+        const bases = tools.clean(basesOf(now.sequence, primer.start, primer.end, forward));
+        inFile.add(bases);
+        inFile.add(tools.reverseComplement(bases));
+      });
       attachedPrimers.slice(0, drawLimit).forEach(function (primer) {
+        if (inFile.has(tools.clean(primer.sequence))) {
+          return;
+        }
         findSitesCached(now.sequence, primer.sequence, now.circular).forEach(function (site, index) {
           // the place of the whole oligo: a primer with a tail also covers the places of its tail (see annotation())
           const length = now.sequence.length;
