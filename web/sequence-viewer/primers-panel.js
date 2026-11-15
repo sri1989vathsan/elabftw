@@ -425,7 +425,15 @@
           top.append(chips);
           box.append(top, element('code', 'primers-card-seq', 'F ' + pair[0].sequence), element('code', 'primers-card-seq', 'R ' + pair[1].sequence));
           const foot = element('div', 'primers-card-foot');
-          foot.append(action('Unlink', async function () {
+          // the PCR section of the Tools panel with the pair in it: the product is a linear double-stranded sequence, saved as an entry
+          const pcr = action('Run PCR', function () {
+            if (window.ToolsPcr && window.ToolsPcr.show) {
+              window.ToolsPcr.show(pair[0].sequence, pair[1].sequence);
+            }
+          }, 'primary');
+          pcr.title = 'In silico PCR on this sequence: the product is a linear double-stranded sequence that can be selected, run on a gel or saved as a new entry';
+          pcr.disabled = !product;
+          foot.append(pcr, action('Unlink', async function () {
             try {
               await tools.pair(pair[0]);
               await tools.pair(pair[1]);
