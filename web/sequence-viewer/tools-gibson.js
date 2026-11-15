@@ -130,6 +130,19 @@
         const primerFeatures = engine.homologyPrimerFeatures(design, insertNames, from, chosen.map(function (item) {
           return item.data.sequence.length;
         }), product.sequence.length);
+        // the vector and each insert are marked as features, so that the parts can be told apart on the map
+        const total = product.sequence.length;
+        const parts = {};
+        let at = from;
+        chosen.forEach(function (item, index) {
+          const size = item.data.sequence.length;
+          parts['part-insert-' + index] = { id: 'part-insert-' + index, name: 'Insert: ' + insertNames[index], type: 'misc_feature', start: at, end: at + size - 1, strand: 1, forward: true, color: '#e8a33d', notes: { note: ['made by ' + label + ' from ' + item.name] } };
+          at += size;
+        });
+        if (at - from < total) {
+          parts['part-vector'] = { id: 'part-vector', name: 'Vector: ' + v.name, type: 'misc_feature', start: at % total, end: (from - 1 + total) % total, strand: 1, forward: true, color: '#5b8def', notes: { note: ['backbone from ' + v.name] } };
+        }
+        Object.assign(primerFeatures, parts);
         // the editor's insert gives its features as an array: the primers are added as items of it
         if (Array.isArray(product.features)) {
           Object.keys(primerFeatures).forEach(function (key) {
