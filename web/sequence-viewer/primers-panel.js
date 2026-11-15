@@ -415,8 +415,22 @@
         };
         pairs.forEach(function (pair) {
           const box = element('div', 'primers-card');
-          const product = size(pair[0], pair[1]);
+          const found = ampliconOf(pair[0], pair[1]);
+          const product = found ? found.size : null;
           const top = element('div', 'primers-card-top');
+          // a click on the pair selects the sequence that it amplifies
+          if (found) {
+            const choose = function () {
+              editor.updateEditor({ selectionLayer: { start: found.start, end: found.end - 1 } });
+            };
+            box.style.cursor = 'pointer';
+            box.title = 'Select the ' + found.size + ' bp that this pair amplifies';
+            box.addEventListener('click', function (event) {
+              if (!event.target.closest('button, select, a')) {
+                choose();
+              }
+            });
+          }
           top.append(element('strong', 'primers-card-name', pair[0].title + '  /  ' + pair[1].title));
           const chips = element('span', 'primers-chips');
           [product ? 'product ' + product + ' bp on this sequence' : 'does not amplify this sequence', 'Tm ' + tools.tm(pair[0].sequence) + ' / ' + tools.tm(pair[1].sequence) + '\u00b0C'].forEach(function (text) {
@@ -426,6 +440,28 @@
           box.append(top, element('code', 'primers-card-seq', 'F ' + pair[0].sequence), element('code', 'primers-card-seq', 'R ' + pair[1].sequence));
           const foot = element('div', 'primers-card-foot');
           // the PCR section of the Tools panel with the pair in it: the product is a linear double-stranded sequence, saved as an entry
+          // the PCR product as it is made, with the 5' tails of the primers (a copy from the editor holds only the plasmid's bases)
+          const made = (function () {
+            const now = current();
+            if (!found || !now || !window.ToolsPcr || !window.ToolsPcr.products) {
+              return null;
+            }
+            return window.ToolsPcr.products(now.sequence, !!now.circular, pair[0].sequence, pair[1].sequence).filter(function (item) {
+              return item.start === found.start % now.sequence.length;
+            })[0] || null;
+          })();
+          const copyMade = action('Copy product', function () {
+            if (made && navigator.clipboard) {
+              navigator.clipboard.writeText(made.sequence).then(function () {
+                copyMade.textContent = 'Copied';
+              });
+            }
+          });
+          copyMade.title = made ? 'Copy the ' + made.size + ' bp PCR product with the tails of the primers (overhangs included)' : '';
+          copyMade.disabled = !made;
+          if (made && made.size !== found.size) {
+            top.querySelector('.primers-chip').textContent += ' (' + made.size + ' bp with the tails)';
+          }
           const pcr = action('Run PCR', function () {
             if (window.ToolsPcr && window.ToolsPcr.show) {
               window.ToolsPcr.show(pair[0].sequence, pair[1].sequence);
@@ -433,7 +469,7 @@
           }, 'primary');
           pcr.title = 'In silico PCR on this sequence: the product is a linear double-stranded sequence that can be selected, run on a gel or saved as a new entry';
           pcr.disabled = !product;
-          foot.append(pcr, action('Unlink', async function () {
+          foot.append(pcr, copyMade, action('Unlink', async function () {
             try {
               await tools.pair(pair[0]);
               await tools.pair(pair[1]);
