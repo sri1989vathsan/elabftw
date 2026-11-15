@@ -309,9 +309,36 @@
           make.disabled = true;
           saveProduct(item, card, context, editor, byBases);
         });
+        // the product as a file, to keep outside the Database: GenBank (with the two primers drawn on it) or FASTA
+        const saveFile = function (text, extension, type) {
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(new Blob([text], { type: type }));
+          link.download = 'PCR-product-' + (index + 1) + '-' + item.size + 'bp.' + extension;
+          document.body.append(link);
+          link.click();
+          link.remove();
+          window.setTimeout(function () {
+            URL.revokeObjectURL(link.href);
+          }, 1000);
+        };
+        const nameOf = function (primer, fallback) {
+          const known = byBases[tools.clean(primer.primer || '')];
+          return (known && known.title) || fallback;
+        };
+        const gb = element('button', 'tool-btn', 'Download GenBank');
+        gb.type = 'button';
+        gb.title = 'A file of this linear double-stranded product, with the two primers drawn on it: it is not added to the Database';
+        gb.addEventListener('click', function () {
+          saveFile(genbankOf(item, data, 'PCR_product_' + (index + 1), { forward: nameOf(item.forward, 'forward primer'), reverse: nameOf(item.reverse, 'reverse primer') }), 'gb', 'text/plain');
+        });
+        const fa = element('button', 'tool-btn', 'Download FASTA');
+        fa.type = 'button';
+        fa.addEventListener('click', function () {
+          saveFile('>PCR product ' + (index + 1) + ', ' + item.size + ' bp, linear\n' + item.sequence.replace(/(.{70})/g, '$1\n').replace(/\n$/, '') + '\n', 'fa', 'text/plain');
+        });
         actions.append(select, copyButton(function () {
           return item.sequence;
-        }), gel, make);
+        }), gel, gb, fa, make);
         card.append(actions);
         result.append(card);
       });
