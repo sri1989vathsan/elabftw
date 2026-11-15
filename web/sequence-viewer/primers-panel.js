@@ -76,6 +76,30 @@
       return { sequence: String(data.sequence || ''), circular: !!data.circular, data: data, name: data.name || context.fileName || 'sequence' };
     };
 
+    // The sequence that two primers amplify is selected when they are ticked or their pair is clicked: a copy made while that selection is
+    // still there holds the PCR product with the tails of the primers. Any other selection is copied as it is.
+    let primerSelection = null;
+    const selectAmplicon = function (found, a, b) {
+      const now = current();
+      let text = null;
+      if (window.ToolsPcr && window.ToolsPcr.products && now.sequence) {
+        const made = window.ToolsPcr.products(now.sequence, now.circular, a.sequence, b.sequence).filter(function (item) {
+          return item.start === found.start % now.sequence.length;
+        })[0];
+        text = made ? made.sequence : null;
+      }
+      primerSelection = { start: found.start, end: found.end - 1, text: text };
+      editor.updateEditor({ selectionLayer: { start: found.start, end: found.end - 1 } });
+    };
+    document.addEventListener('copy', function (event) {
+      const layer = editor.getState().selectionLayer || {};
+      if (primerSelection && primerSelection.text && layer.start === primerSelection.start && layer.end === primerSelection.end && event.clipboardData) {
+        event.clipboardData.setData('text/plain', primerSelection.text);
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    }, true);
+
     // "site" is where the primer binds; its tail (the bases that hang over) and the bases of the primer are drawn by oligo-style.js
     const annotation = function (id, name, start, end, forward, length, site, bases) {
       const drawn = { id: id, name: name, type: 'primer', start: start % length, end: end % length, forward: forward, strand: forward ? 1 : -1 };
@@ -421,7 +445,7 @@
           // a click on the pair selects the sequence that it amplifies
           if (found) {
             const choose = function () {
-              editor.updateEditor({ selectionLayer: { start: found.start, end: found.end - 1 } });
+              selectAmplicon(found, pair[0], pair[1]);
             };
             box.style.cursor = 'pointer';
             box.title = 'Select the ' + found.size + ' bp that this pair amplifies';
@@ -743,7 +767,7 @@
             const key = found ? found.start + '-' + found.end : '';
             if (found && key !== pairedKey) {
               pairedKey = key;
-              editor.updateEditor({ selectionLayer: { start: found.start, end: found.end - 1 } });
+              selectAmplicon(found, two[0], two[1]);
             }
           } else {
             pairedKey = '';
