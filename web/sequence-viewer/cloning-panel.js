@@ -191,16 +191,27 @@
     }
     if (settings.primers && window.PrimerTools && (spec.primers || []).length > 0) {
       let added = 0;
+      let paired = 0;
+      let waiting = null;
       for (const primer of spec.primers) {
         try {
-          const primerId = await window.PrimerTools.createPrimer(primer.name, primer.sequence, / F$/.test(primer.name) || /\sF\s/.test(primer.name) ? true : (/ R$/.test(primer.name) ? false : null), spec.name, id);
+          const forward = / F$/.test(primer.name) || /\sF\s/.test(primer.name);
+          const primerId = await window.PrimerTools.createPrimer(primer.name, primer.sequence, forward ? true : (/ R$/.test(primer.name) ? false : null), spec.name, id);
           await window.PrimerTools.attach(id, primerId);
           added++;
+          // a forward primer is followed by its reverse primer: they are linked as a pair, for the PCR
+          if (forward) {
+            waiting = { id: primerId, title: primer.name };
+          } else if (waiting && / R$/.test(primer.name)) {
+            await window.PrimerTools.pair(waiting, { id: primerId, title: primer.name });
+            paired++;
+            waiting = null;
+          }
         } catch (error) {
           notes.push(error.message || String(error));
         }
       }
-      notes.push(added + ' primer' + (added === 1 ? '' : 's') + ' added');
+      notes.push(added + ' primer' + (added === 1 ? '' : 's') + ' added' + (paired > 0 ? ', ' + paired + ' pair' + (paired === 1 ? '' : 's') + ' linked' : ''));
     }
     if (settings.where === 'lab') {
       await fetch('../registry-lock.php', { method: 'POST', credentials: 'same-origin', headers: headers, body: JSON.stringify({ id: id }) });
