@@ -352,15 +352,42 @@
       const sectionSearch = element('div', 'primers-section');
       // forward and reverse primers that belong together (for the PCR): the pairs of the attached primers, and a way to link two
       const sectionPairs = element('div', 'primers-section');
+      const isForward = function (p) {
+        return /^f/i.test(p.orientation || '') || (!/^r/i.test(p.orientation || '') && / F$| F /.test(p.title));
+      };
+      // the PCR product of two primers on this sequence, in either order: the forward one binds before the reverse one, facing it
+      // (round the origin on a circular sequence); null when they do not make a product
+      const ampliconOf = function (a, b) {
+        const now = current();
+        if (!now || !now.sequence) {
+          return null;
+        }
+        const pairs = [[a, b], [b, a]];
+        for (let i = 0; i < pairs.length; i++) {
+          const f = findSitesCached(now.sequence, pairs[i][0].sequence, now.circular).filter(function (site) {
+            return site.forward;
+          })[0];
+          const r = findSitesCached(now.sequence, pairs[i][1].sequence, now.circular).filter(function (site) {
+            return !site.forward;
+          })[0];
+          if (f && r) {
+            let length = r.end - f.start;
+            if (length <= 0 && now.circular) {
+              length += now.sequence.length;
+            }
+            if (length > 0 && (r.end > f.start || now.circular)) {
+              return { forward: pairs[i][0], reverse: pairs[i][1], start: f.start, end: r.end, size: length };
+            }
+          }
+        }
+        return null;
+      };
       (function () {
         const now = current();
         const byId = {};
         attachedPrimers.forEach(function (p) {
           byId[p.id] = p;
         });
-        const isForward = function (p) {
-          return /^f/i.test(p.orientation || '') || (!/^r/i.test(p.orientation || '') && / F$| F /.test(p.title));
-        };
         const seen = new Set();
         const pairs = [];
         const lonely = [];
@@ -383,23 +410,8 @@
           sectionPairs.append(element('p', 'primers-muted', 'No pair yet. Pick a forward and a reverse primer below and link them: the pair is kept on both primers, for the PCR afterwards.'));
         }
         const size = function (forward, reverse) {
-          if (!now || !now.sequence) {
-            return null;
-          }
-          const f = findSitesCached(now.sequence, forward.sequence, now.circular).filter(function (site) {
-            return site.forward;
-          })[0];
-          const r = findSitesCached(now.sequence, reverse.sequence, now.circular).filter(function (site) {
-            return !site.forward;
-          })[0];
-          if (!f || !r) {
-            return null;
-          }
-          let length = r.end - f.start;
-          if (length <= 0 && now.circular) {
-            length += now.sequence.length;
-          }
-          return length > 0 ? length : null;
+          const found = ampliconOf(forward, reverse);
+          return found ? found.size : null;
         };
         pairs.forEach(function (pair) {
           const box = element('div', 'primers-card');
@@ -608,6 +620,32 @@
         });
         pcrTicked.title = 'The product of these two primers on this sequence; it can be saved as a new entry';
         pcrTicked.hidden = true;
+        // two primers ticked: they can be saved as a pair for the PCR (highlighted), and the sequence between them is selected
+        const pairTicked = action('Add as a pair', async function () {
+          const picked = attachedPrimers.filter(function (primer) {
+            return tickedDb.has(primer.id);
+          });
+          const found = picked.length === 2 ? ampliconOf(picked[0], picked[1]) : null;
+          const forward = found ? found.forward : picked.find(isForward);
+          const reverse = found ? found.reverse : picked.find(function (primer) {
+            return primer !== forward;
+          });
+          if (!forward || !reverse) {
+            return;
+          }
+          pairTicked.disabled = true;
+          try {
+            await tools.pair(forward, reverse);
+            await loadAttached();
+            subTab = 'pairs';
+            await render();
+          } catch (error) {
+            say(error.message || String(error), true);
+            pairTicked.disabled = false;
+          }
+        }, 'primary');
+        pairTicked.hidden = true;
+        let pairedKey = '';
         const refreshTicked = function () {
           const total = tickedDb.size + tickedFile.size;
           orderTicked.textContent = 'Order ' + total;
@@ -621,6 +659,26 @@
           detachTicked.disabled = tickedDb.size === 0 || !entryId;
           detachTicked.hidden = attachedPrimers.length === 0;
           pcrTicked.hidden = tickedDb.size !== 2;
+          pairTicked.hidden = tickedDb.size !== 2 || tickedFile.size > 0;
+          if (tickedDb.size === 2) {
+            const picked = attachedPrimers.filter(function (primer) {
+              return tickedDb.has(primer.id);
+            });
+            const found = ampliconOf(picked[0], picked[1]);
+            const known = picked.some(isForward) && picked.some(function (primer) {
+              return !isForward(primer);
+            });
+            pairTicked.disabled = !found && !known;
+            pairTicked.title = found ? 'Link them as a forward and reverse pair; they make a PCR product of ' + found.size + ' bp, now selected' : (known ? 'Link them as a forward and reverse pair (they do not make a product on this sequence)' : 'A pair is a forward and a reverse primer');
+            pairTicked.textContent = found ? 'Add as a pair (' + found.size + ' bp)' : 'Add as a pair';
+            const key = found ? found.start + '-' + found.end : '';
+            if (found && key !== pairedKey) {
+              pairedKey = key;
+              editor.updateEditor({ selectionLayer: { start: found.start, end: found.end - 1 } });
+            }
+          } else {
+            pairedKey = '';
+          }
           everything.checked = total === Math.min(attachedPrimers.length, drawLimit) + fileOnly.length && total > 0;
         };
         // open or close all the rows
@@ -645,7 +703,7 @@
           render();
         }, 'quiet');
         fold.title = 'Show or hide the sequence and the details of every primer';
-        bar.append(everything, element('span', 'primers-muted', 'All'), orderTicked, pcrTicked, addTicked, folderTicked, detachTicked, fold);
+        bar.append(everything, element('span', 'primers-muted', 'All'), orderTicked, pairTicked, pcrTicked, addTicked, folderTicked, detachTicked, fold);
         bar.classList.add('primers-pickbar-compact');
         sectionAttached.append(bar);
         const pick = function (box, set, value) {
