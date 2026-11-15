@@ -629,11 +629,23 @@
         pcrTicked.title = 'The product of these two primers on this sequence; it can be saved as a new entry';
         pcrTicked.hidden = true;
         // two primers ticked: they can be saved as a pair for the PCR (highlighted), and the sequence between them is selected
-        const pairTicked = action('Add as a pair', async function () {
-          const picked = attachedPrimers.filter(function (primer) {
+        // the two ticked primers, those of the database and those only in the file (these are added to the database when the pair is made)
+        const pickedTwo = function () {
+          const list = attachedPrimers.filter(function (primer) {
             return tickedDb.has(primer.id);
-          });
-          const found = picked.length === 2 ? ampliconOf(picked[0], picked[1]) : null;
+          }).map(function (primer) {
+            return primer;
+          }).concat(Array.from(tickedFile).map(function (item) {
+            return { id: 0, file: item, title: item.name, sequence: item.bases, orientation: item.forward === false ? 'Reverse' : (item.forward ? 'Forward' : '') };
+          }));
+          return list.length === 2 ? list : null;
+        };
+        const pairTicked = action('Add as a pair', async function () {
+          const picked = pickedTwo();
+          if (!picked) {
+            return;
+          }
+          const found = ampliconOf(picked[0], picked[1]);
           const forward = found ? found.forward : picked.find(isForward);
           const reverse = found ? found.reverse : picked.find(function (primer) {
             return primer !== forward;
@@ -643,6 +655,18 @@
           }
           pairTicked.disabled = true;
           try {
+            // a primer that is only in the file goes into the database (and is attached) first
+            const filed = picked.filter(function (primer) {
+              return primer.file;
+            });
+            if (filed.length > 0) {
+              const ids = await addMany(filed.map(function (primer) {
+                return primer.file;
+              }), [], true);
+              filed.forEach(function (primer, index) {
+                primer.id = ids[index];
+              });
+            }
             await tools.pair(forward, reverse);
             await loadAttached();
             subTab = 'pairs';
@@ -667,17 +691,18 @@
           detachTicked.disabled = tickedDb.size === 0 || !entryId;
           detachTicked.hidden = attachedPrimers.length === 0;
           pcrTicked.hidden = tickedDb.size !== 2;
-          pairTicked.hidden = tickedDb.size !== 2 || tickedFile.size > 0;
-          if (tickedDb.size === 2) {
-            const picked = attachedPrimers.filter(function (primer) {
-              return tickedDb.has(primer.id);
-            });
-            const found = ampliconOf(picked[0], picked[1]);
-            const known = picked.some(isForward) && picked.some(function (primer) {
+          const two = pickedTwo();
+          pairTicked.hidden = !two;
+          if (two) {
+            const found = ampliconOf(two[0], two[1]);
+            const known = two.some(isForward) && two.some(function (primer) {
               return !isForward(primer);
             });
             pairTicked.disabled = !found && !known;
-            pairTicked.title = found ? 'Link them as a forward and reverse pair; they make a PCR product of ' + found.size + ' bp, now selected' : (known ? 'Link them as a forward and reverse pair (they do not make a product on this sequence)' : 'A pair is a forward and a reverse primer');
+            const onlyFile = two.some(function (primer) {
+              return primer.file;
+            });
+            pairTicked.title = (found ? 'Link them as a forward and reverse pair; they make a PCR product of ' + found.size + ' bp, now selected' : (known ? 'Link them as a forward and reverse pair (they do not make a product on this sequence)' : 'A pair is a forward and a reverse primer')) + (onlyFile ? '. A primer that is only in the file is added to the database first.' : '');
             pairTicked.textContent = found ? 'Add as a pair (' + found.size + ' bp)' : 'Add as a pair';
             const key = found ? found.start + '-' + found.end : '';
             if (found && key !== pairedKey) {
