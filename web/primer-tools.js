@@ -403,6 +403,34 @@
     return id;
   }
 
+  // writes (or clears, other = 0) the Partner field of a primer: the id of the other primer of its forward and reverse pair
+  async function setPartner(id, other, title) {
+    const entry = await json('api/v2/inventory/' + id);
+    const metadata = JSON.parse(entry.metadata || '{"extra_fields":{}}');
+    metadata.extra_fields = metadata.extra_fields || {};
+    const name = Object.keys(metadata.extra_fields).find(function (n) {
+      return /^partner/i.test(n);
+    });
+    if (!name && !other) {
+      return;
+    }
+    const value = other ? '#' + other + (title ? ' ' + title : '') : '';
+    if (name) {
+      metadata.extra_fields[name].value = value;
+    } else {
+      metadata.extra_fields.Partner = { type: 'text', value: value, position: Object.keys(metadata.extra_fields).length + 1, description: 'The other primer of the pair, for PCR' };
+    }
+    await json('api/v2/inventory/' + id, { method: 'PATCH', headers: jsonHeaders(), body: JSON.stringify({ metadata: JSON.stringify(metadata) }) });
+  }
+
+  // links a forward and a reverse primer as a pair (both ways), or unlinks them when forward is given without reverse
+  async function pair(forward, reverse) {
+    await setPartner(forward.id, reverse ? reverse.id : 0, reverse ? reverse.title : '');
+    if (reverse) {
+      await setPartner(reverse.id, forward.id, forward.title);
+    }
+  }
+
   // a primer of the database as it is now: its name, bases and orientation
   async function getPrimer(id) {
     const entry = await json('api/v2/inventory/' + id);
@@ -673,6 +701,7 @@
     findSimilar: findSimilar,
     allPrimers: allPrimers,
     createPrimer: createPrimer,
+    pair: pair,
     destination: destination,
     inLab: inLab,
     registerInLab: registerInLab,

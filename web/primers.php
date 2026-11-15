@@ -79,6 +79,7 @@ function describe(App $App, int $id): ?array
     $sequence = '';
     $orientation = '';
     $tm = null;
+    $partner = null;
     $metadata = json_decode((string) ($data['metadata'] ?? ''), true);
     foreach (is_array($metadata) ? ($metadata['extra_fields'] ?? array()) : array() as $name => $field) {
         if (!is_array($field)) {
@@ -90,6 +91,9 @@ function describe(App $App, int $id): ?array
             $orientation = (string) ($field['value'] ?? '');
         } elseif (preg_match('/^tm/i', (string) $name) === 1 && is_numeric($field['value'] ?? null)) {
             $tm = (float) $field['value'];
+        } elseif (preg_match('/^partner/i', (string) $name) === 1 && preg_match('/\d+/', (string) ($field['value'] ?? ''), $found) === 1) {
+            // the other primer of the pair (forward and reverse), written by the cloning panel or the Pairs tab
+            $partner = (int) $found[0];
         }
     }
     return array(
@@ -100,6 +104,7 @@ function describe(App $App, int $id): ?array
         'sequence' => $sequence,
         'orientation' => $orientation,
         'tm' => $tm,
+        'partner' => $partner,
         // the number of the lab database (null while the primer is only in My entries or My database)
         'number' => isset($data['custom_id']) && $data['custom_id'] !== null ? (int) $data['custom_id'] : null,
     );
