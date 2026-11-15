@@ -350,6 +350,121 @@
       }));
       const sectionAttached = element('div', 'primers-section');
       const sectionSearch = element('div', 'primers-section');
+      // forward and reverse primers that belong together (for the PCR): the pairs of the attached primers, and a way to link two
+      const sectionPairs = element('div', 'primers-section');
+      (function () {
+        const now = current();
+        const byId = {};
+        attachedPrimers.forEach(function (p) {
+          byId[p.id] = p;
+        });
+        const isForward = function (p) {
+          return /^f/i.test(p.orientation || '') || (!/^r/i.test(p.orientation || '') && / F$| F /.test(p.title));
+        };
+        const seen = new Set();
+        const pairs = [];
+        const lonely = [];
+        attachedPrimers.forEach(function (p) {
+          if (!p.partner) {
+            return;
+          }
+          if (!byId[p.partner]) {
+            lonely.push(p);
+            return;
+          }
+          const key = Math.min(p.id, p.partner) + '-' + Math.max(p.id, p.partner);
+          if (!seen.has(key)) {
+            seen.add(key);
+            pairs.push(isForward(p) || !isForward(byId[p.partner]) ? [p, byId[p.partner]] : [byId[p.partner], p]);
+          }
+        });
+        sectionPairs.append(element('h4', '', 'Pairs for PCR'));
+        if (pairs.length === 0) {
+          sectionPairs.append(element('p', 'primers-muted', 'No pair yet. Pick a forward and a reverse primer below and link them: the pair is kept on both primers, for the PCR afterwards.'));
+        }
+        const size = function (forward, reverse) {
+          if (!now || !now.sequence) {
+            return null;
+          }
+          const f = findSitesCached(now.sequence, forward.sequence, now.circular).filter(function (site) {
+            return site.forward;
+          })[0];
+          const r = findSitesCached(now.sequence, reverse.sequence, now.circular).filter(function (site) {
+            return !site.forward;
+          })[0];
+          if (!f || !r) {
+            return null;
+          }
+          let length = r.end - f.start;
+          if (length <= 0 && now.circular) {
+            length += now.sequence.length;
+          }
+          return length > 0 ? length : null;
+        };
+        pairs.forEach(function (pair) {
+          const box = element('div', 'primers-card');
+          const product = size(pair[0], pair[1]);
+          const top = element('div', 'primers-card-top');
+          top.append(element('strong', 'primers-card-name', pair[0].title + '  /  ' + pair[1].title));
+          const chips = element('span', 'primers-chips');
+          [product ? 'product ' + product + ' bp on this sequence' : 'does not amplify this sequence', 'Tm ' + tools.tm(pair[0].sequence) + ' / ' + tools.tm(pair[1].sequence) + '\u00b0C'].forEach(function (text) {
+            chips.append(element('span', 'primers-chip', text));
+          });
+          top.append(chips);
+          box.append(top, element('code', 'primers-card-seq', 'F ' + pair[0].sequence), element('code', 'primers-card-seq', 'R ' + pair[1].sequence));
+          const foot = element('div', 'primers-card-foot');
+          foot.append(action('Unlink', async function () {
+            try {
+              await tools.pair(pair[0]);
+              await tools.pair(pair[1]);
+              await loadAttached();
+              await render();
+            } catch (error) {
+              say(error.message || String(error), true);
+            }
+          }));
+          box.append(foot);
+          sectionPairs.append(box);
+        });
+        lonely.forEach(function (p) {
+          sectionPairs.append(element('p', 'primers-muted', p.title + ' is paired with #' + p.partner + ', which is not attached to this plasmid.'));
+        });
+        const free = attachedPrimers.filter(function (p) {
+          return !p.partner || !byId[p.partner];
+        });
+        if (free.length >= 2) {
+          const row = element('div', 'primers-actions');
+          row.style.cssText = 'display:flex;flex-direction:column;gap:0.35rem;align-items:stretch';
+          const choose = function (label, wanted) {
+            const select = element('select', 'tools-select');
+            select.title = label;
+            free.forEach(function (p) {
+              select.append(Object.assign(element('option', '', label + ': ' + p.title), { value: String(p.id) }));
+            });
+            const first = free.find(function (p) {
+              return isForward(p) === wanted;
+            });
+            select.value = String((first || free[wanted ? 0 : free.length - 1]).id);
+            return select;
+          };
+          const fwd = choose('Forward', true);
+          const rev = choose('Reverse', false);
+          row.append(fwd, rev, action('Link as a pair', async function () {
+            if (fwd.value === rev.value) {
+              say('Choose two different primers.', true);
+              return;
+            }
+            try {
+              await tools.pair(byId[Number(fwd.value)], byId[Number(rev.value)]);
+              await loadAttached();
+              await render();
+            } catch (error) {
+              say(error.message || String(error), true);
+            }
+          }, 'primary'));
+          sectionPairs.append(row);
+        }
+      })();
 
       // the primers annotated in the file: the primers of the editor and the features of the type primer_bind (a GenBank file has
       // its primers as these). Those that are not in the database yet are listed with the attached ones.
@@ -920,7 +1035,7 @@
         subTab = attachedPrimers.length > 0 ? 'attached' : 'search';
       }
       const subTabs = element('div', 'primers-subtabs');
-      [['attached', 'Attached', attachedPrimers.length + fileOnly.length, sectionAttached], ['search', 'Find and add', null, sectionSearch]].forEach(function (tabDef) {
+      [['attached', 'Attached', attachedPrimers.length + fileOnly.length, sectionAttached], ['pairs', 'Pairs', null, sectionPairs], ['search', 'Find and add', null, sectionSearch]].forEach(function (tabDef) {
         const button = element('button', 'primers-subtab' + (subTab === tabDef[0] ? ' active' : ''), tabDef[1] + (tabDef[2] === null ? '' : ' (' + tabDef[2] + ')'));
         button.type = 'button';
         button.setAttribute('aria-pressed', subTab === tabDef[0] ? 'true' : 'false');
@@ -962,7 +1077,7 @@
         });
         toLabRow.append(toLab);
       }
-      panel.append(subTabs, destinationRow, toLabRow, sectionAttached, sectionSearch);
+      panel.append(subTabs, destinationRow, toLabRow, sectionAttached, sectionPairs, sectionSearch);
       // the preview of the search belongs to the search tab
       if (subTab !== 'search' && Object.keys(previewDrawn).length > 0) {
         previewDrawn = {};
