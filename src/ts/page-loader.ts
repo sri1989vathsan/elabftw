@@ -131,6 +131,13 @@ if (document.getElementById('feedbackRoot')) {
   );
 }
 
+if (document.getElementById('calendarPageRoot')) {
+  void import(
+    /* webpackChunkName: 'calendar-page' */
+    './calendar-page'
+  );
+}
+
 if (document.getElementById('projectManagementRoot')) {
   void import(
     /* webpackChunkName: 'projectmanagement' */
