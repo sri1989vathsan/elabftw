@@ -144,7 +144,8 @@
     name.type = 'text';
     name.value = spec.name;
     const where = element('select', 'tools-select');
-    [['none', 'My entries (private, no number yet)'], ['lab', 'The lab database (it is locked)']].forEach(function (choice) {
+    // a PCR product is in no module of the lab database: it is always a private entry of the user
+    [['none', 'My entries (private, no number yet)']].forEach(function (choice) {
       where.append(Object.assign(element('option', '', choice[1]), { value: choice[0] }));
     });
     const parent = element('label', 'tool-muted');
@@ -220,7 +221,17 @@
         save.disabled = false;
       }
     });
-    form.append(element('div', 'tool-muted', 'Name'), name, element('div', 'tool-muted', 'Where it goes'), where, parent, primersLabel, save, message);
+    // each check box on a line of its own, the button below them
+    [parent, primersLabel].forEach(function (label) {
+      label.style.cssText = 'display:flex;align-items:center;gap:0.4rem;margin:0.35rem 0';
+    });
+    const heading = function (text) {
+      const node = element('div', 'tool-muted', text);
+      node.style.margin = '0.5rem 0 0.2rem';
+      return node;
+    };
+    save.style.cssText = 'display:block;margin:0.6rem 0 0.3rem';
+    form.append(heading('Name'), name, parent, primersLabel, save, message);
     card.append(form);
   }
 
@@ -330,7 +341,8 @@
         });
         actions.append(select, copyButton(function () {
           return item.sequence;
-        }), tab, gel, gb, fa, make);
+        }), tab, gel, gb, fa);
+        // a PCR product is not a plasmid and has no module of its own: it is kept as a file, or looked at in a tab (the form of `make` stays for a module of fragments)
         card.append(actions);
         result.append(card);
       });
