@@ -12,6 +12,27 @@
     link.href = 'planned.css?v=' + Math.floor(Date.now() / 3600000);
     document.head.append(link);
   }
+  // one of your own folders holds entries of My entries (not listed in the lab database): its list is the one of My entries
+  (function () {
+    const query = new URLSearchParams(window.location.search);
+    if (!/registry\.php$/.test(window.location.pathname) || !query.get('folder') || query.get('planned') === '1') {
+      return;
+    }
+    fetch('registry-transfer.php?folders=1', { credentials: 'same-origin' }).then(function (response) {
+      return response.ok ? response.json() : null;
+    }).then(function (loaded) {
+      const found = loaded && (loaded.folders || []).find(function (f) {
+        return String(f.id) === query.get('folder');
+      });
+      if (found && !found.database && Number(found.owner) === Number(loaded.me)) {
+        query.set('planned', '1');
+        window.location.replace(window.location.pathname + '?' + query.toString());
+      }
+    }).catch(function () {
+      // the list stays as it is
+    });
+  })();
+
   const token = function () {
     const meta = document.querySelector('meta[name="csrf-token"]');
     return meta ? meta.content : (document.body.dataset.csrf || '');
