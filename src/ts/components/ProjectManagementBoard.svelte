@@ -2713,7 +2713,7 @@
 
   {#if canvasView}
     {#if typeof effectiveTopLevelId === 'number'}
-      <ProjectCanvas {projects} rootId={effectiveTopLevelId} activeId={activeProjectId} onOpenTask={openTaskFromSummary} />
+      <ProjectCanvas {projects} rootId={effectiveTopLevelId} activeId={activeProjectId} onOpenTask={openTaskFromSummary} taskVersion={tasks.map(task => `${task.id}:${task.project_id ?? ''}:${task.body}:${task.completed_at ?? ''}:${task.column_id ?? ''}:${task.updated_at ?? ''}`).join('|')} />
     {:else}
       <p class="pm-muted mt-3">{t('Pick a project above to open its canvas.')}</p>
     {/if}

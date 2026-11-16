@@ -6121,7 +6121,7 @@ div > .sticky-navbar {
 }
 
 .pmc-frame {
-  border: 1px dashed;
+  border: 1.5px solid;
   border-radius: 0.75rem;
   pointer-events: none;
   position: absolute;
@@ -6217,6 +6217,47 @@ div > .sticky-navbar {
       border-color: var(--danger, #c0392b);
     }
   }
+}
+
+.pmc-node-x {
+  background: var(--mainbackground);
+  border: 1px solid var(--secondary);
+  border-radius: 50%;
+  color: var(--secondary);
+  cursor: pointer;
+  font-size: 0.65rem;
+  height: 1.3rem;
+  line-height: 1;
+  opacity: 0;
+  padding: 0;
+  position: absolute;
+  right: -0.45rem;
+  top: -0.45rem;
+  transition: opacity 0.12s;
+  width: 1.3rem;
+  z-index: 5;
+
+  &:hover {
+    background: var(--danger, #c0392b);
+    border-color: var(--danger, #c0392b);
+    color: #fff;
+  }
+}
+
+.pmc-node:hover .pmc-node-x,
+.pmc-node:focus-within .pmc-node-x {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .pmc-node-x {
+    opacity: 1;
+  }
+}
+
+.pmc-frame-sub {
+  border-style: dashed;
+  border-width: 1px;
 }
 
 .pmc-question {

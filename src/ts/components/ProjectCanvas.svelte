@@ -55,6 +55,13 @@
   export let rootId: number;
   export let activeId: number | 'all' | null = null;
   export let onOpenTask: (taskId: number) => void = () => undefined;
+  // changes when a task is edited on the board (its project, its title...): the cards are read again
+  export let taskVersion = '';
+  let seenVersion = taskVersion;
+  $: if (taskVersion !== seenVersion) {
+    seenVersion = taskVersion;
+    void load(false, true);
+  }
 
   const t = i18next.t.bind(i18next);
   const notify = new AppNotification();
@@ -118,8 +125,9 @@
     if (visible.length > 0 && !visible.includes(addTo)) addTo = visible[0];
   }
 
-  async function load(resetView = false): Promise<void> {
-    loading = true;
+  // quiet = a refresh in the background: no "Loading", the view and the open card are left alone
+  async function load(resetView = false, quiet = false): Promise<void> {
+    if (!quiet) loading = true;
     try {
       const data = await ApiC.getJson(`todolist_canvas?project_id=${rootId}&include_subprojects=1`) as { nodes: CanvasNode[]; edges: CanvasEdge[] };
       nodes = data.nodes;
@@ -127,9 +135,23 @@
       if (resetView || visible.length === 0) resetVisible();
       relayout();
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Could not load the canvas.');
+      if (!quiet) notify.error(error instanceof Error ? error.message : 'Could not load the canvas.');
     } finally {
       loading = false;
+    }
+  }
+
+  // The canvas keeps itself up to date: it reads the cards again every few seconds while it is on screen (other people, other tabs, a task
+  // edited in its window), when the tab is shown again, and at once when a task of the board changes. Nothing is read while a card is being
+  // dragged or edited, or a picker is open.
+  let refreshing = false;
+  async function refresh(): Promise<void> {
+    if (refreshing || document.hidden || dragging !== null || popup !== null || picker !== null || loading) return;
+    refreshing = true;
+    try {
+      await load(false, true);
+    } finally {
+      refreshing = false;
     }
   }
 
@@ -154,8 +176,8 @@
     }
   }
 
-  // Each project keeps its own coordinate space; side by side on screen they only get an offset. Frames are
-  // packed left to right unless the user has moved one. The origin of a project is only reset on request
+  // Each project keeps its own coordinate space; on screen a project is a frame, and its subprojects are frames INSIDE it (below its own
+  // cards). Frames are packed left to right unless the user has moved one. The origin of a project is only reset on request
   // (reset = true: first view, Fit), so moving a card never makes its group jump.
   function relayout(reset = false): void {
     loadCustom();
@@ -165,13 +187,11 @@
     }
     let originsAdded = false;
     const next: typeof layout = {};
-    let cursorX = OUTER_PAD;
-    let cursorY = OUTER_PAD;
-    let rowHeight = 0;
-    let bottom = 0;
     const maxWidth = Math.max(canvasWidth, 560);
     // from `visible` right now: the reactive visibleTree is only refreshed after the current handler returns
-    for (const project of tree.filter(item => visible.includes(item.id))) {
+    const shownProjects = tree.filter(item => visible.includes(item.id));
+    const sizes: Record<number, { ox: number; oy: number; frameW: number; frameH: number; empty: boolean }> = {};
+    for (const project of shownProjects) {
       const own = nodes.filter(node => node.project_id === project.id);
       if (!origins[project.id]) {
         origins[project.id] = own.length > 0
@@ -182,23 +202,51 @@
       const { ox, oy } = origins[project.id];
       const width = own.length > 0 ? Math.max(NODE_W, Math.max(...own.map(node => node.x + NODE_W)) - ox) : 220;
       const height = own.length > 0 ? Math.max(70, Math.max(...own.map(node => node.y + nodeHeight(node))) - oy) : 70;
-      const frameW = width + GROUP_PAD * 2;
-      const frameH = height + GROUP_PAD * 2 + GROUP_LABEL;
-      const placed = custom[project.id];
-      if (placed) {
-        next[project.id] = { ox, oy, fx: placed.fx, fy: placed.fy };
-        bottom = Math.max(bottom, placed.fy + frameH);
-        continue;
+      sizes[project.id] = { ox, oy, frameW: width + GROUP_PAD * 2, frameH: height + GROUP_PAD * 2 + GROUP_LABEL, empty: own.length === 0 };
+    }
+    let bottom = 0;
+    // frames side by side from (x0, y0), wrapping at `limit`; a frame the user placed keeps its place. Gives the bottom edge.
+    const packRow = (ids: number[], x0: number, y0: number, limit: number): number => {
+      let cursorX = x0;
+      let cursorY = y0;
+      let rowHeight = 0;
+      let lowest = y0;
+      for (const id of ids) {
+        const size = sizes[id];
+        const placed = custom[id];
+        if (placed) {
+          next[id] = { ox: size.ox, oy: size.oy, fx: placed.fx, fy: placed.fy };
+          lowest = Math.max(lowest, placed.fy + size.frameH);
+          continue;
+        }
+        if (cursorX + size.frameW > limit && cursorX > x0) {
+          cursorX = x0;
+          cursorY += rowHeight + GROUP_GAP;
+          rowHeight = 0;
+        }
+        next[id] = { ox: size.ox, oy: size.oy, fx: cursorX, fy: cursorY };
+        cursorX += size.frameW + GROUP_GAP;
+        rowHeight = Math.max(rowHeight, size.frameH);
+        lowest = Math.max(lowest, cursorY + rowHeight);
       }
-      if (cursorX + frameW > maxWidth && cursorX > OUTER_PAD) {
-        cursorX = OUTER_PAD;
-        cursorY += rowHeight + GROUP_GAP;
-        rowHeight = 0;
+      return lowest;
+    };
+    const subIds = shownProjects.filter(project => project.id !== rootId).map(project => project.id);
+    if (visible.includes(rootId) && sizes[rootId]) {
+      const size = sizes[rootId];
+      const placed = custom[rootId];
+      const fx = placed ? placed.fx : OUTER_PAD;
+      const fy = placed ? placed.fy : OUTER_PAD;
+      next[rootId] = { ox: size.ox, oy: size.oy, fx, fy };
+      bottom = fy + size.frameH;
+      if (subIds.length > 0) {
+        // the subprojects sit inside the frame of the project, under its own cards
+        const x0 = fx + GROUP_PAD;
+        const y0 = size.empty ? fy + GROUP_LABEL + GROUP_PAD : fy + size.frameH + GROUP_PAD;
+        bottom = packRow(subIds, x0, y0, Math.max(maxWidth - OUTER_PAD, x0 + 300)) + GROUP_PAD;
       }
-      next[project.id] = { ox, oy, fx: cursorX, fy: cursorY };
-      cursorX += frameW + GROUP_GAP;
-      rowHeight = Math.max(rowHeight, frameH);
-      bottom = Math.max(bottom, cursorY + rowHeight);
+    } else {
+      bottom = packRow(subIds, OUTER_PAD, OUTER_PAD, maxWidth - OUTER_PAD);
     }
     layout = next;
     canvasHeight = Math.max(420, bottom + OUTER_PAD);
@@ -217,22 +265,43 @@
     return l ? l.fy + GROUP_PAD + GROUP_LABEL + node.y - l.oy : node.y;
   }
 
-  type Frame = { id: number; name: string; color: string; x: number; y: number; w: number; h: number };
+  type Frame = { id: number; name: string; color: string; x: number; y: number; w: number; h: number; sub: boolean };
 
+  // The frame of one project around its own cards (an empty project: a small empty frame).
+  function ownFrame(project: Proj, list: CanvasNode[], layoutNow: typeof layout): Frame | null {
+    const own = list.filter(node => node.project_id === project.id);
+    const l = layoutNow[project.id];
+    if (!l) return null;
+    const sub = project.id !== rootId;
+    if (own.length === 0) {
+      return { id: project.id, name: project.name, color: colorOf(project.id), x: l.fx, y: l.fy, w: 220 + GROUP_PAD * 2, h: 70 + GROUP_PAD * 2 + GROUP_LABEL, sub };
+    }
+    const x1 = Math.min(...own.map(node => screenX(node, layoutNow)));
+    const y1 = Math.min(...own.map(node => screenY(node, layoutNow)));
+    const x2 = Math.max(...own.map(node => screenX(node, layoutNow) + NODE_W));
+    const y2 = Math.max(...own.map(node => screenY(node, layoutNow) + nodeHeight(node)));
+    return { id: project.id, name: project.name, color: colorOf(project.id), x: x1 - GROUP_PAD, y: y1 - GROUP_PAD - GROUP_LABEL, w: x2 - x1 + GROUP_PAD * 2, h: y2 - y1 + GROUP_PAD * 2 + GROUP_LABEL, sub };
+  }
+
+  // The frame of the project is drawn first and wraps its own cards and the frames of its subprojects; the subprojects follow, inside it.
   function frames(projectsShown: Proj[], list: CanvasNode[], layoutNow: typeof layout, _heights: typeof heights): Frame[] {
-    return projectsShown.map(project => {
-      const own = list.filter(node => node.project_id === project.id);
-      const l = layoutNow[project.id];
-      if (!l) return null;
-      if (own.length === 0) {
-        return { id: project.id, name: project.name, color: colorOf(project.id), x: l.fx, y: l.fy, w: 220 + GROUP_PAD * 2, h: 70 + GROUP_PAD * 2 + GROUP_LABEL };
-      }
-      const x1 = Math.min(...own.map(node => screenX(node, layoutNow)));
-      const y1 = Math.min(...own.map(node => screenY(node, layoutNow)));
-      const x2 = Math.max(...own.map(node => screenX(node, layoutNow) + NODE_W));
-      const y2 = Math.max(...own.map(node => screenY(node, layoutNow) + nodeHeight(node)));
-      return { id: project.id, name: project.name, color: colorOf(project.id), x: x1 - GROUP_PAD, y: y1 - GROUP_PAD - GROUP_LABEL, w: x2 - x1 + GROUP_PAD * 2, h: y2 - y1 + GROUP_PAD * 2 + GROUP_LABEL };
-    }).filter((frame): frame is Frame => frame !== null);
+    const all = projectsShown.map(project => ownFrame(project, list, layoutNow)).filter((frame): frame is Frame => frame !== null);
+    const rootFrame = all.find(frame => frame.id === rootId);
+    const subs = all.filter(frame => frame.id !== rootId);
+    if (rootFrame && subs.length > 0) {
+      const rootHasCards = list.some(node => node.project_id === rootId);
+      const boxes = subs.map(frame => ({ x1: frame.x - GROUP_PAD, y1: frame.y - GROUP_PAD, x2: frame.x + frame.w + GROUP_PAD, y2: frame.y + frame.h + GROUP_PAD }));
+      if (rootHasCards) boxes.push({ x1: rootFrame.x, y1: rootFrame.y, x2: rootFrame.x + rootFrame.w, y2: rootFrame.y + rootFrame.h });
+      const x1 = Math.min(...boxes.map(box => box.x1));
+      const y1 = Math.min(...boxes.map(box => box.y1)) - (rootHasCards ? 0 : GROUP_LABEL);
+      const x2 = Math.max(...boxes.map(box => box.x2));
+      const y2 = Math.max(...boxes.map(box => box.y2));
+      rootFrame.x = x1;
+      rootFrame.y = y1;
+      rootFrame.w = x2 - x1;
+      rootFrame.h = y2 - y1;
+    }
+    return [...(rootFrame ? [rootFrame] : []), ...subs];
   }
 
   $: frameList = frames(visibleTree, shown, layout, heights);
@@ -295,7 +364,18 @@
       }
     });
     observer.observe(canvasEl);
-    return () => observer.disconnect();
+    const timer = window.setInterval(() => void refresh(), 6000);
+    const onShow = (): void => {
+      if (!document.hidden) void refresh();
+    };
+    document.addEventListener('visibilitychange', onShow);
+    window.addEventListener('focus', onShow);
+    return () => {
+      observer.disconnect();
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onShow);
+      window.removeEventListener('focus', onShow);
+    };
   });
 
   function toggleProject(id: number): void {
@@ -368,7 +448,7 @@
     window.addEventListener('pointerup', up);
   }
 
-  // A frame is moved by its label; the cards inside travel with it. Where it was put is remembered.
+  // A frame is moved by its label; the cards inside travel with it, and so do the frames of the subprojects of a project. Where it was put is remembered.
   function startFrameDrag(event: PointerEvent, frame: Frame): void {
     if (event.button !== 0) return;
     const l = layout[frame.id];
@@ -376,25 +456,27 @@
     event.preventDefault();
     const startX = event.clientX;
     const startY = event.clientY;
-    const originFx = l.fx;
-    const originFy = l.fy;
+    const moving = frame.id === rootId ? Object.keys(layout).map(Number) : [frame.id];
+    const starts = Object.fromEntries(moving.map(id => [id, { fx: layout[id].fx, fy: layout[id].fy }]));
     dragging = -frame.id;
     const move = (e: PointerEvent): void => {
-      const current = layout[frame.id];
-      if (!current) return;
-      current.fx = Math.round(originFx + e.clientX - startX);
-      current.fy = Math.round(originFy + e.clientY - startY);
+      for (const id of moving) {
+        const current = layout[id];
+        if (!current) continue;
+        current.fx = Math.round(starts[id].fx + e.clientX - startX);
+        current.fy = Math.round(starts[id].fy + e.clientY - startY);
+      }
       layout = layout;
     };
     const up = (): void => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       dragging = null;
-      const final = layout[frame.id];
-      if (final) {
-        custom[frame.id] = { fx: final.fx, fy: final.fy };
-        saveCustom();
+      for (const id of moving) {
+        const final = layout[id];
+        if (final) custom[id] = { fx: final.fx, fy: final.fy };
       }
+      saveCustom();
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
@@ -598,7 +680,7 @@
       {#if tool === 'connect'}{pending === null ? t('Click a card, then another to draw an arrow') : t('Now click the card it points to')}
       {:else if tool === 'remove'}{t('Click a card to take it off the canvas')}
       {:else if arrowData.hidden > 0}{arrowData.hidden} {t('arrow(s) lead to projects that are hidden')}
-      {:else}{t('Click a card to open it, drag to move it')}{/if}
+      {:else}{t('Click a card to open it, drag to move it, the × takes it off the canvas')}{/if}
     </span>
   </div>
 
@@ -629,7 +711,7 @@
       {/if}
 
       {#each frameList as frame (frame.id)}
-        <div class="pmc-frame" style="left:{frame.x}px;top:{frame.y}px;width:{frame.w}px;height:{frame.h}px;border-color:{frame.color}">
+        <div class="pmc-frame" class:pmc-frame-sub={frame.sub} style="left:{frame.x}px;top:{frame.y}px;width:{frame.w}px;height:{frame.h}px;border-color:{frame.color}">
           <span class="pmc-frame-label" style="color:{frame.color}" title={t('Drag to move this project')} on:pointerdown={(event) => startFrameDrag(event, frame)} role="presentation"><span class="pmc-dot" style="background:{frame.color}"></span>{frame.name}</span>
         </div>
       {/each}
@@ -664,8 +746,9 @@
           on:pointerdown={(event) => startDrag(event, node)}
           role="button"
           tabindex="0"
-          on:keydown={(event) => { if (event.key === 'Enter') openCard(node); }}
+          on:keydown={(event) => { if (event.key === 'Enter') openCard(node); else if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); void removeNode(node); } }}
         >
+          <button type="button" class="pmc-node-x" title={t('Remove from the canvas')} aria-label={t('Remove from the canvas')} on:click|stopPropagation={() => removeNode(node)}><i class="fas fa-xmark" aria-hidden="true"></i></button>
           {#if node.type === 'question'}
             <div class="pmc-kind"><i class="fas fa-circle-question fa-fw" aria-hidden="true"></i>{t('Question')}</div>
             <div class="pmc-title">{node.title}</div>
