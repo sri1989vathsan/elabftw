@@ -1971,7 +1971,7 @@
     <i class='fas fa-list fa-fw mr-1' aria-hidden='true'></i>{t('Tasks')}
   </button>
   <button type='button' class={panelView === 'calendar' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => panelView = 'calendar'}>
-    <i class='fas fa-calendar-days fa-fw mr-1' aria-hidden='true'></i>{t('Calendar')}
+    <i class='fas fa-table-list fa-fw mr-1' aria-hidden='true'></i>{t('By date')}
   </button>
 </div>
 
