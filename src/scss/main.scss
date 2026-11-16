@@ -6183,9 +6183,25 @@ div > .sticky-navbar {
   background: rgba(127, 127, 127, 0.06);
   border: 1px solid var(--secondary);
   border-radius: 0.5rem;
-  min-height: 420px;
+  min-height: min(420px, 80vh);
   overflow: hidden;
   position: relative;
+}
+
+// the cards can be further right or lower than the window is wide or high: this part scrolls, the popup of a card stays where it is
+.pmc-scroll {
+  height: 100%;
+  overflow: auto;
+  position: relative;
+}
+
+.pmc-content {
+  min-width: 100%;
+  position: relative;
+}
+
+.pmc-node,
+.pmc-frame-label {
   touch-action: none;
 }
 

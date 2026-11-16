@@ -161,6 +161,22 @@
     }
   }
 
+  // the button of the toolbar: everything is read again now (the cards, the text of the open experiment, the tasks of the board)
+  let refreshingAll = false;
+  async function refreshAll(): Promise<void> {
+    if (refreshingAll) return;
+    refreshingAll = true;
+    try {
+      await load(false, true);
+      if (popup && popup.type === 'experiment' && popup.experiment) {
+        await loadSections(popup.experiment.id, true);
+      }
+      window.dispatchEvent(new CustomEvent('todolist-changed'));
+    } finally {
+      refreshingAll = false;
+    }
+  }
+
   function loadCustom(): void {
     if (customLoadedFor === rootId) return;
     customLoadedFor = rootId;
@@ -362,6 +378,9 @@
   }
 
   onDestroy(() => window.clearInterval(sectionTimer));
+
+  // how wide the cards and frames are together: wider than the window, the canvas scrolls sideways
+  $: contentWidth = Math.max(0, ...frameList.map(frame => frame.x + frame.w), ...shown.map(node => screenX(node, layout) + NODE_W)) + OUTER_PAD;
 
   onMount(() => {
     const observer = new ResizeObserver(entries => {
@@ -779,6 +798,7 @@
     <button type="button" class="btn btn-sm" class:btn-primary={tool === 'connect'} class:btn-ghost={tool !== 'connect'} on:click={() => setTool(tool === 'connect' ? 'select' : 'connect')}><i class="fas fa-arrow-right fa-fw mr-1" aria-hidden="true"></i>{t('Connect')}</button>
     <button type="button" class="btn btn-sm" class:btn-primary={tool === 'remove'} class:btn-ghost={tool !== 'remove'} on:click={() => setTool(tool === 'remove' ? 'select' : 'remove')}><i class="fas fa-xmark fa-fw mr-1" aria-hidden="true"></i>{t('Remove')}</button>
     <button type="button" class="btn btn-sm btn-ghost" on:click={() => relayout(true)}><i class="fas fa-crosshairs fa-fw mr-1" aria-hidden="true"></i>{t('Fit')}</button>
+    <button type="button" class="btn btn-sm btn-ghost" title={t('Read everything again: cards, experiments and tasks')} aria-label={t('Refresh')} disabled={refreshingAll} on:click={refreshAll}><i class="fas fa-arrows-rotate fa-fw mr-1" class:fa-spin={refreshingAll} aria-hidden="true"></i>{t('Refresh')}</button>
     {#if visibleTree.length > 1}
       <label class="pmc-addto">
         <span class="pm-muted">{t('Add to')}</span>
@@ -816,7 +836,9 @@
       {/if}
     </aside>
 
-    <div class="pmc-canvas" bind:this={canvasEl} style="height:{canvasHeight}px">
+    <div class="pmc-canvas" style="height:min({canvasHeight}px, 80vh)">
+      <div class="pmc-scroll" bind:this={canvasEl}>
+      <div class="pmc-content" style="width:{Math.max(canvasWidth, contentWidth)}px;height:{canvasHeight}px">
       {#if loading && nodes.length === 0}
         <p class="pm-muted p-3">{t('Loading')}…</p>
       {:else if visible.length === 0}
@@ -910,6 +932,9 @@
           {/if}
         </div>
       {/each}
+
+      </div>
+      </div>
 
       {#if popup}
         <div class="pmc-popup" role="dialog" aria-label={popup.type}>
