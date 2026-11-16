@@ -31,12 +31,14 @@ if (!$App->Session->has('is_auth')) {
 
 $entryId = (int) ($_GET['entry'] ?? 0);
 $title = '';
+$customId = '';
 $canWrite = false;
 $isLocked = false;
 try {
     $Entity = new Inventory($App->Users, $entryId > 0 ? $entryId : null);
     $Entity->readOne();
     $title = (string) ($Entity->entityData['title'] ?? '');
+    $customId = (string) ($Entity->entityData['custom_id'] ?? '');
     try {
         $Entity->canOrExplode(AccessType::Write);
         // a locked entry is read only in the sequence editor, also for the person who locked it, until it is unlocked by hand
@@ -125,6 +127,7 @@ $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'U
   class="embedded"
   data-library-url="features-library.js?v=<?= (int) filemtime(__DIR__ . '/features-library.js') ?>"
   data-entry="<?= $entryId ?>"
+  data-custom-id="<?= $h($customId) ?>"
   data-upload="<?= (int) ($_GET['upload'] ?? 0) ?>"
   data-can-write="<?= $canWrite ? '1' : '0' ?>"
   data-locked="<?= $isLocked ? '1' : '0' ?>"

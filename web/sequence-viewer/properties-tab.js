@@ -172,7 +172,8 @@
       // downloads
       panel.append(element('strong', 'props-heading', 'Download the sequence'));
       const files = element('div', 'tool-actions');
-      const base = safeName(data.name || context.fileName().replace(/\.[^.]+$/, ''));
+      const customId = document.body.dataset.customId || '';
+      const base = (customId ? customId + '_' : '') + safeName(data.name || context.fileName().replace(/\.[^.]+$/, ''));
       const genbank = element('button', 'tool-btn tool-btn-primary', 'GenBank (.gb)');
       genbank.type = 'button';
       genbank.addEventListener('click', function () {

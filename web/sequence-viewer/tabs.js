@@ -105,11 +105,13 @@
       try {
         const doc = frameOf(tab).document;
         const name = doc.getElementById('entry-title');
-        if (name && name.textContent && tab.label.textContent !== name.textContent) {
-          tab.label.textContent = name.textContent;
-          tab.button.title = name.textContent;
+        const id = doc.body && doc.body.dataset.customId ? '#' + doc.body.dataset.customId + ' ' : '';
+        const label = name && name.textContent ? id + name.textContent : '';
+        if (label && tab.label.textContent !== label) {
+          tab.label.textContent = label;
+          tab.button.title = label;
           if (tab === current) {
-            document.title = name.textContent + ' - Sequence editor';
+            document.title = label + ' - Sequence editor';
           }
         }
         tab.mark.hidden = !isDirty(tab);
