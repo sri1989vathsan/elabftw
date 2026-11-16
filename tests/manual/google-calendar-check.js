@@ -35,20 +35,20 @@ window.googleCalendarCheck = async function () {
 
   try {
     __gstub.reset();
-    Object.keys(localStorage).filter(function (k) { return /^googleSync(Calendar|Target|ImportEvents|CalendarsShown)/.test(k); }).forEach(function (k) { localStorage.removeItem(k); });
+    Object.keys(localStorage).filter(function (k) { return /^googleSync(Calendar|Target|ImportEvents|CalendarsShown|Token)/.test(k); }).forEach(function (k) { localStorage.removeItem(k); });
     for (var spec of [{ content: 'GCAL alpha', deadline: at(1, 14, 30).toISOString(), duration_minutes: 90 }, { content: 'GCAL beta', deadline: at(2, 9, 0).toISOString() }]) {
       created.push(Number((await api('POST', 'todolist', spec)).loc.split('/').pop()));
     }
     localStorage.setItem('googleSyncTwoWay', '1');
     box('Google Calendar (').click();
     await wait(300);
-    box('New events of that calendar').click();
+    box('Two-way:').click();
     button('Connect').click();
     await wait(3500);
     var events = mine();
     check('C1 the to-dos become events with the right length', events.length === 2 && events.some(function (e) { return /alpha/.test(e.summary) && minutes(e) === 90; }) && events.some(function (e) { return /beta/.test(e.summary) && minutes(e) === 30; }), events);
     check('C1b the events carry the task marker and a link back', events.every(function (e) { return e.extendedProperties && e.extendedProperties.private.elabftwTask && /projectmanagement\.php\?task=/.test(e.description); }), events);
-    check('C1c the panel lists the calendars', document.querySelectorAll('#googleSyncRow input[name^="googleCal-"]').length === 3, document.getElementById('googleSyncRow').textContent);
+    check('C1c the panel has a dropdown of the calendars the to-dos can go to (the ones that can be written to)', document.querySelectorAll('#googleSyncRow select option').length === 2, document.getElementById('googleSyncRow').textContent);
 
     await api('PATCH', 'todolist/' + created[1], { duration_minutes: 120 });
     await sync();
@@ -83,7 +83,7 @@ window.googleCalendarCheck = async function () {
     __gstub.addEvent('lab@group.calendar', 'GCAL seminar', at(2, 15, 0).toISOString(), at(2, 16, 0).toISOString());
     var got = null;
     window.addEventListener('elabftw:calendar-events', function (e) { got = e.detail.events; }, { once: false });
-    box('Lab calendar').click();
+    window.dispatchEvent(new CustomEvent('elabftw:calendar-toggle', { detail: { id: 'lab@group.calendar', on: true } }));
     window.dispatchEvent(new CustomEvent('elabftw:calendar-range', { detail: { from: at(-3, 0, 0).toISOString(), to: at(10, 0, 0).toISOString() } }));
     await wait(2500);
     check('C8 events of a shown calendar are sent to the calendar page', got && got.some(function (e) { return e.title === 'GCAL seminar' && e.source === 'Lab calendar'; }), got);
@@ -106,7 +106,7 @@ window.googleCalendarCheck = async function () {
     check('no error', false, String(error && error.stack || error));
   }
   for (var id of created) { await api('DELETE', 'todolist/' + id); }
-  Object.keys(localStorage).filter(function (k) { return /^googleSync(Calendar|Target|ImportEvents|CalendarsShown)/.test(k); }).forEach(function (k) { localStorage.removeItem(k); });
+  Object.keys(localStorage).filter(function (k) { return /^googleSync(Calendar|Target|ImportEvents|CalendarsShown|Token)/.test(k); }).forEach(function (k) { localStorage.removeItem(k); });
   __gstub.reset();
   return { pass: results.every(function (r) { return r.ok; }), results: results };
 };

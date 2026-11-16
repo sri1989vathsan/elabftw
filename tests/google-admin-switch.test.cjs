@@ -40,5 +40,6 @@ test('the browser code prefers the administrator client ID and hides the box the
   const src = read('src/ts/googleSync.ts');
   assert.match(src, /return adminClientId\(\) \|\| read\(KEY_CLIENT\);/);
   assert.equal((src.match(/read\(KEY_CLIENT\)/g) || []).length, 1); // only the helper reads the browser's own value
-  assert.match(src, /if \(adminClientId\(\) === ''\) \{\s*body\.appendChild\(input\);/);
+  // the box is made and added only while the administrator has not set a client ID
+  assert.match(src, /if \(adminClientId\(\) === ''\) \{[\s\S]*?body\.appendChild\(input\);/);
 });

@@ -62,7 +62,7 @@ const KEY_TWO_WAY = 'googleSyncTwoWay';
 // last state written to both sides, so a change can be told apart from an old value
 const KEY_SNAPSHOT = 'googleSyncSnapshot';
 const SILENT_TIMEOUT_MS = 15_000;
-// short-lived access token, per tab: gone when the tab closes
+// short-lived access token (about an hour), kept per eLabFTW account in this browser: other tabs and a restart of the browser can use it
 const KEY_TOKEN = 'googleSyncToken';
 // What the Calendar sync remembers is kept per eLabFTW account (two people can use one browser):
 // where the to-dos go ('tasks', 'calendar' or 'both'), the calendar they go to, the calendars shown on the calendar page,
@@ -116,7 +116,7 @@ function write(key: string, value: string | null, storage: Storage = localStorag
 }
 
 function currentToken(): Token | null {
-  const raw = read(KEY_TOKEN, sessionStorage);
+  const raw = read(acct(KEY_TOKEN));
   if (!raw) {
     return null;
   }
@@ -182,7 +182,7 @@ async function requestToken(clientId: string, silent = false): Promise<Token> {
           return;
         }
         const token = { value: response.access_token, expires: Date.now() + (response.expires_in ?? 3600) * 1000, scope: response.scope ?? scopes() };
-        write(KEY_TOKEN, JSON.stringify(token), sessionStorage);
+        write(acct(KEY_TOKEN), JSON.stringify(token));
         resolve(token);
       },
       error_callback: error => reject(new Error(
@@ -203,7 +203,7 @@ async function google(method: string, path: string, token: string, body?: unknow
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (response.status === 401) {
-    write(KEY_TOKEN, null, sessionStorage);
+    write(acct(KEY_TOKEN), null);
     throw new AuthError('Google access expired.');
   }
   if (!response.ok) {
@@ -551,15 +551,10 @@ let statusIsError = false;
 let running = false;
 let rerun = false;
 let timer: number | undefined;
-// null: not touched yet, so open only while no client ID is entered
-let panelOpen: boolean | null = null;
 
 function setStatus(text: string, isError = false): void {
   status = text;
   statusIsError = isError;
-  if (isError) {
-    panelOpen = true;
-  }
   render();
 }
 
@@ -690,7 +685,7 @@ async function connect(): Promise<void> {
 async function disconnect(): Promise<void> {
   const token = currentToken();
   write(KEY_ENABLED, null);
-  write(KEY_TOKEN, null, sessionStorage);
+  write(acct(KEY_TOKEN), null);
   window.clearTimeout(timer);
   try {
     if (token) {
@@ -750,11 +745,38 @@ async function ensureCalendars(): Promise<void> {
   void publishCalendarList();
 }
 
+// The settings are in the Calendars menu of the calendar page (the host #googleSettings, drawn when the menu is open). The to-do
+// panel (#googleSyncRow) only says how things are and points there.
 function render(): void {
-  const host = document.getElementById('googleSyncRow');
-  if (!host) {
+  const row = document.getElementById('googleSyncRow');
+  if (row) {
+    renderLine(row);
+  }
+  const host = document.getElementById('googleSettings');
+  if (host) {
+    renderSettings(host);
+  }
+}
+
+// the to-do panel says nothing about Google, except when the sync has a problem
+function renderLine(host: HTMLElement): void {
+  host.replaceChildren();
+  if (!statusIsError || !status) {
     return;
   }
+  const line = document.createElement('div');
+  line.className = 'small mb-3 text-danger';
+  line.setAttribute('role', 'alert');
+  line.append(`Google sync: ${status} `);
+  const link = document.createElement('a');
+  link.href = '/calendar.php#settings';
+  link.setAttribute('data-calendar-settings', '');
+  link.textContent = 'Calendar settings';
+  line.append(link, '.');
+  host.appendChild(line);
+}
+
+function renderSettings(host: HTMLElement): void {
   // don't redraw under the user's cursor while they type the client ID
   if (host.contains(document.activeElement) && document.activeElement instanceof HTMLInputElement
     && document.activeElement.type === 'text') {
@@ -765,175 +787,115 @@ function render(): void {
   const clientId = clientIdValue() ?? '';
   const enabled = read(KEY_ENABLED) === '1';
   const connected = enabled && currentToken() !== null;
-
-  const details = document.createElement('details');
-  details.className = 'mb-3';
-  details.open = panelOpen ?? !clientId;
-  details.addEventListener('toggle', () => {
-    panelOpen = details.open;
-  });
-  const summary = document.createElement('summary');
-  summary.className = 'text-muted';
-  summary.textContent = connected ? 'Google Tasks / Calendar: connected' : 'Google Tasks / Calendar sync (optional)';
-  details.appendChild(summary);
-
+  const usesCalendar = target() !== 'tasks';
   const body = document.createElement('div');
-  body.className = 'pt-2';
+  body.className = 'pt-1';
 
-  const intro = document.createElement('p');
-  intro.className = 'small text-muted mb-2';
-  intro.textContent = 'Copies your open to-dos to your own Google account: to a list called "eLabFTW" in Google Tasks '
-    + 'and/or as events (as long as the duration of the task) in a Google Calendar of your choice. '
-    + 'Only titles and dates are sent unless you tick the first box below.';
-  body.appendChild(intro);
-
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className = 'form-control form-control-sm mb-2';
-  input.placeholder = 'Google OAuth client ID';
-  input.value = clientId;
-  input.setAttribute('aria-label', 'Google OAuth client ID');
-  input.addEventListener('change', () => {
-    write(KEY_CLIENT, input.value.trim() || null);
-    render();
-  });
   if (adminClientId() === '') {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'form-control form-control-sm mb-2';
+    input.placeholder = 'Google OAuth client ID';
+    input.value = clientId;
+    input.setAttribute('aria-label', 'Google OAuth client ID');
+    input.addEventListener('change', () => {
+      write(KEY_CLIENT, input.value.trim() || null);
+      render();
+    });
     body.appendChild(input);
   }
 
-  // where the to-dos go: Google Tasks, Google Calendar (as events that last as long as the task) or both
-  const where = document.createElement('div');
-  where.className = 'mb-2';
-  const whereTitle = document.createElement('div');
-  whereTitle.className = 'small font-weight-bold';
-  whereTitle.textContent = 'Send my to-dos to';
-  where.appendChild(whereTitle);
-  const choose = (value: Target) => (on: boolean): void => {
-    if (!on) {
-      return;
-    }
+  // where the to-dos go: one choice
+  const where = document.createElement('label');
+  where.className = 'small d-block mb-2';
+  where.append('Send my to-dos to ');
+  const whereSelect = document.createElement('select');
+  whereSelect.className = 'form-control form-control-sm';
+  const options: [Target, string][] = [['calendar', 'Google Calendar (as events)'], ['tasks', 'Google Tasks']];
+  if (target() === 'both') {
+    options.push(['both', 'Google Calendar and Google Tasks']);
+  }
+  for (const [value, text] of options) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = text;
+    option.selected = target() === value;
+    whereSelect.appendChild(option);
+  }
+  whereSelect.addEventListener('change', () => {
+    const value = whereSelect.value as Target;
     write(acct(KEY_TARGET), value === 'tasks' ? null : value);
     calendars = [];
     render();
+    void publishCalendarList();
     if (read(KEY_ENABLED) === '1' && currentToken() === null) {
       setStatus('Connect again to allow what you chose.', false);
     } else {
       scheduleSync();
     }
-  };
-  where.append(
-    choice('radio', 'googleTarget', 'Google Tasks', target() === 'tasks', choose('tasks')),
-    choice('radio', 'googleTarget', 'Google Calendar (a task with a date is an event, as long as its duration)', target() === 'calendar', choose('calendar')),
-    choice('radio', 'googleTarget', 'Both', target() === 'both', choose('both')),
-  );
+  });
+  where.appendChild(whereSelect);
   body.appendChild(where);
 
-  const label = document.createElement('label');
-  label.className = 'small d-block mb-2';
-  const box = document.createElement('input');
-  box.type = 'checkbox';
-  box.className = 'mr-1';
-  box.checked = read(KEY_DETAILS) === '1';
-  box.addEventListener('change', () => {
-    write(KEY_DETAILS, box.checked ? '1' : null);
-    scheduleSync();
-  });
-  label.append(box, 'Also send notes, experiment names and links back to eLabFTW');
-  body.appendChild(label);
-
-  const twoWayLabel = document.createElement('label');
-  twoWayLabel.className = 'small d-block mb-2';
-  const twoWayBox = document.createElement('input');
-  twoWayBox.type = 'checkbox';
-  twoWayBox.className = 'mr-1';
-  twoWayBox.checked = read(KEY_TWO_WAY) === '1';
-  twoWayBox.addEventListener('change', () => {
-    write(KEY_TWO_WAY, twoWayBox.checked ? '1' : null);
-    scheduleSync();
-  });
-  twoWayLabel.append(
-    twoWayBox,
-    'Also bring ticks, edits and new tasks from the Google list back into eLabFTW (text only, nothing is ever deleted here)',
-  );
-  body.appendChild(twoWayLabel);
-
-  // the calendars: which ones are shown on the calendar page of eLabFTW, and the one the to-dos go to
-  const usesCalendar = target() !== 'tasks';
-  const showBox = choice('checkbox', 'googleShow', 'Also show events of my Google calendars on the eLabFTW calendar page', shownIds().length > 0, on => {
-    write(acct(KEY_CAL_SHOWN), on ? JSON.stringify(['primary']) : null);
-    calendars = [];
-    render();
-    if (read(KEY_ENABLED) === '1' && currentToken() === null) {
-      setStatus('Connect again to allow Google Calendar.', false);
-    } else {
-      scheduleShown();
-    }
-  });
-  showBox.className = 'small d-block mb-2';
-  body.appendChild(showBox);
-  if (connected && (usesCalendar || shownIds().length > 0)) {
-    const list = document.createElement('div');
-    list.className = 'border rounded p-2 mb-2';
-    const head = document.createElement('div');
-    head.className = 'small font-weight-bold';
-    head.textContent = usesCalendar ? 'My Google calendars (the eye shows it on the calendar page, the dot receives my to-dos)' : 'My Google calendars';
-    list.appendChild(head);
+  // the calendar the to-dos go to (only the ones that can be written to)
+  if (usesCalendar && connected) {
+    const row = document.createElement('label');
+    row.className = 'small d-block mb-2';
+    row.append('Calendar for my to-dos ');
     if (calendars.length === 0) {
-      const wait = document.createElement('div');
-      wait.className = 'small text-muted';
-      wait.textContent = 'Loading calendars…';
-      list.appendChild(wait);
+      row.append(' loading…');
       void ensureCalendars();
-    }
-    const ids = shownIds();
-    const shownHere = (calendar: CalendarInfo): boolean => ids.includes(calendar.id) || (calendar.primary && ids.includes('primary'));
-    for (const calendar of calendars) {
-      const row = document.createElement('div');
-      row.className = 'd-flex align-items-center';
-      const eye = choice('checkbox', `googleCal-${calendar.id}`, calendar.summary, shownHere(calendar), on => {
-        const next = new Set(shownIds().filter(id => id !== calendar.id && !(calendar.primary && id === 'primary')));
-        if (on) {
-          next.add(calendar.id);
-        }
-        write(acct(KEY_CAL_SHOWN), next.size > 0 ? JSON.stringify([...next]) : null);
-        scheduleShown();
-      }, calendar.color);
-      eye.classList.add('flex-grow-1');
-      row.appendChild(eye);
-      if (usesCalendar && calendar.writable) {
-        const current = calendarTargetId();
-        const dot = document.createElement('input');
-        dot.type = 'radio';
-        dot.name = 'googleCalendarTarget';
-        dot.title = 'My to-dos go to this calendar';
-        dot.checked = current === calendar.id || (current === 'primary' && calendar.primary);
-        dot.addEventListener('change', () => {
-          write(acct(KEY_CAL_TARGET), calendar.primary ? null : calendar.id);
-          scheduleSync();
-        });
-        row.appendChild(dot);
+    } else {
+      const select = document.createElement('select');
+      select.className = 'form-control form-control-sm';
+      const current = calendarTargetId();
+      for (const calendar of calendars.filter(item => item.writable)) {
+        const option = document.createElement('option');
+        option.value = calendar.id;
+        option.textContent = calendar.summary;
+        option.selected = current === calendar.id || (current === 'primary' && calendar.primary);
+        select.appendChild(option);
       }
-      list.appendChild(row);
+      select.addEventListener('change', () => {
+        const picked = calendars.find(item => item.id === select.value);
+        write(acct(KEY_CAL_TARGET), picked?.primary ? null : select.value);
+        scheduleSync();
+      });
+      row.appendChild(select);
     }
-    body.appendChild(list);
+    body.appendChild(row);
   }
-  if (usesCalendar) {
-    body.appendChild(choice('checkbox', 'googleImport', 'New events of that calendar become to-dos here (needs the box above: bring changes back)', read(acct(KEY_CAL_IMPORT)) === '1', on => {
+
+  // one switch for the way back: changes and new items in Google come back into eLabFTW (with a calendar, new events become to-dos)
+  const twoWayOn = read(KEY_TWO_WAY) === '1' && (!usesCalendar || read(acct(KEY_CAL_IMPORT)) === '1');
+  body.appendChild(choice(
+    'checkbox',
+    'googleTwoWay',
+    'Two-way: changes and new items in Google come back here (nothing is ever deleted here)',
+    twoWayOn,
+    on => {
+      write(KEY_TWO_WAY, on ? '1' : null);
       write(acct(KEY_CAL_IMPORT), on ? '1' : null);
       scheduleSync();
-    }));
-  }
+    },
+  )).classList.replace('mb-1', 'mb-2');
 
   const actions = document.createElement('div');
-  actions.className = 'mb-2';
+  actions.className = 'mb-1';
   if (connected) {
     actions.appendChild(button('Sync now', () => void runSync(), true));
     actions.appendChild(button('Disconnect', () => void disconnect()));
   } else {
-    actions.appendChild(button(enabled ? 'Connect again' : 'Connect', () => void connect(), true));
+    actions.appendChild(button(enabled ? 'Connect again' : 'Connect Google', () => void connect(), true));
   }
   body.appendChild(actions);
 
+  if (!connected && !status) {
+    const hint = document.createElement('div');
+    hint.className = 'small text-muted';
+    hint.textContent = 'Connect your Google account once to show its calendars here and to send your to-dos to it.';
+    body.appendChild(hint);
+  }
   if (status) {
     const line = document.createElement('div');
     line.className = `small ${statusIsError ? 'text-danger' : 'text-muted'}`;
@@ -941,9 +903,7 @@ function render(): void {
     line.textContent = status;
     body.appendChild(line);
   }
-
-  details.appendChild(body);
-  host.appendChild(details);
+  host.appendChild(body);
 }
 
 export function initGoogleSync(): void {
@@ -966,6 +926,10 @@ export function initGoogleSync(): void {
     toggleCalendar(detail.id, detail.on);
   });
   window.addEventListener('elabftw:calendar-connect', connectCalendars);
+  // a calendar page that was opened before this started has asked already: tell it how things are
+  void publishCalendarList();
+  // the settings are drawn in the Calendars menu of the calendar page when it is opened
+  window.addEventListener('elabftw:google-settings-open', () => render());
   window.setInterval(() => void runSync(), AUTO_SYNC_MS);
   // coming back to the tab: pick up what changed in Google meanwhile
   let lastFocusSync = 0;
