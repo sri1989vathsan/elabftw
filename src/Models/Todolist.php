@@ -843,7 +843,7 @@ final class Todolist extends AbstractRest
                 DATE_FORMAT(deadline, '%Y-%m-%dT%H:%i:%sZ') AS deadline,
                 reminder_minutes, duration_minutes, repeat_rule,
                 DATE_FORMAT(completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
-                creation_time, ordering, userid, team, assigned_userid
+                creation_time, ordering, userid, team, assigned_userid, project_id
             FROM todolist
             WHERE EXISTS (
                     SELECT 1 FROM todolist_task_assignees ta WHERE ta.task_id = todolist.id AND ta.userid = :userid

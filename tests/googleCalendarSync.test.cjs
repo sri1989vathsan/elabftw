@@ -203,6 +203,7 @@ test('the calendar page shows the events of a calendar but not the ones that are
   assert.equal(list.length, 1);
   assert.equal(list[0].title, 'Seminar');
   assert.equal(list[0].source, 'Lab');
+  assert.equal(list[0].calendar, 'lab');
   assert.equal(list[0].color, '#0b8043');
 });
 
