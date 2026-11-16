@@ -145,6 +145,7 @@ final class CustomMigrationRunner
         '105_folder_tree_covering_indexes.sql',
         '106_order_upload_procurement_index.sql',
         '107_orders_list_index.sql',
+        '109_todolist_duration.sql',
         '110_inventory.sql',
         '111_inventory_steps.sql',
         '112_registry_storage.sql',

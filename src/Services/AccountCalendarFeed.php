@@ -61,7 +61,8 @@ final class AccountCalendarFeed
         $stamp = (new DateTimeImmutable('now', $this->utc))->format('Ymd\THis\Z');
         foreach ($this->getEntries() as $entry) {
             $deadline = new DateTimeImmutable($entry['deadline'], $this->utc);
-            $end = $deadline->add(new DateInterval('PT30M'));
+            // the task says how long it takes (30 minutes when nothing says so: orders and steps)
+            $end = $deadline->add(new DateInterval('PT' . max(5, (int) ($entry['duration_minutes'] ?? 30)) . 'M'));
             $description = $entry['description'];
             if ($entry['notes'] !== null && trim($entry['notes']) !== '') {
                 $description .= "\n\n" . $entry['notes'];
@@ -100,7 +101,7 @@ final class AccountCalendarFeed
 
     private function getTodos(): array
     {
-        $sql = 'SELECT id, body, notes, deadline, reminder_minutes
+        $sql = 'SELECT id, body, notes, deadline, reminder_minutes, duration_minutes
             FROM todolist
             WHERE userid = :userid AND deadline IS NOT NULL
             ORDER BY deadline ASC';
@@ -115,6 +116,7 @@ final class AccountCalendarFeed
                 'notes' => $row['notes'] === null ? null : $this->plainText($row['notes']),
                 'deadline' => $row['deadline'],
                 'reminder_minutes' => $row['reminder_minutes'],
+                'duration_minutes' => (int) $row['duration_minutes'],
                 'url' => rtrim($this->siteUrl, '/') . '/?task=' . $row['id'],
             );
         }, $req->fetchAll());
