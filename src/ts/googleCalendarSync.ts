@@ -22,6 +22,8 @@ export type EventTime = { dateTime?: string; date?: string };
 export type RemoteEvent = {
   id: string;
   status?: string;
+  // 'default' for the events people make; birthdays, mail events, focus time... are other types and cannot carry our marker
+  eventType?: string;
   summary?: string;
   description?: string;
   start?: EventTime;
@@ -81,6 +83,10 @@ export type CalResult = {
   updated: number;
   pulled: number;
   imported: number;
+  // imported to-dos whose event could not be marked (Google refused): they are not brought in again
+  unmarked: number;
+  // what Google said the last time it refused
+  unmarkedReason?: string;
   completed: number;
 };
 
@@ -131,7 +137,7 @@ function titleOf(event: RemoteEvent): string {
 
 export async function syncCalendar(api: CalendarApi, todos: CalTodo[], options: CalOptions): Promise<CalResult> {
   const now = options.now ?? new Date();
-  const result: CalResult = { snapshot: {}, created: 0, updated: 0, pulled: 0, imported: 0, completed: 0 };
+  const result: CalResult = { snapshot: {}, created: 0, updated: 0, pulled: 0, imported: 0, unmarked: 0, completed: 0 };
   const events = await api.listEvents(options.range.from.toISOString(), options.range.to.toISOString());
   const byTask = new Map<string, RemoteEvent>();
   for (const event of events) {
@@ -215,8 +221,13 @@ export async function syncCalendar(api: CalendarApi, todos: CalTodo[], options: 
 
   // new events of the calendar become to-dos, and are marked so they are not taken twice
   if (options.twoWay && options.importEvents) {
+    // an event that already became a to-do (even if it could not be marked) is never taken twice
+    const known = new Set(Object.values({ ...options.snapshot, ...result.snapshot }).map(item => item.event));
     for (const event of events) {
-      if (event.extendedProperties?.private?.[MARKER] || event.status === 'cancelled' || event.recurringEventId) {
+      if (event.extendedProperties?.private?.[MARKER] || event.status === 'cancelled' || event.recurringEventId || known.has(event.id)) {
+        continue;
+      }
+      if (event.eventType && event.eventType !== 'default') {
         continue;
       }
       const start = startOf(event);
@@ -226,9 +237,16 @@ export async function syncCalendar(api: CalendarApi, todos: CalTodo[], options: 
       }
       const minutes = Math.min(1440, Math.max(5, minutesOfEvent(event)));
       const id = await options.local.createTodo({ title: summary, deadline: new Date(start).toISOString(), duration_minutes: minutes });
-      await api.patchEvent(event.id, { extendedProperties: { private: { [MARKER]: String(id) } } });
-      result.imported += 1;
+      // recorded before the mark is written, so that a refusal of Google (or a failed run) does not bring the event in again
       result.snapshot[String(id)] = { event: event.id, title: summary, start, minutes };
+      known.add(event.id);
+      result.imported += 1;
+      try {
+        await api.patchEvent(event.id, { extendedProperties: { private: { [MARKER]: String(id) } } });
+      } catch (error) {
+        result.unmarked += 1;
+        result.unmarkedReason = error instanceof Error ? error.message : String(error);
+      }
     }
   }
   return result;

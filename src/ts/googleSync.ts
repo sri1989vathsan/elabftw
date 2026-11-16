@@ -585,6 +585,7 @@ async function syncToCalendar(token: string, todos: Todo[], twoWay: boolean, inc
     result.created + result.updated ? `${result.created} new, ${result.updated} updated` : '',
     pulled ? `${result.imported} added and ${result.pulled} changed from Google` : '',
     result.completed ? `${result.completed} done` : '',
+    result.unmarked ? `${result.unmarked} added without a link to their event (${result.unmarkedReason ?? 'Google refused to mark it'})` : '',
   ].filter(Boolean).join('; ');
 }
 
