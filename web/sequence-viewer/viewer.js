@@ -89,6 +89,9 @@
   // what is written to the file has none of the colours of the display
   // a version put back in the editor (history-tab.js) gets the colours of the display too
   window.ViewerPalette = applyPalette;
+  window.ViewerClean = function (sequenceData) {
+    return withoutPalette(sequenceData);
+  };
   function withoutPalette(sequenceData) {
     const clone = JSON.parse(JSON.stringify(sequenceData));
     featuresOf(clone).forEach(function (feature) {
@@ -201,6 +204,13 @@
     }
     if (window.ToolsTab) {
       window.ToolsTab.setup(editor, { entryId: entryId, name: fileName });
+    }
+    if (window.PropertiesTab) {
+      window.PropertiesTab.setup(editor, { entryId: entryId, canWrite: canWrite, locked: function () {
+        return body.locked === '1';
+      }, fileName: function () {
+        return saveName;
+      } });
     }
   }
 

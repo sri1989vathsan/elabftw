@@ -158,6 +158,7 @@ $h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'U
   <script src="align-tab.js?v=<?= (int) filemtime(__DIR__ . '/align-tab.js') ?>"></script>
   <script src="enzymes-tab.js?v=<?= (int) filemtime(__DIR__ . '/enzymes-tab.js') ?>"></script>
   <script src="origin-tab.js?v=<?= (int) filemtime(__DIR__ . '/origin-tab.js') ?>"></script>
+  <script src="properties-tab.js?v=<?= (int) filemtime(__DIR__ . '/properties-tab.js') ?>"></script>
   <script src="history-tab.js?v=<?= (int) filemtime(__DIR__ . '/history-tab.js') ?>"></script>
   <script src="annotate.js?v=<?= (int) filemtime(__DIR__ . '/annotate.js') ?>"></script>
   <script src="annotate-tab.js?v=<?= (int) filemtime(__DIR__ . '/annotate-tab.js') ?>"></script>

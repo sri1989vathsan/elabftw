@@ -2161,3 +2161,33 @@ body.embedded #back { display: none; }
   font-size: 0.82rem;
   margin: 0.1rem 0 0.15rem;
 }
+
+/* ---- the properties tool ---- */
+#tool-sidebar .props-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0.5rem 0;
+}
+
+#tool-sidebar .props-label {
+  color: #5a6672;
+  font-size: 0.75rem;
+}
+
+#tool-sidebar .props-input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+#tool-sidebar .props-text {
+  resize: vertical;
+}
+
+#tool-sidebar .props-heading {
+  display: block;
+  margin: 1rem 0 0.3rem;
+  font-size: 0.85rem;
+}
