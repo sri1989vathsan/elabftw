@@ -1,4 +1,4 @@
-# Google Tasks sync (optional, per user, browser-side)
+# Google Tasks and Calendar sync (optional, per user, browser-side)
 
 Copies a user's open to-dos and unfinished steps into a list called **eLabFTW**
 in that user's own Google Tasks. eLabFTW -> Google always; Google -> eLabFTW only
@@ -132,3 +132,49 @@ Connect fails with a message and the rest of eLabFTW is unaffected.
 against `tests/manual/google-stub.js` (a fake Google that needs no account or
 internet). It does NOT prove anything about real Google: that needs G3 with a
 real OAuth client ID.
+
+## Google Calendar (added with task durations)
+
+Each user chooses, in the panel, where the to-dos go: **Google Tasks** (as above), **Google Calendar**, or both.
+Settings are kept per eLabFTW account in the browser (`googleSync*:<userid>`); Google Tasks and Calendar use the
+same client ID and the same Connect button, and the permissions asked from Google follow the choice:
+
+- Tasks: `https://www.googleapis.com/auth/tasks`
+- Calendar (only when the to-dos go there, or calendars are shown on the calendar page):
+  `https://www.googleapis.com/auth/calendar.events` and `https://www.googleapis.com/auth/calendar.calendarlist.readonly`
+
+When the choice changes the panel says "Connect again" (one click) so Google can ask for the new permission.
+Admin setup: enable the **Google Calendar API** too, add the two scopes to the consent screen, and in the
+Content-Security-Policy add ` https://www.googleapis.com` to `connect-src` (next to `https://tasks.googleapis.com`).
+
+How a task is written: a task with a deadline is an event that starts at the deadline and lasts the duration of the task
+(30 minutes unless changed in the task editor, or by dragging its lower edge on the calendar page), with a popup reminder
+of the task's reminder, a link back to the task in the description, and a hidden private property `elabftwTask=<id>`
+that matches the event on the next sync. Notes are sent only when "Also send notes" is ticked.
+
+Rules (same ideas as for Google Tasks; judged against a snapshot of what was written last time):
+
+- eLabFTW -> Google always: new task -> new event; changed title, deadline or duration -> event patched; a task that is done
+  gets a tick in front of its event title (once), the event is kept.
+- Two-way box on: an event that was retitled, moved or made longer or shorter in Google changes the task (title, deadline,
+  duration). If both sides changed, eLabFTW wins. Nothing is ever deleted in eLabFTW.
+- An event deleted in Google is not made again until the task itself changes.
+- "New events of that calendar become to-dos" (two-way only, off by default): a future event without the property, not
+  recurring and not all-day, becomes a to-do with its length as the duration, and the property is written back to the event.
+- Only tasks of the next 12 months and the last 30 days are looked at.
+- Which calendars are shown on the eLabFTW calendar page is chosen with the eye boxes in the panel (the primary calendar
+  by default); their events are drawn next to the tasks, read only. The events that are tasks are not drawn twice.
+
+| # | Steps | Expect |
+|---|-------|--------|
+| C1 | Choose Google Calendar, Connect | A calendar list appears; the dot picks the calendar that receives the to-dos |
+| C2 | Create a task with a date and a duration of 90 minutes | Event of 90 minutes at that time, with a reminder and a link back |
+| C3 | Change the duration in the task editor / drag the block on the calendar page | The event changes on the next sync |
+| C4 | Two-way on: move or lengthen the event in Google | Task deadline and duration follow |
+| C5 | Delete the event in Google | Not made again; changing the task makes it again |
+| C6 | Complete the task | Event title gets a tick in front |
+| C7 | Tick the eye of another calendar | Its events appear on the calendar page in its colour, without the tasks twice |
+| C8 | Choose "Both" | Tasks list and calendar are both written |
+
+`tests/googleCalendarSync.test.cjs` covers the logic; `tests/manual/google-calendar-check.js` runs C1-C7 against
+`tests/manual/google-stub.js`. Real Google has not been tried.
