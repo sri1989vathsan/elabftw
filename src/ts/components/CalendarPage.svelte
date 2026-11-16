@@ -104,6 +104,13 @@
   let clockTimer: number | undefined;
   let drag: { key: string; mode: 'move' | 'resize'; start: Date; end: Date } | null = null;
   let suppressClick = false;
+  // a region selected with the mouse on the empty grid (minutes of the day, in the column `index`), and the new task made from it
+  let selection: { index: number; lo: number; hi: number } | null = null;
+  let newTask: { start: Date; end: Date } | null = null;
+  let newTitle = '';
+  let newProject: number | null = null;
+  let newBusy = false;
+  let newTitleInput: HTMLInputElement | undefined;
   let monthDay: Date | null = null;
   // the calendars of the page: the projects of the tasks (each can be shown or hidden, 0 is "No project"), and the Google calendars
   let projects: Project[] = [];
@@ -291,6 +298,7 @@
     ...external.filter(event => googleState !== 'ready' || event.calendar === undefined || shownGoogle.has(event.calendar)),
   ].map(event => (event.kind === 'task' ? { ...event, color: projectColor(event.project ?? 0) } : event)).map(applyDrag);
   // the project calendars: a colour each, a project with a parent is written "Parent / Project"
+  $: projectChoices = [...projects].sort((a, b) => projectName(a.id).localeCompare(projectName(b.id)));
   $: sorted = [...projects].sort((a, b) => a.id - b.id);
   $: projectName = (id: number): string => {
     const project = projects.find(item => item.id === id);
@@ -392,6 +400,10 @@
 
   function timeText(date: Date): string {
     return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+
+  function hourClock(minute: number): string {
+    return `${String(Math.floor(minute / 60) % 24).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
   }
 
   function hourLabel(hour: number): string {
@@ -529,6 +541,68 @@
     window.addEventListener('pointerup', up);
   }
 
+  // ---- selecting a region of the empty grid with the mouse: a window asks for the title, then a task is made that begins at the top of
+  // the region and ends at the bottom of it (15 minutes at least)
+  function startSelect(pointer: PointerEvent, index: number): void {
+    if (pointer.button !== 0 || !columnsEl || (pointer.target as HTMLElement).closest('.cal-ev, .cal-select-box')) return;
+    const top = columnsEl.getBoundingClientRect().top;
+    const minuteAt = (y: number): number => Math.min(1440 - SNAP, Math.max(0, Math.floor((y - top) / HOUR * 60 / SNAP) * SNAP));
+    const anchor = minuteAt(pointer.clientY);
+    const startY = pointer.clientY;
+    let moved = false;
+    const move = (e: PointerEvent): void => {
+      if (!moved && Math.abs(e.clientY - startY) < 4) return;
+      moved = true;
+      const here = minuteAt(e.clientY);
+      selection = { index, lo: Math.min(anchor, here), hi: Math.max(anchor, here) + SNAP };
+    };
+    const up = (): void => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      const chosen = selection;
+      selection = null;
+      if (!moved || !chosen) return;
+      const day = days[index];
+      void openNewTask(new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, chosen.lo), new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, chosen.hi));
+    };
+    pointer.preventDefault();
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  async function openNewTask(start: Date, end: Date): Promise<void> {
+    newTask = { start, end };
+    newTitle = '';
+    await tick();
+    newTitleInput?.focus();
+  }
+
+  function closeNewTask(): void {
+    newTask = null;
+    newBusy = false;
+  }
+
+  async function saveNewTask(): Promise<void> {
+    if (!newTask || newTitle.trim() === '') return;
+    newBusy = true;
+    try {
+      await ApiC.post(Model.Todolist, {
+        notifOnSaved: 0,
+        content: newTitle.trim(),
+        deadline: newTask.start.toISOString(),
+        duration_minutes: Math.max(5, Math.min(1440, Math.round((newTask.end.getTime() - newTask.start.getTime()) / 60000))),
+        project_id: newProject,
+      });
+      window.dispatchEvent(new CustomEvent('todolist-changed'));
+      newTask = null;
+      await load();
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Could not create the task.');
+    } finally {
+      newBusy = false;
+    }
+  }
+
   function onLinkClick(event: MouseEvent): void {
     if (suppressClick) {
       event.preventDefault();
@@ -585,7 +659,7 @@
   }
 </script>
 
-<svelte:window on:click={closeMenu} on:keydown={event => { if (event.key === 'Escape') { menuOpen = false; feedDialog = false; } }} />
+<svelte:window on:click={closeMenu} on:keydown={event => { if (event.key === 'Escape') { menuOpen = false; feedDialog = false; newTask = null; } }} />
 
 <div class='cal-page'>
   <div class='cal-toolbar'>
@@ -702,7 +776,7 @@
             <div class='cal-line' style='top:{hour * HOUR}px'></div>
           {/each}
           {#each days as day, index (day.getTime())}
-            <div class='cal-col' class:cal-today={sameDay(day, now)} style='left:{index / days.length * 100}%;width:{100 / days.length}%'>
+            <div class='cal-col' class:cal-today={sameDay(day, now)} style='left:{index / days.length * 100}%;width:{100 / days.length}%' role='presentation' on:pointerdown={(pointer) => startSelect(pointer, index)}>
               {#each columns[index] ?? [] as event (event.key)}
                 <a
                   class='cal-ev'
@@ -724,6 +798,11 @@
                   {/if}
                 </a>
               {/each}
+              {#if selection && selection.index === index}
+                <div class='cal-select-box' style='top:{selection.lo / 60 * HOUR}px;height:{(selection.hi - selection.lo) / 60 * HOUR}px'>
+                  {hourClock(selection.lo)}–{hourClock(selection.hi)}
+                </div>
+              {/if}
               {#if sameDay(day, now)}
                 <div class='cal-now' style='top:{nowTop}px'></div>
               {/if}
@@ -735,6 +814,34 @@
   {/if}
   {#if loading}<p class='pm-muted small mt-2'>{t('Loading')}…</p>{/if}
 </div>
+
+{#if newTask}
+  <div class='cal-modal-backdrop' role='presentation' on:mousedown|self={closeNewTask}>
+    <form class='cal-modal' role='dialog' aria-modal='true' aria-labelledby='cal-new-title' on:submit|preventDefault={saveNewTask}>
+      <h3 id='cal-new-title' class='h5'>{t('New task')}</h3>
+      <div class='small'>
+        <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>{newTask.start.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}, {timeText(newTask.start)}–{timeText(newTask.end)}
+      </div>
+      <label class='cal-modal-field'>
+        <span class='small'>{t('Title')}</span>
+        <input class='form-control' type='text' bind:this={newTitleInput} bind:value={newTitle} autocomplete='off' />
+      </label>
+      <label class='cal-modal-field'>
+        <span class='small'>{t('Project')}</span>
+        <select class='form-control' bind:value={newProject}>
+          <option value={null}>{t('Unfiled')}</option>
+          {#each projectChoices as project (project.id)}
+            <option value={project.id}>{projectName(project.id)}</option>
+          {/each}
+        </select>
+      </label>
+      <div class='cal-modal-buttons'>
+        <button type='button' class='btn btn-ghost' on:click={closeNewTask}>{t('Cancel')}</button>
+        <button type='submit' class='btn btn-primary' disabled={newBusy || newTitle.trim() === ''}>{t('Add task')}</button>
+      </div>
+    </form>
+  </div>
+{/if}
 
 {#if feedDialog}
   <div class='cal-modal-backdrop' role='presentation' on:mousedown|self={closeFeedDialog}>
@@ -839,6 +946,20 @@
 
   .cal-feed-error {
     color: var(--danger, #c0392b);
+  }
+
+  .cal-select-box {
+    background: color-mix(in srgb, var(--primary) 22%, transparent);
+    border: 1px solid var(--primary);
+    border-radius: 0.25rem;
+    font-size: 0.7rem;
+    left: 2px;
+    overflow: hidden;
+    padding: 0 0.25rem;
+    pointer-events: none;
+    position: absolute;
+    right: 2px;
+    z-index: 4;
   }
 
   .cal-modal-backdrop {
