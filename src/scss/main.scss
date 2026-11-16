@@ -6411,8 +6411,8 @@ div > .sticky-navbar {
   background: var(--mainbackground);
   border: 1px solid var(--secondary);
   border-radius: 0.75rem;
-  bottom: 0.6rem;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+  max-height: calc(100% - 1.2rem);
   overflow: auto;
   padding: 0.8rem;
   position: absolute;
