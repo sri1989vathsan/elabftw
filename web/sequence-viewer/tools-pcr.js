@@ -251,6 +251,8 @@
       window.DigestCompare.pcrLanes = found.slice(0, 6).map(function (item, index) {
         return { label: 'PCR ' + (index + 1), size: item.size, start: item.start, end: item.end };
       });
+      const gelHost = element('div', 'tool-card');
+      gelHost.hidden = true;
       found.slice(0, 6).forEach(function (item, index) {
         const card = element('div', 'tool-card');
         const gcCount = item.sequence.replace(/[^GC]/g, '').length;
@@ -263,9 +265,22 @@
         });
         const gel = element('button', 'tool-btn', 'Show on the gel');
         gel.type = 'button';
+        gel.title = 'The gel of Compare digests, with the products of this PCR as lanes';
         gel.addEventListener('click', function () {
-          if (window.ToolSidebar) {
-            window.ToolSidebar.open('digest');
+          const open = gelHost.hidden;
+          gelHost.hidden = !open;
+          gel.textContent = open ? 'Hide the gel' : 'Show on the gel';
+          gelHost.textContent = '';
+          if (open && window.DigestCompare && window.DigestCompare.gelInto) {
+            window.DigestCompare.gelInto(gelHost);
+            const full = element('button', 'tool-btn', 'Open in Compare digests');
+            full.type = 'button';
+            full.addEventListener('click', function () {
+              if (window.ToolSidebar) {
+                window.ToolSidebar.open('digest');
+              }
+            });
+            gelHost.append(full);
           }
         });
         const make = element('button', 'tool-btn', 'Save as a new entry');
@@ -319,6 +334,7 @@
         card.append(actions);
         result.append(card);
       });
+      result.append(gelHost);
   }
 
   async function pcr(editor, context) {

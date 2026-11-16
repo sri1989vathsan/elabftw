@@ -594,6 +594,27 @@
       }
     }
 
+    // the same gel in another panel (the Primers tab): the combinations of the digests, the products of the PCR, the uncut plasmid
+    window.DigestCompare.gelInto = function (host) {
+      const state = cutsOf();
+      const results = [];
+      lanes.forEach(function (lane, index) {
+        const done = lane.enzymes.length === 0 ? [] : digest(lane.enzymes, state);
+        if (done.length > 0) {
+          results.push({ label: lane.enzymes.length > 2 ? lane.enzymes.slice(0, 2).join('+') + '+' : lane.enzymes.join('+'), color: COLORS[index % COLORS.length], fragments: done });
+        }
+      });
+      (window.DigestCompare.pcrLanes || []).forEach(function (lane) {
+        results.push({ label: lane.label, color: '#c2410c', fragments: [{ size: lane.size, start: lane.start, end: lane.end }] });
+      });
+      if (showUncut) {
+        results.unshift({ label: 'uncut', color: '#8a93a0', fragments: [{ size: state.length, start: 0, end: state.length - 1 }] });
+      }
+      const wrap = element('div', 'digest-gel-wrap');
+      wrap.append(gel(state, results));
+      host.append(wrap, element('p', 'digest-help', 'The same gel as in Compare digests: its combinations and the PCR products. Click a band to select it on the sequence.'));
+    };
+
     window.ToolSidebar.register({ id: 'digest', icon: 'digest', label: 'Compare digests', show: function (host) {
       panel = host;
       render();
