@@ -3,6 +3,7 @@
   import { ApiC } from '../api';
   import i18next from '../i18n';
   import { openCalendarSettings } from '../calendar-settings';
+  import { core } from '../core';
   import {
     feedError as feedErrorStore,
     feedText as feedTextStore,
@@ -59,6 +60,8 @@
 
   const HOUR = 48;
   const SNAP = 15;
+  // what the page remembers is kept per eLabFTW account (two people can use one browser)
+  const account = (key: string): string => `${key}:${core.currentUserid ?? 0}`;
   const VIEW_KEY = 'elabftw-calendar-page-view';
   const TASK_COLOR = '#5f6b7a';
   const PALETTE = ['#0c58ab', '#7c3aed', '#1a7f4b', '#b45309', '#be185d', '#0f766e', '#c2410c', '#4d7c0f'];
@@ -88,7 +91,7 @@
 
   function savedView(): View {
     try {
-      const stored = window.localStorage.getItem(VIEW_KEY);
+      const stored = window.localStorage.getItem(account(VIEW_KEY));
       return isView(stored) ? stored : 'week';
     } catch {
       return 'week';
@@ -143,7 +146,7 @@
 
   function readHidden(): number[] {
     try {
-      const parsed = JSON.parse(window.localStorage.getItem(HIDDEN_KEY) ?? '[]') as unknown;
+      const parsed = JSON.parse(window.localStorage.getItem(account(HIDDEN_KEY)) ?? '[]') as unknown;
       return Array.isArray(parsed) ? parsed.filter((id): id is number => typeof id === 'number') : [];
     } catch {
       return [];
@@ -238,7 +241,7 @@
     const todayShown = days.some(day => sameDay(day, now));
     gridEl.scrollTop = Math.max(0, ((todayShown ? now.getHours() - 1 : prefs.start) - hourSpan.first) * HOUR);
   }
-  $: try { window.localStorage.setItem(VIEW_KEY, view); } catch { /* the view is then just not remembered */ }
+  $: try { window.localStorage.setItem(account(VIEW_KEY), view); } catch { /* the view is then just not remembered */ }
 
   function applyDrag(event: CalEvent): CalEvent {
     return drag && drag.key === event.key ? { ...event, start: drag.start, end: drag.end } : event;
@@ -362,12 +365,12 @@
 
   function toggleProject(id: number): void {
     hiddenProjects = hiddenProjects.includes(id) ? hiddenProjects.filter(value => value !== id) : [...hiddenProjects, id];
-    try { window.localStorage.setItem(HIDDEN_KEY, JSON.stringify(hiddenProjects)); } catch { /* not remembered */ }
+    try { window.localStorage.setItem(account(HIDDEN_KEY), JSON.stringify(hiddenProjects)); } catch { /* not remembered */ }
   }
 
   function setAllProjects(on: boolean): void {
     hiddenProjects = on ? [] : usedProjects;
-    try { window.localStorage.setItem(HIDDEN_KEY, JSON.stringify(hiddenProjects)); } catch { /* not remembered */ }
+    try { window.localStorage.setItem(account(HIDDEN_KEY), JSON.stringify(hiddenProjects)); } catch { /* not remembered */ }
   }
 
   // a Google calendar is shown or hidden by the sync (the same choice as in the panel of the to-dos)
@@ -616,7 +619,7 @@
     </div>
       <div class='cal-menu' bind:this={menuEl}>
         <button type='button' class='btn btn-secondary btn-sm' aria-haspopup='true' aria-expanded={menuOpen} on:click={() => { menuOpen = !menuOpen; }}>
-          <i class='fas fa-layer-group fa-fw mr-1' aria-hidden='true'></i>{t('Calendars')} <span class='cal-menu-count'>{shownCount}/{totalCount}</span> <i class='fas fa-caret-down' aria-hidden='true'></i>
+          <i class='fas fa-layer-group fa-fw mr-1' aria-hidden='true'></i><span class='cal-btn-label'>{t('Calendars')}</span> <span class='cal-menu-count'>{shownCount}/{totalCount}</span> <i class='fas fa-caret-down' aria-hidden='true'></i>
         </button>
         {#if menuOpen}
           <div class='cal-menu-panel' role='group' aria-label={t('Calendars')}>
@@ -668,8 +671,8 @@
           </div>
         {/if}
       </div>
-      <button type='button' class='btn btn-secondary btn-sm' on:click={openCalendarSettings}>
-        <i class='fas fa-gear fa-fw mr-1' aria-hidden='true'></i>{t('Settings')}
+      <button type='button' class='btn btn-secondary btn-sm' title={t('Calendar settings')} aria-label={t('Calendar settings')} on:click={openCalendarSettings}>
+        <i class='fas fa-gear fa-fw' aria-hidden='true'></i><span class='cal-btn-label'> {t('Settings')}</span>
       </button>
     </div>
   </div>
@@ -850,7 +853,26 @@
   .cal-right {
     align-items: center;
     display: flex;
-    gap: 0.5rem;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .cal-toolbar :global(.btn) {
+    line-height: 1.2;
+    padding: 0.2rem 0.5rem;
+    white-space: nowrap;
+  }
+
+  /* a narrow window: the buttons are only icons (and the count) */
+  @media (max-width: 760px) {
+    .cal-btn-label {
+      display: none;
+    }
+
+    .cal-title {
+      font-size: 1rem;
+      margin-left: 0.25rem;
+    }
   }
 
   .cal-menu {
