@@ -194,6 +194,7 @@
         panel.append(holder);
         if (window.ToolsPcr && window.ToolsPcr.saveEntryForm) {
           window.ToolsPcr.saveEntryForm(holder, {
+            plasmid: !!editor.getState().sequenceData.circular,
             name: (document.getElementById('entry-title') || {}).textContent || base,
             genbank: function (fileName) {
               return window.bioParsers.jsonToGenbank(Object.assign(cleanData(), { name: fileName }));

@@ -165,19 +165,35 @@
     folderName.placeholder = 'Name of the new folder';
     folderName.hidden = true;
     folder.addEventListener('change', function () {
-      folderName.hidden = folder.value !== 'new';
+      showFolder();
     });
+    // a plasmid can be added to the lab database directly (it is locked there), or kept in My entries, in a folder
+    const where = element('select', 'tools-select');
+    [['lab', 'Add to the lab database (it is locked)'], ['none', 'My entries, in a folder'], ['file', 'Not in the Database: only download the file']].forEach(function (choice) {
+      where.append(Object.assign(element('option', '', choice[1]), { value: choice[0] }));
+    });
+    where.hidden = !spec.plasmid;
+    const showFolder = function () {
+      const mine = !spec.plasmid || where.value === 'none';
+      folder.hidden = !mine;
+      folderName.hidden = !mine || folder.value !== 'new';
+      parent.hidden = primersLabel.hidden = spec.plasmid && where.value === 'file';
+      save.textContent = spec.plasmid && where.value === 'file' ? 'Download the GenBank file' : spec.saveLabel;
+    };
+    where.addEventListener('change', showFolder);
     const moduleSelect = element('select', 'tools-select');
+    moduleSelect.hidden = !!spec.plasmid;
     fetch('../registry-modules.php', { credentials: 'same-origin' }).then(function (response) {
       return response.json();
     }).then(function (loaded) {
+      // a plasmid goes in the module of the plasmids; anything else (a PCR product) in another module
       const list = (loaded.modules || []).filter(function (m) {
-        return !/^(plasmids?|primers?|probes?)$/i.test(m.title);
+        return spec.plasmid ? /^plasmids?$/i.test(m.title) : !/^(plasmids?|primers?|probes?)$/i.test(m.title);
       });
       list.forEach(function (m) {
         moduleSelect.append(Object.assign(element('option', '', m.title), { value: String(m.id) }));
       });
-      const samples = list.find(function (m) {
+      const samples = spec.plasmid ? list[0] : list.find(function (m) {
         return /^samples?$/i.test(m.title);
       });
       if (samples) {
@@ -209,6 +225,20 @@
         message.textContent = 'A name is needed.';
         return;
       }
+      if (spec.plasmid && where.value === 'file') {
+        const safe = name.value.trim().replace(/[^A-Za-z0-9_.-]+/g, '_').slice(0, 60) || 'plasmid';
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(new Blob([spec.genbank(safe.slice(0, 40))], { type: 'text/plain' }));
+        link.download = safe + '.gb';
+        document.body.append(link);
+        link.click();
+        link.remove();
+        window.setTimeout(function () {
+          URL.revokeObjectURL(link.href);
+        }, 1000);
+        message.textContent = 'Downloaded ' + safe + '.gb. Nothing was added to the Database.';
+        return;
+      }
       save.disabled = true;
       message.textContent = 'Saving...';
       const headers = { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': csrf };
@@ -217,7 +247,7 @@
         if (!moduleId) {
           throw new Error('There is no module to put it in.');
         }
-        const made = await fetch('../api/v2/inventory', { method: 'POST', credentials: 'same-origin', headers: headers, body: JSON.stringify({ category: moduleId, title: name.value.trim(), register: 'none' }) });
+        const made = await fetch('../api/v2/inventory', { method: 'POST', credentials: 'same-origin', headers: headers, body: JSON.stringify({ category: moduleId, title: name.value.trim(), register: spec.plasmid ? where.value : 'none' }) });
         if (!made.ok) {
           throw new Error('The entry could not be made (' + made.status + ').');
         }
@@ -239,8 +269,12 @@
             await tools.attach(id, entry.id);
           }
         }
-        let folderId = Number(folder.value) || 0;
-        if (folder.value === 'new') {
+        const inMine = !spec.plasmid || where.value === 'none';
+        if (!inMine) {
+          await fetch('../registry-lock.php', { method: 'POST', credentials: 'same-origin', headers: headers, body: JSON.stringify({ id: id }) });
+        }
+        let folderId = inMine ? Number(folder.value) || 0 : 0;
+        if (inMine && folder.value === 'new') {
           const wanted = folderName.value.trim();
           if (wanted === '') {
             throw new Error('Saved, but the new folder needs a name.');
@@ -285,7 +319,8 @@
       return node;
     };
     save.style.cssText = 'display:block;margin:0.6rem 0 0.3rem';
-    form.append(heading('Name'), name, heading('Folder'), folder, folderName, heading('Module'), moduleSelect, parent, primersLabel, save, message);
+    showFolder();
+    form.append(heading('Name'), name, heading(spec.plasmid ? 'Where it goes' : 'Folder'), where, folder, folderName, spec.plasmid ? element('span') : heading('Module'), moduleSelect, parent, primersLabel, save, message);
     card.append(form);
   }
 
