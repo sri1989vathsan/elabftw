@@ -313,7 +313,10 @@
   // only the projects that have a task in the days shown are listed, the ones that are hidden stay listed
   $: usedProjects = [...new Set([...tasks.map(task => task.project ?? 0), ...hiddenProjects])]
     .sort((a, b) => (a === 0 ? 1 : b === 0 ? -1 : projectName(a).localeCompare(projectName(b))));
-  $: columns = view === 'month' ? [] : days.map(day => place(events, day));
+  // an event that fills whole days (from midnight to midnight: holidays, birthdays) is not a block of the grid but a strip above it
+  $: columns = view === 'month' ? [] : days.map(day => place(events.filter(event => !isAllDay(event)), day));
+  $: allDayRows = view === 'month' ? [] : days.map(day => events.filter(event => isAllDay(event) && event.start.getTime() < day.getTime() + DAY_MS && event.end.getTime() > day.getTime()));
+  $: hasAllDay = allDayRows.some(list => list.length > 0);
   $: byDay = view === 'month' ? groupByDay(events, days) : new Map<string, CalEvent[]>();
   $: title = periodLabel(view, cursor, days);
   $: nowTop = (now.getHours() + now.getMinutes() / 60) * HOUR;
@@ -326,6 +329,11 @@
 
   function applyDrag(event: CalEvent): CalEvent {
     return drag && drag.key === event.key ? { ...event, start: drag.start, end: drag.end } : event;
+  }
+
+  function isAllDay(event: CalEvent): boolean {
+    const midnight = (date: Date): boolean => date.getHours() === 0 && date.getMinutes() === 0;
+    return event.kind === 'external' && event.end.getTime() - event.start.getTime() >= DAY_MS - 3600000 && midnight(event.start) && midnight(event.end);
   }
 
   function sameDay(a: Date, b: Date): boolean {
@@ -745,7 +753,7 @@
           <button type='button' class='cal-month-num' on:click={() => openDay(day)} title={t('Open this day')}>{day.getDate()}</button>
           {#each list.slice(0, 3) as event (event.key)}
             <a class='cal-chip' class:cal-done={event.done} style='--c:{event.color}' href={event.url ?? '#'} data-open-task-popup={event.kind === 'task' ? event.id : undefined} title={event.title} on:click={onLinkClick}>
-              <span class='cal-chip-time'>{timeText(event.start)}</span> {event.title}
+              {#if !isAllDay(event)}<span class='cal-chip-time'>{timeText(event.start)}</span> {/if}{event.title}
             </a>
           {/each}
           {#if list.length > 3}
@@ -764,6 +772,18 @@
         </button>
       {/each}
     </div>
+    {#if hasAllDay}
+      <div class='cal-head cal-allday' style='--n:{days.length}'>
+        <div class='cal-gutter'></div>
+        {#each allDayRows as list, index (index)}
+          <div class='cal-allday-cell'>
+            {#each list as event (event.key)}
+              <span class='cal-allday-chip' style='--c:{event.color}' title={`${event.title}${event.source ? `  (${event.source})` : ''}`}>{event.title}</span>
+            {/each}
+          </div>
+        {/each}
+      </div>
+    {/if}
     <div class='cal-grid' bind:this={gridEl}>
       <div class='cal-body' style='height:{HOUR * 24}px'>
         <div class='cal-hours'>
@@ -1034,6 +1054,30 @@
   .cal-head {
     display: grid;
     grid-template-columns: 3.2rem repeat(var(--n), minmax(0, 1fr));
+  }
+
+  .cal-allday {
+    margin-bottom: 0.2rem;
+  }
+
+  .cal-allday-cell {
+    border-left: 1px solid var(--cal-line);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 0 2px;
+  }
+
+  .cal-allday-chip {
+    background: color-mix(in srgb, var(--c) 22%, var(--mainbackground, #fff));
+    border-left: 3px solid var(--c);
+    border-radius: 0.2rem;
+    font-size: 0.72rem;
+    overflow: hidden;
+    padding: 0 0.3rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .cal-day-head {
