@@ -14,6 +14,8 @@ set -e
 # and unset the sensitive ones so they cannot be accessed by a rogue process
 getEnv() {
     custom_connect_src=${CUSTOM_CONNECT_SRC:-}
+    # fork: let the page load Google's sign-in and call its APIs (optional Google Tasks/Calendar sync), off by default
+    google_sync_csp=${GOOGLE_SYNC_CSP:-false}
     db_host=${DB_HOST:-localhost}
     db_port=${DB_PORT:-3306}
     db_name=${DB_NAME:-elabftw}
@@ -196,6 +198,16 @@ nginxConf() {
         rm -f /run/nginx/conf.d/brotli.conf
     fi
     sed -i -e "s/%CUSTOM_CONNECT_SRC%/$(escape_sed_repl "${custom_connect_src}")/" /run/nginx/common.conf
+    # the placeholders are always replaced: by Google's addresses with GOOGLE_SYNC_CSP=true, else by nothing
+    google_script_src=""
+    google_connect_src=""
+    google_frame_src=""
+    if [ "${google_sync_csp}" = "true" ]; then
+        google_script_src=" https://accounts.google.com/gsi/client"
+        google_connect_src=" https://tasks.googleapis.com https://www.googleapis.com https://accounts.google.com/gsi/"
+        google_frame_src=" https://accounts.google.com/gsi/"
+    fi
+    sed -i -e "s|%GOOGLE_SCRIPT_SRC%|${google_script_src}|" -e "s|%GOOGLE_CONNECT_SRC%|${google_connect_src}|" -e "s|%GOOGLE_FRAME_SRC%|${google_frame_src}|" /run/nginx/common.conf
     # put a random short string as the server header to prevent fingerprinting
     random=$(openssl rand -hex 2)
     if (( 16#${random:0:2} % 64 == 0 )); then
