@@ -11,10 +11,12 @@
   const status = document.getElementById('status');
   const saveState = document.getElementById('save-state');
   const fileName = params.get('name') || 'sequence';
-  const entryId = Number(body.entry) || 0;
+  // a sequence that is open in a tab without being in the Database (the product of a PCR): its text is kept by the page of the tabs, nothing is saved
+  const scratchKey = params.get('scratch') || '';
+  const entryId = scratchKey ? 0 : Number(body.entry) || 0;
   // a Sanger trace (ab1) is an instrument file: it is only looked at, never written back
   const isTrace = /\.ab1$/i.test(fileName);
-  const canWrite = body.canWrite === '1' && !isTrace;
+  const canWrite = body.canWrite === '1' && !isTrace && !scratchKey;
   // the tool of the Tools menu: an editor with no file of the database behind it, nothing is saved
   const toolMode = body.tool === '1';
   // after a save the file to replace is the new version, and a SnapGene file is saved as a GenBank file next to it
@@ -104,6 +106,9 @@
   }
 
   document.title = fileName + ' - Sequence editor';
+  if (scratchKey && document.getElementById('entry-title')) {
+    document.getElementById('entry-title').textContent = fileName.replace(/\.gb$/i, '');
+  }
   const titleElement = document.getElementById('title');
   if (titleElement) {
     titleElement.textContent = fileName;
@@ -218,17 +223,26 @@
     if (toolMode) {
       return loadTool();
     }
-    const download = new URLSearchParams({ f: params.get('f') || '', name: fileName, storage: params.get('storage') || '1' });
-    if (params.get('access_key')) {
-      download.set('access_key', params.get('access_key'));
-    }
-    const response = await fetch('../app/download.php?' + download.toString(), { credentials: 'same-origin' });
-    if (!response.ok) {
-      throw new Error('The file could not be downloaded (' + response.status + ').');
-    }
     // SnapGene and ab1 files are binary, the other formats are text
-    const isSnapgene = /\.dna$/i.test(fileName);
-    const input = isSnapgene || isTrace ? new File([await response.blob()], fileName) : await response.text();
+    const isSnapgene = !scratchKey && /\.dna$/i.test(fileName);
+    let input;
+    if (scratchKey) {
+      const kept = window.parent && window.parent.CloningTabs ? window.parent.CloningTabs.scratch(scratchKey) : null;
+      if (!kept) {
+        throw new Error('This sequence is not kept any more: make it again.');
+      }
+      input = kept.text;
+    } else {
+      const download = new URLSearchParams({ f: params.get('f') || '', name: fileName, storage: params.get('storage') || '1' });
+      if (params.get('access_key')) {
+        download.set('access_key', params.get('access_key'));
+      }
+      const response = await fetch('../app/download.php?' + download.toString(), { credentials: 'same-origin' });
+      if (!response.ok) {
+        throw new Error('The file could not be downloaded (' + response.status + ').');
+      }
+      input = isSnapgene || isTrace ? new File([await response.blob()], fileName) : await response.text();
+    }
     const results = await window.bioParsers.anyToJson(input, { fileName: fileName });
     const result = Array.isArray(results) ? results[0] : results;
     if (!result || !result.success || !result.parsedSequence) {
@@ -338,7 +352,7 @@
     }
 
     if (!canWrite) {
-      setSaveState(isTrace ? 'Sanger trace: read only' : (body.locked === '1' ? 'Locked: unlock this entry to edit its sequence' : 'Read only: you cannot edit this entry'), '');
+      setSaveState(scratchKey ? 'Not in the Database: nothing is saved. Use the download button of the toolbar to keep it' : isTrace ? 'Sanger trace: read only' : (body.locked === '1' ? 'Locked: unlock this entry to edit its sequence' : 'Read only: you cannot edit this entry'), '');
       return;
     }
     setSaveState('No changes yet', '');

@@ -66,7 +66,8 @@
   function add(entry, query, title) {
     // the same file of the same entry is one tab, whatever the link that opened it looked like
     const file = new URLSearchParams(query).get('name') || '';
-    const existing = tabs.find(function (tab) {
+    // a scratch tab (a sequence that is not in the Database) is always a tab of its own
+    const existing = new URLSearchParams(query).has('scratch') ? null : tabs.find(function (tab) {
       return tab.entry === entry && tab.file === file;
     });
     if (existing) {
@@ -210,7 +211,19 @@
   });
 
   // what the cloning panel (cloning-panel.js) needs: the open plasmids, which one is in front, a way to open another
-  window.CloningTabs = { list: function () {
+  // sequences that are open in a tab without being in the Database (the product of a PCR): the editor of the tab reads its text here, read only
+  const scratch = {};
+  let scratchCount = 0;
+  const addScratch = function (text, name, parentEntry) {
+    scratchCount += 1;
+    const key = 's' + scratchCount;
+    scratch[key] = { text: text, name: name };
+    add(parentEntry, new URLSearchParams({ entry: String(parentEntry), scratch: key, name: name.replace(/[^A-Za-z0-9_.+() -]+/g, '_') + '.gb' }).toString(), name);
+  };
+
+  window.CloningTabs = { addScratch: addScratch, scratch: function (key) {
+    return scratch[key] || null;
+  }, list: function () {
     return tabs.slice();
   }, current: function () {
     return current;

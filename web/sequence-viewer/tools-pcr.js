@@ -297,6 +297,17 @@
         gb.addEventListener('click', function () {
           saveFile(genbankOf(item, data, 'PCR_product_' + (index + 1), { forward: nameOf(item.forward, 'forward primer'), reverse: nameOf(item.reverse, 'reverse primer') }), 'gb', 'text/plain');
         });
+        const tab = element('button', 'tool-btn', 'Open in a new tab');
+        tab.type = 'button';
+        tab.title = 'Open this linear product in a tab of its own: it is not added to the Database';
+        tab.addEventListener('click', function () {
+          const tabs = window.parent && window.parent !== window ? window.parent.CloningTabs : null;
+          if (!tabs || !tabs.addScratch) {
+            return;
+          }
+          const label = 'PCR product ' + (index + 1) + ' (' + item.size + ' bp)';
+          tabs.addScratch(genbankOf(item, data, 'PCR_product_' + (index + 1), { forward: nameOf(item.forward, 'forward primer'), reverse: nameOf(item.reverse, 'reverse primer') }), label, context.entryId || 0);
+        });
         const fa = element('button', 'tool-btn', 'Download FASTA');
         fa.type = 'button';
         fa.addEventListener('click', function () {
@@ -304,7 +315,7 @@
         });
         actions.append(select, copyButton(function () {
           return item.sequence;
-        }), gel, gb, fa, make);
+        }), tab, gel, gb, fa, make);
         card.append(actions);
         result.append(card);
       });
