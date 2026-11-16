@@ -143,10 +143,39 @@
     const name = element('input', 'tools-select');
     name.type = 'text';
     name.value = spec.name;
-    const where = element('select', 'tools-select');
-    // a PCR product is in no module of the lab database: it is always a private entry of the user
-    [['none', 'My entries (private, no number yet)']].forEach(function (choice) {
-      where.append(Object.assign(element('option', '', choice[1]), { value: choice[0] }));
+    // where the product goes: one of your own folders (the choice of the Primers tab), and the module it is an entry of (it is not a plasmid)
+    const folder = element('select', 'tools-select');
+    folder.append(Object.assign(element('option', '', 'No folder (Unfiled)'), { value: '0' }));
+    fetch('../registry-transfer.php?folders=1', { credentials: 'same-origin' }).then(function (response) {
+      return response.json();
+    }).then(function (loaded) {
+      // your own folders only (as in the Primers tab): the entry is in My entries, not listed in the lab database
+      (loaded.folders || []).filter(function (f) {
+        return !f.database && Number(f.owner) === Number(loaded.me);
+      }).forEach(function (f) {
+        folder.append(Object.assign(element('option', '', f.path), { value: String(f.id) }));
+      });
+    }).catch(function () {
+      // only Unfiled is offered
+    });
+    const moduleSelect = element('select', 'tools-select');
+    fetch('../registry-modules.php', { credentials: 'same-origin' }).then(function (response) {
+      return response.json();
+    }).then(function (loaded) {
+      const list = (loaded.modules || []).filter(function (m) {
+        return !/^(plasmids?|primers?|probes?)$/i.test(m.title);
+      });
+      list.forEach(function (m) {
+        moduleSelect.append(Object.assign(element('option', '', m.title), { value: String(m.id) }));
+      });
+      const samples = list.find(function (m) {
+        return /^samples?$/i.test(m.title);
+      });
+      if (samples) {
+        moduleSelect.value = String(samples.id);
+      }
+    }).catch(function () {
+      // the save then says that there is no module
     });
     const parent = element('label', 'tool-muted');
     const parentBox = element('input');
@@ -175,17 +204,11 @@
       message.textContent = 'Saving...';
       const headers = { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': csrf };
       try {
-        // the module of the plasmids: the one that needs a sequence file
-        const modules = (await (await fetch('../registry-modules.php', { credentials: 'same-origin' })).json()).modules || [];
-        const module = modules.find(function (m) {
-          return m.settings && m.settings.requires_sequence_file;
-        }) || modules.find(function (m) {
-          return /plasmid/i.test(m.title);
-        });
-        if (!module) {
-          throw new Error('There is no module of plasmids to put it in.');
+        const moduleId = Number(moduleSelect.value);
+        if (!moduleId) {
+          throw new Error('There is no module to put it in.');
         }
-        const made = await fetch('../api/v2/inventory', { method: 'POST', credentials: 'same-origin', headers: headers, body: JSON.stringify({ category: module.id, title: name.value.trim(), register: where.value }) });
+        const made = await fetch('../api/v2/inventory', { method: 'POST', credentials: 'same-origin', headers: headers, body: JSON.stringify({ category: moduleId, title: name.value.trim(), register: 'none' }) });
         if (!made.ok) {
           throw new Error('The entry could not be made (' + made.status + ').');
         }
@@ -207,8 +230,11 @@
             await tools.attach(id, entry.id);
           }
         }
-        if (where.value === 'lab') {
-          await fetch('../registry-lock.php', { method: 'POST', credentials: 'same-origin', headers: headers, body: JSON.stringify({ id: id }) });
+        if (Number(folder.value) > 0) {
+          const filed = await fetch('../registry-transfer.php', { method: 'POST', credentials: 'same-origin', headers: headers, body: JSON.stringify({ action: 'move_to_folder', ids: [id], folder_id: Number(folder.value) }) });
+          if (!filed.ok) {
+            throw new Error('Saved, but it could not be put in the folder (' + filed.status + ').');
+          }
         }
         message.textContent = '';
         const open = element('a', 'tool-btn', 'Open the new entry');
@@ -231,7 +257,7 @@
       return node;
     };
     save.style.cssText = 'display:block;margin:0.6rem 0 0.3rem';
-    form.append(heading('Name'), name, parent, primersLabel, save, message);
+    form.append(heading('Name'), name, heading('Folder'), folder, heading('Module'), moduleSelect, parent, primersLabel, save, message);
     card.append(form);
   }
 
@@ -341,8 +367,7 @@
         });
         actions.append(select, copyButton(function () {
           return item.sequence;
-        }), tab, gel, gb, fa);
-        // a PCR product is not a plasmid and has no module of its own: it is kept as a file, or looked at in a tab (the form of `make` stays for a module of fragments)
+        }), tab, gel, gb, fa, make);
         card.append(actions);
         result.append(card);
       });
