@@ -20,8 +20,11 @@
     end: Date;
     done: boolean;
     color: string;
-    // the name of the calendar an external event comes from
+    // the name of the calendar an external event comes from, and its id
     source?: string;
+    calendar?: string;
+    // the project of a task (0: none)
+    project?: number;
     url?: string;
   };
 
@@ -31,7 +34,12 @@
     deadline: string;
     duration_minutes?: number | null;
     completed_at: string | null;
+    project_id?: number | null;
   };
+
+  type Project = { id: number; name: string; parent_id: number | null };
+
+  type GoogleCalendar = { id: string; summary: string; color: string; shown: boolean };
 
   type Placed = CalEvent & { top: number; height: number; lane: number; lanes: number };
 
@@ -41,7 +49,9 @@
   const HOUR = 48;
   const SNAP = 15;
   const VIEW_KEY = 'elabftw-calendar-page-view';
-  const TASK_COLOR = '#0c58ab';
+  const TASK_COLOR = '#5f6b7a';
+  const PALETTE = ['#0c58ab', '#7c3aed', '#1a7f4b', '#b45309', '#be185d', '#0f766e', '#c2410c', '#4d7c0f'];
+  const HIDDEN_KEY = 'elabftw-calendar-page-hidden-projects';
   const DAY_MS = 86400000;
 
   function startOfDay(date: Date): Date {
@@ -88,6 +98,20 @@
   let drag: { key: string; mode: 'move' | 'resize'; start: Date; end: Date } | null = null;
   let suppressClick = false;
   let monthDay: Date | null = null;
+  // the calendars of the page: the projects of the tasks (each can be shown or hidden, 0 is "No project"), and the Google calendars
+  let projects: Project[] = [];
+  let hiddenProjects: number[] = readHidden();
+  let googleState: 'unknown' | 'off' | 'needs' | 'ready' = 'unknown';
+  let googleCalendars: GoogleCalendar[] = [];
+
+  function readHidden(): number[] {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(HIDDEN_KEY) ?? '[]') as unknown;
+      return Array.isArray(parsed) ? parsed.filter((id): id is number => typeof id === 'number') : [];
+    } catch {
+      return [];
+    }
+  }
 
   // the days of the view, and the range read from the server (a day more on each side)
   $: days = view === 'day'
@@ -97,7 +121,26 @@
       : Array.from({ length: 42 }, (_, index) => addDays(mondayOf(new Date(cursor.getFullYear(), cursor.getMonth(), 1)), index));
   $: rangeKey = `${view}|${days[0].getTime()}|${days.length}`;
   $: if (rangeKey) void load();
-  $: events = [...tasks, ...external].map(applyDrag);
+  $: shownGoogle = new Set(googleCalendars.filter(calendar => calendar.shown).map(calendar => calendar.id));
+  $: events = [
+    ...tasks.filter(task => !hiddenProjects.includes(task.project ?? 0)),
+    ...external.filter(event => googleState !== 'ready' || event.calendar === undefined || shownGoogle.has(event.calendar)),
+  ].map(event => (event.kind === 'task' ? { ...event, color: projectColor(event.project ?? 0) } : event)).map(applyDrag);
+  // the project calendars: a colour each, a project with a parent is written "Parent / Project"
+  $: sorted = [...projects].sort((a, b) => a.id - b.id);
+  $: projectName = (id: number): string => {
+    const project = projects.find(item => item.id === id);
+    if (!project) return t('No project');
+    const parent = project.parent_id === null ? null : projects.find(item => item.id === project.parent_id);
+    return parent ? `${parent.name} / ${project.name}` : project.name;
+  };
+  $: projectColor = (id: number): string => {
+    const index = sorted.findIndex(item => item.id === id);
+    return index < 0 ? TASK_COLOR : PALETTE[index % PALETTE.length];
+  };
+  // only the projects that have a task in the days shown are listed, the ones that are hidden stay listed
+  $: usedProjects = [...new Set([...tasks.map(task => task.project ?? 0), ...hiddenProjects])]
+    .sort((a, b) => (a === 0 ? 1 : b === 0 ? -1 : projectName(a).localeCompare(projectName(b))));
   $: columns = view === 'month' ? [] : days.map(day => place(events, day));
   $: byDay = view === 'month' ? groupByDay(events, days) : new Map<string, CalEvent[]>();
   $: title = periodLabel(view, cursor, days);
@@ -209,6 +252,7 @@
           end: new Date(start.getTime() + minutes * 60000),
           done: task.completed_at !== null,
           color: TASK_COLOR,
+          project: task.project_id ?? 0,
           url: `projectmanagement.php?task=${task.id}`,
         };
       });
@@ -216,6 +260,40 @@
       notify.error(error instanceof Error ? error.message : 'Could not load the calendar.');
     } finally {
       loading = false;
+    }
+  }
+
+  function toggleProject(id: number): void {
+    hiddenProjects = hiddenProjects.includes(id) ? hiddenProjects.filter(value => value !== id) : [...hiddenProjects, id];
+    try { window.localStorage.setItem(HIDDEN_KEY, JSON.stringify(hiddenProjects)); } catch { /* not remembered */ }
+  }
+
+  function setAllProjects(on: boolean): void {
+    hiddenProjects = on ? [] : usedProjects;
+    try { window.localStorage.setItem(HIDDEN_KEY, JSON.stringify(hiddenProjects)); } catch { /* not remembered */ }
+  }
+
+  // a Google calendar is shown or hidden by the sync (the same choice as in the panel of the to-dos)
+  function toggleGoogle(calendar: GoogleCalendar): void {
+    googleCalendars = googleCalendars.map(item => (item.id === calendar.id ? { ...item, shown: !item.shown } : item));
+    window.dispatchEvent(new CustomEvent('elabftw:calendar-toggle', { detail: { id: calendar.id, on: !calendar.shown } }));
+  }
+
+  function connectGoogle(): void {
+    window.dispatchEvent(new CustomEvent('elabftw:calendar-connect'));
+  }
+
+  function onGoogleList(event: Event): void {
+    const detail = (event as CustomEvent<{ state: 'off' | 'needs' | 'ready'; calendars: GoogleCalendar[] }>).detail;
+    googleState = detail?.state ?? 'off';
+    googleCalendars = detail?.calendars ?? [];
+  }
+
+  async function loadProjects(): Promise<void> {
+    try {
+      projects = await ApiC.getJson(`${Model.TodolistProjects}?archived=0`) as Project[];
+    } catch {
+      projects = [];
     }
   }
 
@@ -295,7 +373,7 @@
   }
 
   function onExternal(event: Event): void {
-    const detail = (event as CustomEvent<{ events: Array<{ key: string; title: string; start: string; end: string; color?: string; source?: string; url?: string }> }>).detail;
+    const detail = (event as CustomEvent<{ events: Array<{ key: string; calendar?: string; title: string; start: string; end: string; color?: string; source?: string; url?: string }> }>).detail;
     external = (detail?.events ?? []).map(item => ({
       key: item.key,
       kind: 'external' as const,
@@ -306,6 +384,7 @@
       done: false,
       color: item.color ?? '#7c3aed',
       source: item.source,
+      calendar: item.calendar,
       url: item.url,
     }));
   }
@@ -313,6 +392,8 @@
   onMount(() => {
     window.addEventListener('todolist-changed', load);
     window.addEventListener('elabftw:calendar-events', onExternal);
+    window.addEventListener('elabftw:calendar-list', onGoogleList);
+    void loadProjects();
     // a request for the events of other calendars, for the days that are shown (answered by the sync, when it is on)
     window.dispatchEvent(new CustomEvent('elabftw:calendar-ready'));
     // refreshed while the page is on screen: tasks edited in a popup, by another person, in another tab
@@ -325,6 +406,7 @@
   onDestroy(() => {
     window.removeEventListener('todolist-changed', load);
     window.removeEventListener('elabftw:calendar-events', onExternal);
+    window.removeEventListener('elabftw:calendar-list', onGoogleList);
     window.clearInterval(refreshTimer);
     window.clearInterval(clockTimer);
   });
@@ -350,6 +432,40 @@
         </button>
       {/each}
     </div>
+  </div>
+
+  <div class='cal-sources'>
+    <div class='cal-sources-row'>
+      <span class='cal-sources-title'>{t('My tasks')}</span>
+      {#each usedProjects as id (id)}
+        <label class='cal-source' class:cal-off={hiddenProjects.includes(id)} style='--c:{projectColor(id)}'>
+          <input type='checkbox' checked={!hiddenProjects.includes(id)} on:change={() => toggleProject(id)} />
+          <span class='cal-dot'></span>{id === 0 ? t('No project') : projectName(id)}
+        </label>
+      {:else}
+        <span class='pm-muted small'>{t('No tasks in these days')}</span>
+      {/each}
+      {#if usedProjects.length > 1}
+        <button type='button' class='btn btn-ghost btn-sm' on:click={() => setAllProjects(true)}>{t('All')}</button>
+        <button type='button' class='btn btn-ghost btn-sm' on:click={() => setAllProjects(false)}>{t('None')}</button>
+      {/if}
+    </div>
+    {#if googleState !== 'unknown'}
+      <div class='cal-sources-row'>
+        <span class='cal-sources-title'>{t('Google calendars')}</span>
+        {#if googleState === 'ready'}
+          {#each googleCalendars as calendar (calendar.id)}
+            <label class='cal-source' class:cal-off={!calendar.shown} style='--c:{calendar.color}'>
+              <input type='checkbox' checked={calendar.shown} on:change={() => toggleGoogle(calendar)} />
+              <span class='cal-dot'></span>{calendar.summary}
+            </label>
+          {/each}
+        {:else}
+          <button type='button' class='btn btn-secondary btn-sm' on:click={connectGoogle}>{googleState === 'needs' ? t('Show my Google calendars') : t('Connect Google')}</button>
+          <span class='pm-muted small'>{googleState === 'needs' ? t('Allow Google Calendar once to choose which calendars are shown here.') : t('Connect your Google account to show its calendars here.')}</span>
+        {/if}
+      </div>
+    {/if}
   </div>
 
   {#if view === 'month'}
@@ -459,6 +575,54 @@
   .cal-views {
     display: flex;
     gap: 0.25rem;
+  }
+
+  .cal-sources {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .cal-sources-row {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.6rem;
+  }
+
+  .cal-sources-title {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .cal-source {
+    align-items: center;
+    border: 1px solid var(--c);
+    border-radius: 999px;
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 0.78rem;
+    gap: 0.3rem;
+    margin: 0;
+    padding: 0.05rem 0.55rem 0.05rem 0.4rem;
+  }
+
+  .cal-source input {
+    margin: 0;
+  }
+
+  .cal-source.cal-off {
+    border-style: dashed;
+    opacity: 0.55;
+  }
+
+  .cal-dot {
+    background: var(--c);
+    border-radius: 50%;
+    display: inline-block;
+    height: 0.6rem;
+    width: 0.6rem;
   }
 
   .cal-head {

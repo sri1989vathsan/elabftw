@@ -236,7 +236,7 @@ export async function syncCalendar(api: CalendarApi, todos: CalTodo[], options: 
 
 export type CalendarInfo = { id: string; summary: string; color: string; writable: boolean; primary: boolean };
 
-export type ShownEvent = { key: string; title: string; start: string; end: string; color: string; source: string; url?: string };
+export type ShownEvent = { key: string; calendar: string; title: string; start: string; end: string; color: string; source: string; url?: string };
 
 // the events of the calendars that are shown on the calendar page: the events that are tasks are left out (the page shows the tasks itself)
 export function shownEvents(calendar: CalendarInfo, events: RemoteEvent[]): ShownEvent[] {
@@ -254,6 +254,7 @@ export function shownEvents(calendar: CalendarInfo, events: RemoteEvent[]): Show
     }
     out.push({
       key: `google-${calendar.id}-${event.id}`,
+      calendar: calendar.id,
       title: String(event.summary ?? '(no title)'),
       start,
       end,

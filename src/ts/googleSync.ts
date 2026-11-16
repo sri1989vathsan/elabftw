@@ -240,7 +240,7 @@ function scopes(): string {
   if (target() !== 'calendar') {
     list.push(SCOPE_TASKS);
   }
-  if (target() !== 'tasks' || shownIds().length > 0) {
+  if (target() !== 'tasks' || read(acct(KEY_CAL_SHOWN)) !== null) {
     list.push(SCOPE_EVENTS, SCOPE_CALENDARS);
   }
   return list.join(' ');
@@ -374,6 +374,69 @@ async function publishShownEvents(): Promise<void> {
 function scheduleShown(): void {
   window.clearTimeout(shownTimer);
   shownTimer = window.setTimeout(() => void publishShownEvents(), 400);
+}
+
+// The calendar page lists the calendars of the user with a box each (like the panel does): this tells it which there are and which are
+// shown. 'off': Google is not connected, 'needs': connected but the Calendar is not allowed yet (one click), 'ready': the list.
+async function publishCalendarList(): Promise<void> {
+  const clientId = clientIdValue();
+  const publish = (state: 'off' | 'needs' | 'ready'): void => {
+    const ids = shownIds();
+    window.dispatchEvent(new CustomEvent('elabftw:calendar-list', {
+      detail: {
+        state,
+        calendars: state === 'ready' ? calendars.map(calendar => ({
+          id: calendar.id,
+          summary: calendar.summary,
+          color: calendar.color,
+          shown: ids.includes(calendar.id) || (calendar.primary && ids.includes('primary')),
+        })) : [],
+      },
+    }));
+  };
+  if (!clientId || read(KEY_ENABLED) !== '1') {
+    publish('off');
+    return;
+  }
+  if (!scopes().includes(SCOPE_CALENDARS)) {
+    publish('needs');
+    return;
+  }
+  const token = await tokenOrNull(clientId);
+  if (!token) {
+    publish('needs');
+    return;
+  }
+  try {
+    if (calendars.length === 0) {
+      await loadCalendars(token.value);
+    }
+    publish('ready');
+  } catch {
+    publish('needs');
+  }
+}
+
+// a box of the calendar page: the calendar is shown or not (the same choice as in the panel)
+function toggleCalendar(id: string, on: boolean): void {
+  const info = calendars.find(calendar => calendar.id === id);
+  const next = new Set(shownIds().filter(value => value !== id && !(info?.primary && value === 'primary')));
+  if (on) {
+    next.add(id);
+  }
+  // an empty list is kept (not removed): the Calendar stays allowed, so ticking a calendar again needs no new permission
+  write(acct(KEY_CAL_SHOWN), JSON.stringify([...next]));
+  scheduleShown();
+  render();
+}
+
+// "Show my Google calendars" on the calendar page: the primary calendar is shown, and Google is asked for the Calendar
+function connectCalendars(): void {
+  if (read(acct(KEY_CAL_SHOWN)) === null) {
+    write(acct(KEY_CAL_SHOWN), JSON.stringify(['primary']));
+  }
+  calendars = [];
+  void connect().then(() => publishCalendarList());
 }
 
 async function findOrCreateList(token: string): Promise<string> {
@@ -675,6 +738,7 @@ async function ensureCalendars(): Promise<void> {
     loadingCalendars = false;
   }
   render();
+  void publishCalendarList();
 }
 
 function render(): void {
@@ -884,7 +948,15 @@ export function initGoogleSync(): void {
     wantedRange = (event as CustomEvent<{ from: string; to: string }>).detail;
     scheduleShown();
   });
-  window.addEventListener('elabftw:calendar-ready', scheduleShown);
+  window.addEventListener('elabftw:calendar-ready', () => {
+    scheduleShown();
+    void publishCalendarList();
+  });
+  window.addEventListener('elabftw:calendar-toggle', event => {
+    const detail = (event as CustomEvent<{ id: string; on: boolean }>).detail;
+    toggleCalendar(detail.id, detail.on);
+  });
+  window.addEventListener('elabftw:calendar-connect', connectCalendars);
   window.setInterval(() => void runSync(), AUTO_SYNC_MS);
   // coming back to the tab: pick up what changed in Google meanwhile
   let lastFocusSync = 0;

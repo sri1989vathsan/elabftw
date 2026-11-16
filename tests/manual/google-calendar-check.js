@@ -88,6 +88,20 @@ window.googleCalendarCheck = async function () {
     await wait(2500);
     check('C8 events of a shown calendar are sent to the calendar page', got && got.some(function (e) { return e.title === 'GCAL seminar' && e.source === 'Lab calendar'; }), got);
     check('C8b the events that are tasks are not sent again', got && !got.some(function (e) { return /GCAL (alpha|beta|from)/.test(e.title); }), got);
+
+    // the calendar page lists the calendars with a box each and can show or hide them
+    var listed = null;
+    window.addEventListener('elabftw:calendar-list', function (e) { listed = e.detail; });
+    window.dispatchEvent(new CustomEvent('elabftw:calendar-ready'));
+    await wait(1500);
+    check('C9 the calendar page is told which calendars there are and which are shown', listed && listed.state === 'ready' && listed.calendars.length === 3 && listed.calendars.some(function (c) { return c.summary === 'Lab calendar' && c.shown; }), listed);
+    got = null;
+    window.dispatchEvent(new CustomEvent('elabftw:calendar-toggle', { detail: { id: 'lab@group.calendar', on: false } }));
+    await wait(2500);
+    check('C9b hiding a calendar takes its events away', got && !got.some(function (e) { return e.title === 'GCAL seminar'; }), got);
+    window.dispatchEvent(new CustomEvent('elabftw:calendar-toggle', { detail: { id: 'lab@group.calendar', on: true } }));
+    await wait(2500);
+    check('C9c showing it again brings them back', got && got.some(function (e) { return e.title === 'GCAL seminar'; }), got);
   } catch (error) {
     check('no error', false, String(error && error.stack || error));
   }
