@@ -153,10 +153,19 @@
       (loaded.folders || []).filter(function (f) {
         return !f.database && Number(f.owner) === Number(loaded.me);
       }).forEach(function (f) {
-        folder.append(Object.assign(element('option', '', f.path), { value: String(f.id) }));
+        folder.insertBefore(Object.assign(element('option', '', f.path), { value: String(f.id) }), folder.querySelector('option[value="new"]'));
       });
     }).catch(function () {
       // only Unfiled is offered
+    });
+    // a folder that does not exist yet is made when the product is saved
+    folder.append(Object.assign(element('option', '', '+ New folder...'), { value: 'new' }));
+    const folderName = element('input', 'tools-select');
+    folderName.type = 'text';
+    folderName.placeholder = 'Name of the new folder';
+    folderName.hidden = true;
+    folder.addEventListener('change', function () {
+      folderName.hidden = folder.value !== 'new';
     });
     const moduleSelect = element('select', 'tools-select');
     fetch('../registry-modules.php', { credentials: 'same-origin' }).then(function (response) {
@@ -230,8 +239,27 @@
             await tools.attach(id, entry.id);
           }
         }
-        if (Number(folder.value) > 0) {
-          const filed = await fetch('../registry-transfer.php', { method: 'POST', credentials: 'same-origin', headers: headers, body: JSON.stringify({ action: 'move_to_folder', ids: [id], folder_id: Number(folder.value) }) });
+        let folderId = Number(folder.value) || 0;
+        if (folder.value === 'new') {
+          const wanted = folderName.value.trim();
+          if (wanted === '') {
+            throw new Error('Saved, but the new folder needs a name.');
+          }
+          const created = await fetch('../api/v2/experiments_folders', { method: 'POST', credentials: 'same-origin', headers: headers, body: JSON.stringify({ name: wanted, parent_id: null, scope: 'inventory' }) });
+          if (!created.ok) {
+            throw new Error('Saved, but the folder could not be made (' + created.status + ').');
+          }
+          folderId = Number((created.headers.get('Location') || '').split('/').pop()) || 0;
+          if (folderId === 0) {
+            const again = await (await fetch('../registry-transfer.php?folders=1', { credentials: 'same-origin' })).json();
+            const found = (again.folders || []).find(function (f) {
+              return f.path === wanted && Number(f.owner) === Number(again.me);
+            });
+            folderId = found ? Number(found.id) : 0;
+          }
+        }
+        if (folderId > 0) {
+          const filed = await fetch('../registry-transfer.php', { method: 'POST', credentials: 'same-origin', headers: headers, body: JSON.stringify({ action: 'move_to_folder', ids: [id], folder_id: folderId }) });
           if (!filed.ok) {
             throw new Error('Saved, but it could not be put in the folder (' + filed.status + ').');
           }
@@ -257,7 +285,7 @@
       return node;
     };
     save.style.cssText = 'display:block;margin:0.6rem 0 0.3rem';
-    form.append(heading('Name'), name, heading('Folder'), folder, heading('Module'), moduleSelect, parent, primersLabel, save, message);
+    form.append(heading('Name'), name, heading('Folder'), folder, folderName, heading('Module'), moduleSelect, parent, primersLabel, save, message);
     card.append(form);
   }
 
