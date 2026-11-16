@@ -131,6 +131,25 @@ if (document.getElementById('feedbackRoot')) {
   );
 }
 
+// the calendar settings window opens on the page the user is on: the gear of the to-do panel, the Settings button of the calendar page
+function openCalendarSettings(): void {
+  void import(
+    /* webpackChunkName: 'calendar-settings' */
+    './calendar-settings'
+  ).then(module => module.openCalendarSettings());
+}
+
+document.addEventListener('click', event => {
+  if ((event.target as HTMLElement | null)?.closest('[data-calendar-settings]')) {
+    event.preventDefault();
+    openCalendarSettings();
+  }
+});
+
+if (['#settings', '#calendars'].includes(window.location.hash) && document.getElementById('googleSyncRow') !== null) {
+  openCalendarSettings();
+}
+
 if (document.getElementById('calendarPageRoot')) {
   void import(
     /* webpackChunkName: 'calendar-page' */

@@ -98,10 +98,11 @@ Connect fails with a message and the rest of eLabFTW is unaffected.
   list) can create, retitle, redate and complete that user's to-dos. Imported
   text is plain text (the server also strips tags); nothing else in eLabFTW is
   reachable by the import code.
-- A Google access token (Tasks scope only, about 1 hour) is kept in
-  `sessionStorage` for the tab, so it survives page changes but not closing the
-  tab. A script injected into an eLabFTW page could read it; that is the
-  reason for the narrow scope and short life.
+- A Google access token (about 1 hour; the scopes the user chose: Tasks and/or Calendar events) is kept in this
+  browser's `localStorage`, per eLabFTW account (`googleSyncToken:<user id>`), so other tabs and a restart of the browser
+  can use it for the hour it lasts (it used to be `sessionStorage`, per tab, which meant connecting again in every new
+  tab). A script injected into an eLabFTW page could read it; that is the reason for the narrow scopes and the short life.
+  On a shared computer, Disconnect removes it.
 - Disconnect revokes the token at Google and forgets it. Revoking the app in
   the Google account does the same.
 - Deleting something in eLabFTW does not delete copies already in Google; it
@@ -132,19 +133,23 @@ against `tests/manual/google-stub.js` (a fake Google that needs no account or
 internet). It does NOT prove anything about real Google: that needs G3 with a
 real OAuth client ID.
 
-## Google Calendar (added with task durations)
+## The panel (To-do panel, "By date" tab)
 
-Each user chooses, in the panel, where the to-dos go: **Google Tasks** (as above), **Google Calendar**, or both.
-Settings are kept per eLabFTW account in the browser (`googleSync*:<userid>`); Google Tasks and Calendar use the
-same client ID and the same Connect button, and the permissions asked from Google follow the choice:
+Four things: **Send my to-dos to** (Google Tasks, Google Calendar, or both), **Calendar for my to-dos** (a dropdown of the
+calendars the user can write to; shown once connected), one **Two-way** switch (changes and new items in Google come back
+into eLabFTW; with a calendar, new events of it become to-dos), and Connect / Sync now / Disconnect. "More" holds
+"Also send notes, experiment names and links". Which Google calendars are shown next to the tasks is chosen on the calendar
+page (Calendars menu), not in the panel. Settings are kept per eLabFTW account in the browser (`googleSync*:<userid>`).
+
+Google Tasks and Calendar use the same client ID and the same Connect button, and the permissions asked from Google follow the choice:
 
 - Tasks: `https://www.googleapis.com/auth/tasks`
 - Calendar (only when the to-dos go there, or calendars are shown on the calendar page):
   `https://www.googleapis.com/auth/calendar.events` and `https://www.googleapis.com/auth/calendar.calendarlist.readonly`
 
 When the choice changes the panel says "Connect again" (one click) so Google can ask for the new permission.
-Admin setup: enable the **Google Calendar API** too, add the two scopes to the consent screen, and in the
-Content-Security-Policy add ` https://www.googleapis.com` to `connect-src` (next to `https://tasks.googleapis.com`).
+Admin setup: enable the **Google Calendar API** too and add the two scopes to the consent screen (the Content-Security-Policy
+switch `GOOGLE_SYNC_CSP=true` above already allows `https://www.googleapis.com`).
 
 Where to link Google: in the to-do panel, open the **By date** tab; the Google section is under the private calendar link
 (choose Google Tasks / Google Calendar, then **Connect**). The calendar page also has a **Calendars** dropdown in its toolbar

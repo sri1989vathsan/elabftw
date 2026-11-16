@@ -2,8 +2,17 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import { ApiC } from '../api';
   import i18next from '../i18n';
-  import { core } from '../core';
-  import { feedAddress, feedInfo, parseFeed } from '../icalFeed';
+  import { openCalendarSettings } from '../calendar-settings';
+  import {
+    feedError as feedErrorStore,
+    feedText as feedTextStore,
+    feeds as feedsStore,
+    loadCalendarSettings,
+    refreshFeeds,
+    toggleFeed,
+    viewPrefs as prefsStore,
+  } from '../calendarSettings';
+  import { parseFeed } from '../icalFeed';
   import { Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
 
@@ -43,9 +52,6 @@
 
   type GoogleCalendar = { id: string; summary: string; color: string; shown: boolean };
 
-  // a calendar from a web address (an .ics file): kept in this browser, for this account
-  type Feed = { id: string; name: string; url: string; color: string; shown: boolean };
-
   type Placed = CalEvent & { top: number; height: number; lane: number; lanes: number };
 
   const t = i18next.t.bind(i18next);
@@ -58,8 +64,6 @@
   const PALETTE = ['#0c58ab', '#7c3aed', '#1a7f4b', '#b45309', '#be185d', '#0f766e', '#c2410c', '#4d7c0f'];
   const HIDDEN_KEY = 'elabftw-calendar-page-hidden-projects';
   const DAY_MS = 86400000;
-  const FEEDS_KEY = 'elabftw-calendar-page-feeds';
-  const FEED_REFRESH_MS = 15 * 60000;
 
   function startOfDay(date: Date): Date {
     const copy = new Date(date);
@@ -118,135 +122,22 @@
   let googleState: 'unknown' | 'off' | 'needs' | 'ready' = 'unknown';
   let googleCalendars: GoogleCalendar[] = [];
   let menuOpen = false;
-  let feeds: Feed[] = readFeeds();
-  // what each address gave last time (the text of the calendar), when, and what went wrong
-  let feedText: Record<string, string> = {};
-  let feedFetched: Record<string, number> = {};
-  let feedError: Record<string, string> = {};
-  let feedUrl = '';
-  let feedName = '';
-  let feedBusy = false;
-  // the window for adding a calendar from a web address, and what is wrong with what was typed in it
-  let feedDialog = false;
-  let feedFormError = '';
-  let feedUrlInput: HTMLInputElement | undefined;
+  // the calendars from a web address and how the grid looks are set in the calendar settings window (on any page): read here
+  loadCalendarSettings();
+  $: feeds = $feedsStore;
+  $: feedText = $feedTextStore;
+  $: feedError = $feedErrorStore;
+  $: prefs = $prefsStore;
   let menuEl: HTMLElement | undefined;
+
   function closeMenu(event: Event): void {
     if (menuOpen && menuEl && !menuEl.contains(event.target as Node)) {
       menuOpen = false;
     }
   }
 
-  function feedsKey(): string {
-    return `${FEEDS_KEY}:${core.currentUserid ?? 0}`;
-  }
-
-  function readFeeds(): Feed[] {
-    try {
-      const parsed = JSON.parse(window.localStorage.getItem(feedsKey()) ?? '[]') as unknown;
-      return Array.isArray(parsed)
-        ? parsed.filter((item): item is Feed => typeof item === 'object' && item !== null && typeof (item as Feed).url === 'string' && typeof (item as Feed).id === 'string')
-        : [];
-    } catch {
-      return [];
-    }
-  }
-
-  function saveFeeds(): void {
-    try { window.localStorage.setItem(feedsKey(), JSON.stringify(feeds)); } catch { /* not remembered */ }
-  }
-
-  // reads the calendar at an address; throws a sentence that says what is wrong
-  async function fetchFeed(url: string): Promise<string> {
-    let response: Response;
-    try {
-      response = await fetch(url, { credentials: 'omit', cache: 'no-store' });
-    } catch {
-      throw new Error(t('The calendar could not be read from this address. The site may not allow other sites to read it, or this server does not allow it to be contacted (the administrator can allow it in the Content-Security-Policy).'));
-    }
-    if (!response.ok) {
-      throw new Error(`${t('The address answered with an error')}: ${response.status}`);
-    }
-    const text = await response.text();
-    if (!feedInfo(text).valid) {
-      throw new Error(t('This address is not a calendar (an .ics file).'));
-    }
-    return text;
-  }
-
-  async function refreshFeed(feed: Feed, force = false): Promise<void> {
-    if (!force && Date.now() - (feedFetched[feed.id] ?? 0) < FEED_REFRESH_MS) return;
-    feedFetched = { ...feedFetched, [feed.id]: Date.now() };
-    try {
-      const text = await fetchFeed(feed.url);
-      feedText = { ...feedText, [feed.id]: text };
-      const { [feed.id]: _gone, ...rest } = feedError;
-      feedError = rest;
-    } catch (error) {
-      feedError = { ...feedError, [feed.id]: error instanceof Error ? error.message : String(error) };
-    }
-  }
-
-  function refreshFeeds(force = false): void {
-    for (const feed of feeds.filter(item => item.shown)) void refreshFeed(feed, force);
-  }
-
-  async function openFeedDialog(): Promise<void> {
-    menuOpen = false;
-    feedFormError = '';
-    feedDialog = true;
-    await tick();
-    feedUrlInput?.focus();
-  }
-
-  function closeFeedDialog(): void {
-    feedDialog = false;
-    feedFormError = '';
-  }
-
-  async function addFeed(): Promise<void> {
-    const url = feedAddress(feedUrl);
-    feedFormError = '';
-    if (url === '') {
-      feedFormError = t('Enter the web address of a calendar: it starts with https:// (or webcal://) and ends in .ics.');
-      return;
-    }
-    if (feeds.some(item => item.url === url)) {
-      feedFormError = t('This calendar is already in the list.');
-      return;
-    }
-    feedBusy = true;
-    try {
-      const text = await fetchFeed(url);
-      const id = `f${Date.now().toString(36)}`;
-      const name = feedName.trim() || feedInfo(text).name || new URL(url).hostname;
-      feeds = [...feeds, { id, name, url, color: PALETTE[(feeds.length + 3) % PALETTE.length], shown: true }];
-      feedText = { ...feedText, [id]: text };
-      feedFetched = { ...feedFetched, [id]: Date.now() };
-      saveFeeds();
-      feedUrl = '';
-      feedName = '';
-      feedDialog = false;
-    } catch (error) {
-      feedFormError = error instanceof Error ? error.message : String(error);
-    } finally {
-      feedBusy = false;
-    }
-  }
-
-  function toggleFeed(feed: Feed): void {
-    feeds = feeds.map(item => (item.id === feed.id ? { ...item, shown: !item.shown } : item));
-    saveFeeds();
-    if (!feed.shown) void refreshFeed(feed);
-  }
-
-  function removeFeed(feed: Feed): void {
-    feeds = feeds.filter(item => item.id !== feed.id);
-    const { [feed.id]: _text, ...texts } = feedText;
-    feedText = texts;
-    const { [feed.id]: _error, ...errors } = feedError;
-    feedError = errors;
-    saveFeeds();
+  function isWeekend(date: Date): boolean {
+    return date.getDay() === 0 || date.getDay() === 6;
   }
 
   function readHidden(): number[] {
@@ -262,8 +153,8 @@
   $: days = view === 'day'
     ? [startOfDay(cursor)]
     : view === 'week'
-      ? Array.from({ length: 7 }, (_, index) => addDays(mondayOf(cursor), index))
-      : Array.from({ length: 42 }, (_, index) => addDays(mondayOf(new Date(cursor.getFullYear(), cursor.getMonth(), 1)), index));
+      ? Array.from({ length: 7 }, (_, index) => addDays(mondayOf(cursor), index)).filter(day => prefs.weekends || !isWeekend(day))
+      : Array.from({ length: 42 }, (_, index) => addDays(mondayOf(new Date(cursor.getFullYear(), cursor.getMonth(), 1)), index)).filter(day => prefs.weekends || !isWeekend(day));
   $: rangeKey = `${view}|${days[0].getTime()}|${days.length}`;
   $: if (rangeKey) void load();
   $: shownCount = usedProjects.filter(id => !hiddenProjects.includes(id)).length + googleCalendars.filter(calendar => calendar.shown).length + feeds.filter(feed => feed.shown).length;
@@ -292,11 +183,12 @@
     });
   })();
   $: shownGoogle = new Set(googleCalendars.filter(calendar => calendar.shown).map(calendar => calendar.id));
-  $: events = [
+  $: undragged = [
     ...tasks.filter(task => !hiddenProjects.includes(task.project ?? 0)),
     ...feedEvents,
     ...external.filter(event => googleState !== 'ready' || event.calendar === undefined || shownGoogle.has(event.calendar)),
-  ].map(event => (event.kind === 'task' ? { ...event, color: projectColor(event.project ?? 0) } : event)).map(applyDrag);
+  ].map(event => (event.kind === 'task' ? { ...event, color: projectColor(event.project ?? 0) } : event));
+  $: events = undragged.map(applyDrag);
   // the project calendars: a colour each, a project with a parent is written "Parent / Project"
   $: projectChoices = [...projects].sort((a, b) => projectName(a.id).localeCompare(projectName(b.id)));
   $: sorted = [...projects].sort((a, b) => a.id - b.id);
@@ -314,16 +206,36 @@
   $: usedProjects = [...new Set([...tasks.map(task => task.project ?? 0), ...hiddenProjects])]
     .sort((a, b) => (a === 0 ? 1 : b === 0 ? -1 : projectName(a).localeCompare(projectName(b))));
   // an event that fills whole days (from midnight to midnight: holidays, birthdays) is not a block of the grid but a strip above it
-  $: columns = view === 'month' ? [] : days.map(day => place(events.filter(event => !isAllDay(event)), day));
+  $: columns = view === 'month' ? [] : days.map(day => place(events.filter(event => !isAllDay(event)), day, hourSpan.first));
   $: allDayRows = view === 'month' ? [] : days.map(day => events.filter(event => isAllDay(event) && event.start.getTime() < day.getTime() + DAY_MS && event.end.getTime() > day.getTime()));
   $: hasAllDay = allDayRows.some(list => list.length > 0);
   $: byDay = view === 'month' ? groupByDay(events, days) : new Map<string, CalEvent[]>();
   $: title = periodLabel(view, cursor, days);
-  $: nowTop = (now.getHours() + now.getMinutes() / 60) * HOUR;
+  // the hours shown: the working hours, longer when an event of these days is outside them
+  $: hourSpan = ((): { first: number; last: number } => {
+    let first = prefs.start;
+    let last = prefs.end;
+    if (view !== 'month') {
+      for (const event of undragged) {
+        if (isAllDay(event)) continue;
+        for (const day of days) {
+          const from = day.getTime();
+          const to = from + DAY_MS;
+          if (event.start.getTime() < to && event.end.getTime() > from) {
+            first = Math.min(first, Math.floor((Math.max(event.start.getTime(), from) - from) / 3600000));
+            last = Math.max(last, Math.ceil((Math.min(event.end.getTime(), to) - from) / 3600000));
+          }
+        }
+      }
+    }
+    return { first: Math.max(0, first), last: Math.min(24, Math.max(last, first + 1)) };
+  })();
+  $: hours = Array.from({ length: hourSpan.last - hourSpan.first }, (_, index) => hourSpan.first + index);
+  $: nowTop = (now.getHours() + now.getMinutes() / 60 - hourSpan.first) * HOUR;
   $: if (view !== 'month' && gridEl && scrolledFor !== rangeKey) {
     scrolledFor = rangeKey;
     const todayShown = days.some(day => sameDay(day, now));
-    gridEl.scrollTop = Math.max(0, (todayShown ? now.getHours() - 1 : 7) * HOUR);
+    gridEl.scrollTop = Math.max(0, ((todayShown ? now.getHours() - 1 : prefs.start) - hourSpan.first) * HOUR);
   }
   $: try { window.localStorage.setItem(VIEW_KEY, view); } catch { /* the view is then just not remembered */ }
 
@@ -355,7 +267,7 @@
   }
 
   // The events of one day side by side where they overlap: a lane per overlapping event, the width shared by the lanes of the cluster.
-  function place(list: CalEvent[], day: Date): Placed[] {
+  function place(list: CalEvent[], day: Date, firstHour = 0): Placed[] {
     const from = day.getTime();
     const to = from + DAY_MS;
     const items = list
@@ -383,7 +295,7 @@
         laneEnds[lane] = end;
       }
       clusterEnd = Math.max(clusterEnd, end);
-      const top = (start - from) / 3600000 * HOUR;
+      const top = (start - from) / 3600000 * HOUR - firstHour * HOUR;
       const height = Math.max(20, (end - start) / 3600000 * HOUR - 2);
       cluster.push({ ...event, top, height, lane, lanes: 1 });
     }
@@ -484,7 +396,18 @@
   function go(direction: number): void {
     cursor = view === 'month'
       ? new Date(cursor.getFullYear(), cursor.getMonth() + direction, 1)
-      : addDays(cursor, direction * (view === 'week' ? 7 : 1));
+      : view === 'week'
+        ? addDays(cursor, direction * 7)
+        : nextShownDay(cursor, direction);
+  }
+
+  // one day further or back, over Saturday and Sunday when they are not shown
+  function nextShownDay(from: Date, direction: number): Date {
+    let day = addDays(from, direction);
+    while (!prefs.weekends && isWeekend(day)) {
+      day = addDays(day, direction);
+    }
+    return day;
   }
 
   function today(): void {
@@ -516,7 +439,12 @@
         drag = { key: event.key, mode, start: origin.start, end };
         return;
       }
-      const dayShift = view === 'week' ? Math.round(dx / columnWidth) : 0;
+      let dayShift = 0;
+      if (view === 'week') {
+        const index = days.findIndex(day => sameDay(day, origin.start));
+        const target = Math.min(days.length - 1, Math.max(0, index + Math.round(dx / columnWidth)));
+        dayShift = index < 0 ? 0 : Math.round((days[target].getTime() - days[index].getTime()) / DAY_MS);
+      }
       const shiftMs = (dayShift * 24 * 60 + minutes) * 60000;
       const start = new Date(origin.start.getTime() + shiftMs);
       // a move to another day keeps the clock time (summer time must not shift the task by an hour)
@@ -554,7 +482,7 @@
   function startSelect(pointer: PointerEvent, index: number): void {
     if (pointer.button !== 0 || !columnsEl || (pointer.target as HTMLElement).closest('.cal-ev, .cal-select-box')) return;
     const top = columnsEl.getBoundingClientRect().top;
-    const minuteAt = (y: number): number => Math.min(1440 - SNAP, Math.max(0, Math.floor((y - top) / HOUR * 60 / SNAP) * SNAP));
+    const minuteAt = (y: number): number => Math.min(1440 - SNAP, Math.max(0, Math.floor(((y - top) / HOUR * 60 + hourSpan.first * 60) / SNAP) * SNAP));
     const anchor = minuteAt(pointer.clientY);
     const startY = pointer.clientY;
     let moved = false;
@@ -667,7 +595,7 @@
   }
 </script>
 
-<svelte:window on:click={closeMenu} on:keydown={event => { if (event.key === 'Escape') { menuOpen = false; feedDialog = false; newTask = null; } }} />
+<svelte:window on:click={closeMenu} on:keydown={event => { if (event.key === 'Escape') { menuOpen = false; newTask = null; } }} />
 
 <div class='cal-page'>
   <div class='cal-toolbar'>
@@ -716,35 +644,40 @@
                   <span class='cal-dot'></span>{calendar.summary}
                 </label>
               {/each}
-            {:else if googleState === 'unknown'}
+            {/if}
+            {#if googleState === 'unknown'}
               <span class='pm-muted small'>{t('Google is not set up here: ask the administrator to turn on the Google sync.')}</span>
             {:else}
-              <button type='button' class='btn btn-secondary btn-sm' on:click={connectGoogle}>{googleState === 'needs' ? t('Show my Google calendars') : t('Connect Google')}</button>
-              <span class='pm-muted small'>{googleState === 'needs' ? t('Allow Google Calendar once to choose which calendars are shown here.') : t('Connect your Google account to show its calendars here.')}</span>
-            {/if}
-            <div class='cal-menu-head'><span class='cal-sources-title'>{t('Calendars from a web address')}</span></div>
-            {#each feeds as feed (feed.id)}
-              <div class='cal-feed'>
-                <label class='cal-source' class:cal-off={!feed.shown} style='--c:{feed.color}'>
-                  <input type='checkbox' checked={feed.shown} on:change={() => toggleFeed(feed)} />
-                  <span class='cal-dot'></span>{feed.name}
-                </label>
-                <button type='button' class='btn btn-ghost btn-sm' aria-label={t('Remove this calendar')} title={t('Remove this calendar')} on:click={() => removeFeed(feed)}><i class='fas fa-xmark' aria-hidden='true'></i></button>
-              </div>
-              {#if feed.shown && feedError[feed.id]}
-                <div class='cal-feed-error small'>{feedError[feed.id]}</div>
+              {#if googleState === 'needs'}
+                <button type='button' class='btn btn-secondary btn-sm' on:click={connectGoogle}>{t('Show my Google calendars')}</button>
+                <span class='pm-muted small'>{t('Allow Google Calendar once to choose which calendars are shown here.')}</span>
               {/if}
-            {/each}
-            <button type='button' class='btn btn-secondary btn-sm' on:click={openFeedDialog}><i class='fas fa-link fa-fw mr-1' aria-hidden='true'></i>{t('Add from URL…')}</button>
+            {/if}
+            {#if feeds.length > 0}
+              <div class='cal-menu-head'><span class='cal-sources-title'>{t('Calendars from a web address')}</span></div>
+              {#each feeds as feed (feed.id)}
+                <label class='cal-source' class:cal-off={!feed.shown} style='--c:{feed.color}'>
+                  <input type='checkbox' checked={feed.shown} on:change={() => toggleFeed(feed.id)} />
+                  <span class='cal-dot'></span>{feed.name}
+                  {#if feedError[feed.id] && feed.shown}<i class='fas fa-triangle-exclamation text-danger' title={feedError[feed.id]} aria-label={feedError[feed.id]}></i>{/if}
+                </label>
+              {/each}
+            {/if}
+            <span class='pm-muted small'>{t('Connect Google, add a calendar from a web address or share your tasks in Settings.')}</span>
           </div>
         {/if}
       </div>
+      <button type='button' class='btn btn-secondary btn-sm' on:click={openCalendarSettings}>
+        <i class='fas fa-gear fa-fw mr-1' aria-hidden='true'></i>{t('Settings')}
+      </button>
     </div>
   </div>
 
+  <div class='cal-main'>
+  <div class='cal-view-area'>
   {#if view === 'month'}
-    <div class='cal-month'>
-      {#each days.slice(0, 7) as day (day.getTime())}
+    <div class='cal-month' style='--cols:{prefs.weekends ? 7 : 5}'>
+      {#each days.slice(0, prefs.weekends ? 7 : 5) as day (day.getTime())}
         <div class='cal-month-head'>{day.toLocaleDateString(undefined, { weekday: 'short' })}</div>
       {/each}
       {#each days as day (day.getTime())}
@@ -785,15 +718,15 @@
       </div>
     {/if}
     <div class='cal-grid' bind:this={gridEl}>
-      <div class='cal-body' style='height:{HOUR * 24}px'>
+      <div class='cal-body' style='height:{HOUR * hours.length}px'>
         <div class='cal-hours'>
-          {#each Array.from({ length: 24 }, (_, hour) => hour) as hour (hour)}
-            <div class='cal-hour' style='top:{hour * HOUR}px'><span>{hour === 0 ? '' : hourLabel(hour)}</span></div>
+          {#each hours as hour (hour)}
+            <div class='cal-hour' style='top:{(hour - hourSpan.first) * HOUR}px'><span>{hour === hourSpan.first ? '' : hourLabel(hour)}</span></div>
           {/each}
         </div>
         <div class='cal-columns' bind:this={columnsEl} style='--n:{days.length}'>
-          {#each Array.from({ length: 24 }, (_, hour) => hour) as hour (hour)}
-            <div class='cal-line' style='top:{hour * HOUR}px'></div>
+          {#each hours as hour (hour)}
+            <div class='cal-line' style='top:{(hour - hourSpan.first) * HOUR}px'></div>
           {/each}
           {#each days as day, index (day.getTime())}
             <div class='cal-col' class:cal-today={sameDay(day, now)} style='left:{index / days.length * 100}%;width:{100 / days.length}%' role='presentation' on:pointerdown={(pointer) => startSelect(pointer, index)}>
@@ -819,11 +752,11 @@
                 </a>
               {/each}
               {#if selection && selection.index === index}
-                <div class='cal-select-box' style='top:{selection.lo / 60 * HOUR}px;height:{(selection.hi - selection.lo) / 60 * HOUR}px'>
+                <div class='cal-select-box' style='top:{(selection.lo / 60 - hourSpan.first) * HOUR}px;height:{(selection.hi - selection.lo) / 60 * HOUR}px'>
                   {hourClock(selection.lo)}–{hourClock(selection.hi)}
                 </div>
               {/if}
-              {#if sameDay(day, now)}
+              {#if sameDay(day, now) && nowTop >= 0 && nowTop <= HOUR * hours.length}
                 <div class='cal-now' style='top:{nowTop}px'></div>
               {/if}
             </div>
@@ -833,6 +766,8 @@
     </div>
   {/if}
   {#if loading}<p class='pm-muted small mt-2'>{t('Loading')}…</p>{/if}
+  </div>
+  </div>
 </div>
 
 {#if newTask}
@@ -858,30 +793,6 @@
       <div class='cal-modal-buttons'>
         <button type='button' class='btn btn-ghost' on:click={closeNewTask}>{t('Cancel')}</button>
         <button type='submit' class='btn btn-primary' disabled={newBusy || newTitle.trim() === ''}>{t('Add task')}</button>
-      </div>
-    </form>
-  </div>
-{/if}
-
-{#if feedDialog}
-  <div class='cal-modal-backdrop' role='presentation' on:mousedown|self={closeFeedDialog}>
-    <form class='cal-modal' role='dialog' aria-modal='true' aria-labelledby='cal-feed-title' on:submit|preventDefault={addFeed}>
-      <h3 id='cal-feed-title' class='h5'>{t('Add a calendar from a web address')}</h3>
-      <label class='cal-modal-field'>
-        <span class='small'>{t('Web address (URL)')}</span>
-        <input class='form-control' type='text' bind:this={feedUrlInput} bind:value={feedUrl} placeholder='https://…/calendar.ics' autocomplete='off' />
-      </label>
-      <label class='cal-modal-field'>
-        <span class='small'>{t('Name (optional)')}</span>
-        <input class='form-control' type='text' bind:value={feedName} placeholder={t('The name the calendar gives itself')} autocomplete='off' />
-      </label>
-      <span class='pm-muted small'>{t('The address of a calendar from Google ("Secret address in iCal format"), Outlook, a university or any other service. It is kept in this browser only.')}</span>
-      {#if feedFormError}
-        <div class='cal-feed-error small' role='alert'>{feedFormError}</div>
-      {/if}
-      <div class='cal-modal-buttons'>
-        <button type='button' class='btn btn-ghost' on:click={closeFeedDialog}>{t('Cancel')}</button>
-        <button type='submit' class='btn btn-primary' disabled={feedBusy || feedUrl.trim() === ''}>{feedBusy ? t('Reading…') : t('Add calendar')}</button>
       </div>
     </form>
   </div>
@@ -958,15 +869,28 @@
     z-index: 30;
   }
 
-  .cal-feed {
-    align-items: center;
+  .cal-main {
+    align-items: flex-start;
     display: flex;
-    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
   }
 
-  .cal-feed-error {
-    color: var(--danger, #c0392b);
+  .cal-view-area {
+    flex: 1 1 28rem;
+    min-width: 0;
   }
+
+
+
+
+
+
+  .cal-dot {
+    background: var(--c);
+  }
+
+
 
   .cal-select-box {
     background: color-mix(in srgb, var(--primary) 22%, transparent);
@@ -1247,7 +1171,7 @@
     border-left: 1px solid var(--cal-line);
     border-top: 1px solid var(--cal-line);
     display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(var(--cols, 7), minmax(0, 1fr));
   }
 
   .cal-month-head {

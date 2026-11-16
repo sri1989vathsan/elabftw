@@ -83,15 +83,16 @@ window.googleSyncCheck = async function () {
     await wait(6500);
     check('S11 reopening in eLabFTW is not undone by the old Google tick', (await todo(created[1])).completed_at === null);
 
-    sessionStorage.removeItem('googleSyncToken');
+    var tokenKey = Object.keys(localStorage).find(function (k) { return k.indexOf('googleSyncToken') === 0; });
+    localStorage.removeItem(tokenKey);
     await sync();
-    check('S12 a missing Google token is renewed quietly', !!sessionStorage.getItem('googleSyncToken'));
+    check('S12 a missing Google token is renewed quietly', !!Object.keys(localStorage).some(function (k) { return k.indexOf('googleSyncToken') === 0; }));
   } catch (error) {
     check('script ran to the end', false, String(error));
   } finally {
     for (var id of created) { await fetch('/api/v2/todolist/' + id, { method: 'DELETE', credentials: 'same-origin' }); }
     ['googleSyncClientId', 'googleSyncEnabled', 'googleSyncTwoWay', 'googleSyncSnapshot', 'googleSyncDetails', '__gstub'].forEach(function (k) { localStorage.removeItem(k); });
-    sessionStorage.removeItem('googleSyncToken');
+    Object.keys(localStorage).filter(function (k) { return k.indexOf('googleSyncToken') === 0; }).forEach(function (k) { localStorage.removeItem(k); });
   }
   return { pass: results.every(function (r) { return r.ok; }), results: results };
 };

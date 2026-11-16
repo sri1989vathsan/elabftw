@@ -9,8 +9,9 @@
     <div class='d-flex align-items-center justify-content-between mb-2'>
       <h3 class='h5 mb-0'>{{ 'Tasks and steps'|trans }}</h3>
       <div class='d-flex' style='gap:0.35rem'>
-        <a href='/calendar.php' class='btn btn-secondary btn-sm' title='{{ 'Open the calendar page'|trans }}'><i class='fas fa-calendar-days fa-fw mr-1' aria-hidden='true'></i>{{ 'Calendar'|trans }}</a>
-        <a href='/projectmanagement.php' class='btn btn-primary btn-sm'><i class='fas fa-list-check fa-fw mr-1' aria-hidden='true'></i>{{ 'Project boards'|trans }}</a>
+        <a href='/calendar.php#settings' data-calendar-settings class='btn btn-secondary btn-sm' title='{{ 'Calendar settings'|trans }}' aria-label='{{ 'Calendar settings'|trans }}'><i class='fas fa-gear fa-fw' aria-hidden='true'></i></a>
+        <a href='/calendar.php' class='btn btn-secondary btn-sm' title='{{ 'Open the calendar page'|trans }}' aria-label='{{ 'Open the calendar page'|trans }}'><i class='fas fa-calendar-days fa-fw' aria-hidden='true'></i></a>
+        <a href='/projectmanagement.php' class='btn btn-primary btn-sm' title='{{ 'Project boards'|trans }}' aria-label='{{ 'Project boards'|trans }}'><i class='fas fa-list-check fa-fw' aria-hidden='true'></i></a>
       </div>
       {# Kept in the DOM (just hidden) rather than removed: todolist.ts,
          Todolist.svelte and CalendarTodolist.svelte all look this element up
