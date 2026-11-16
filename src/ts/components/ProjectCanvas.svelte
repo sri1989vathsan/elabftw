@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { ApiC } from '../api';
   import { askConfirm } from '../confirm-dialog';
   import i18next from '../i18n';
@@ -85,6 +85,12 @@
   let selectedEdge: number | null = null;
   let popup: CanvasNode | null = null;
   let popupTitle = '';
+  // what the experiment of the open card says under its Goals, Conclusion and Notes headings (read when the card is opened)
+  type Sections = { goals: string; conclusions: string; notes: string };
+  let sections: Sections | null = null;
+  let sectionsFor = 0;
+  let sectionsLoading = false;
+  let sectionTimer: number | undefined;
   let popupNote = '';
   let addTo: number = rootId;
   let picker: 'task' | 'experiment' | null = null;
@@ -355,6 +361,8 @@
     return { destroy: () => observer.disconnect() };
   }
 
+  onDestroy(() => window.clearInterval(sectionTimer));
+
   onMount(() => {
     const observer = new ResizeObserver(entries => {
       const width = Math.round(entries[0].contentRect.width);
@@ -517,6 +525,104 @@
     }
   }
 
+  const SECTION_LIMIT = 700;
+
+  // the text under the headings Goals, Conclusion and Notes of an experiment: up to the next heading. The headings can be at any level
+  // (h1 to h6), anywhere in the text, or a line that is only that word in bold; text that is not in a paragraph counts too.
+  function extractSections(html: string): Sections {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const found: Sections = { goals: '', conclusions: '', notes: '' };
+    const kinds: Array<[keyof Sections, RegExp]> = [
+      ['goals', /^(goals?|aims?|objectives?)\b/i],
+      ['conclusions', /^(conclusions?|results? and conclusions?)\b/i],
+      ['notes', /^(notes?|remarks?)\b/i],
+    ];
+    const kindOf = (text: string): keyof Sections | null => {
+      const label = text.trim().replace(/[:：]\s*$/, '');
+      return kinds.find(([, pattern]) => pattern.test(label))?.[0] ?? null;
+    };
+    let current: keyof Sections | null = null;
+    let seenHeading = false;
+    const BLOCKS = /^(P|DIV|LI|UL|OL|PRE|BLOCKQUOTE|TR|SECTION|ARTICLE)$/;
+    const walk = (parent: Node): void => {
+      for (const child of Array.from(parent.childNodes)) {
+        if (child.nodeType === Node.TEXT_NODE) {
+          if (current) found[current] += child.textContent ?? '';
+          continue;
+        }
+        if (child.nodeType !== Node.ELEMENT_NODE) continue;
+        const element = child as Element;
+        const tag = element.tagName;
+        if (/^H[1-6]$/.test(tag)) {
+          current = kindOf(element.textContent ?? '');
+          seenHeading = true;
+          continue;
+        }
+        if (['TABLE', 'SCRIPT', 'STYLE', 'IMG', 'SVG'].includes(tag)) continue;
+        // a line that is only the word, in bold, is a heading too
+        if (/^(P|DIV)$/.test(tag) && element.querySelector('p, div, ul, ol, table') === null) {
+          const text = (element.textContent ?? '').trim();
+          if (text.length > 0 && text.length < 40 && element.querySelector('strong, b') !== null && kindOf(text) !== null) {
+            current = kindOf(text);
+            seenHeading = true;
+            continue;
+          }
+        }
+        if (tag === 'BR') {
+          if (current) found[current] += '\n';
+          continue;
+        }
+        if (tag === 'LI' && current) found[current] += '• ';
+        walk(element);
+        if (BLOCKS.test(tag) && current) found[current] += '\n';
+      }
+    };
+    walk(doc.body);
+    void seenHeading;
+    for (const key of Object.keys(found) as Array<keyof Sections>) {
+      const text = found[key].replace(/[ \t]+/g, ' ').replace(/ ?\n ?/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+      found[key] = text.length > SECTION_LIMIT ? `${text.slice(0, SECTION_LIMIT).trimEnd()}…` : text;
+    }
+    return found;
+  }
+
+  // read from the experiment itself every time: what was written there in the meantime shows up (silent: the old text stays until the new is there)
+  async function loadSections(id: number, silent = false): Promise<void> {
+    sectionsFor = id;
+    if (!silent) {
+      sections = null;
+      sectionsLoading = true;
+    }
+    try {
+      const entity = await ApiC.getJson(`experiments/${id}`) as { body?: string | null };
+      if (sectionsFor === id) {
+        sections = extractSections(entity.body ?? '');
+      }
+    } catch {
+      if (sectionsFor === id && !silent) {
+        sections = null;
+      }
+    } finally {
+      if (sectionsFor === id) {
+        sectionsLoading = false;
+      }
+    }
+  }
+
+  // while the card of an experiment is open, its text is read again from time to time
+  function watchSections(id: number): void {
+    window.clearInterval(sectionTimer);
+    sectionTimer = window.setInterval(() => {
+      if (!popup || popup.type !== 'experiment' || popup.experiment?.id !== id) {
+        window.clearInterval(sectionTimer);
+        return;
+      }
+      if (!document.hidden) {
+        void loadSections(id, true);
+      }
+    }, 15000);
+  }
+
   function openCard(node: CanvasNode): void {
     if (node.type === 'task' && node.task) {
       onOpenTask(node.task.id);
@@ -525,6 +631,13 @@
     popup = node;
     popupTitle = node.title ?? '';
     popupNote = node.note ?? '';
+    sections = null;
+    sectionsLoading = false;
+    window.clearInterval(sectionTimer);
+    if (node.type === 'experiment' && node.experiment) {
+      void loadSections(node.experiment.id);
+      watchSections(node.experiment.id);
+    }
   }
 
   async function savePopup(): Promise<void> {
@@ -824,6 +937,21 @@
               {#if popup.experiment.status}<div><span class="pm-muted">{t('Status')}:</span> {popup.experiment.status}</div>{/if}
               {#if popup.experiment.date}<div><span class="pm-muted">{t('Date')}:</span> {formatDate(popup.experiment.date)}</div>{/if}
             </div>
+            {#if sectionsLoading}
+              <div class="pm-muted small mt-2">{t('Loading')}…</div>
+            {:else if sections}
+              {#each [[t('Goals'), sections.goals], [t('Conclusions'), sections.conclusions], [t('Notes'), sections.notes]] as [label, text] (label)}
+                {#if text}
+                  <div class="pmc-section">
+                    <div class="pm-label">{label}</div>
+                    <div class="small pmc-section-text">{text}</div>
+                  </div>
+                {/if}
+              {/each}
+              {#if !sections.goals && !sections.conclusions && !sections.notes}
+                <div class="pm-muted small mt-2">{t('No goals, conclusions or notes written under their headings.')}</div>
+              {/if}
+            {/if}
             <div class="d-flex mt-3" style="gap:0.4rem">
               <a class="btn btn-primary btn-sm" href="experiments.php?mode=view&id={popup.experiment.id}" target="_blank" rel="noopener">{t('Open experiment')}</a>
               <button type="button" class="btn btn-ghost btn-sm" on:click={() => popup && removeNode(popup)}>{t('Remove')}</button>
