@@ -605,6 +605,19 @@
     return found;
   }
 
+  const shorten = (text: string): string => (text.length > SECTION_LIMIT ? `${text.slice(0, SECTION_LIMIT).trimEnd()}…` : text);
+
+  // the Goals, Conclusion and Notes fields of the experiment (shown under its title); when one is empty, the text under a heading of that
+  // name in the body of the experiment stands in for it
+  function mergeSections(entity: { body?: string | null; experiment_goal?: string | null; experiment_conclusion?: string | null; experiment_notes?: string | null }): Sections {
+    const fromBody = extractSections(entity.body ?? '');
+    return {
+      goals: shorten((entity.experiment_goal ?? '').trim()) || fromBody.goals,
+      conclusions: shorten((entity.experiment_conclusion ?? '').trim()) || fromBody.conclusions,
+      notes: shorten((entity.experiment_notes ?? '').trim()) || fromBody.notes,
+    };
+  }
+
   // read from the experiment itself every time: what was written there in the meantime shows up (silent: the old text stays until the new is there)
   async function loadSections(id: number, silent = false): Promise<void> {
     sectionsFor = id;
@@ -613,9 +626,14 @@
       sectionsLoading = true;
     }
     try {
-      const entity = await ApiC.getJson(`experiments/${id}`) as { body?: string | null };
+      const entity = await ApiC.getJson(`experiments/${id}`) as {
+        body?: string | null;
+        experiment_goal?: string | null;
+        experiment_conclusion?: string | null;
+        experiment_notes?: string | null;
+      };
       if (sectionsFor === id) {
-        sections = extractSections(entity.body ?? '');
+        sections = mergeSections(entity);
       }
     } catch {
       if (sectionsFor === id && !silent) {
@@ -974,7 +992,7 @@
                 {/if}
               {/each}
               {#if !sections.goals && !sections.conclusions && !sections.notes}
-                <div class="pm-muted small mt-2">{t('No goals, conclusions or notes written under their headings.')}</div>
+                <div class="pm-muted small mt-2">{t('No goals, conclusions or notes written for this experiment.')}</div>
               {/if}
             {/if}
             <div class="d-flex mt-3" style="gap:0.4rem">
