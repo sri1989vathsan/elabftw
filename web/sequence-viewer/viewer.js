@@ -211,7 +211,7 @@
       window.ToolsTab.setup(editor, { entryId: entryId, name: fileName });
     }
     if (window.PropertiesTab) {
-      window.PropertiesTab.setup(editor, { entryId: entryId, canWrite: canWrite, locked: function () {
+      window.PropertiesTab.setup(editor, { entryId: entryId, scratch: !!scratchKey, parent: Number(body.entry) || 0, canWrite: canWrite, locked: function () {
         return body.locked === '1';
       }, fileName: function () {
         return saveName;

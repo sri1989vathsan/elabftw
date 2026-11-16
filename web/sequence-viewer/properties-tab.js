@@ -30,7 +30,7 @@
   };
 
   function setup(editor, context) {
-    if (!window.ToolSidebar || !context.entryId) {
+    if (!window.ToolSidebar || (!context.entryId && !context.scratch)) {
       return;
     }
     const csrf = document.body.dataset.csrf || '';
@@ -77,7 +77,7 @@
       }
       panel.textContent = '';
       const data = editor.getState().sequenceData;
-      const editable = context.canWrite;
+      const editable = context.canWrite || !!context.scratch;
       const message = element('p', 'tool-message', '');
       if (!editable) {
         panel.append(element('p', 'tool-muted', context.locked() ? 'This entry is locked: unlock it to change its properties. The downloads work.' : 'You cannot edit this entry. The downloads work.'));
@@ -88,7 +88,7 @@
       title.type = 'text';
       title.value = (document.getElementById('entry-title') || {}).textContent || context.title || '';
       title.disabled = !editable;
-      const rename = element('button', 'tool-btn', 'Rename the entry');
+      const rename = element('button', 'tool-btn', context.scratch ? 'Rename the tab' : 'Rename the entry');
       rename.type = 'button';
       rename.disabled = !editable;
       rename.addEventListener('click', async function () {
@@ -98,6 +98,16 @@
           return;
         }
         rename.disabled = true;
+        if (context.scratch) {
+          // a sequence that is not in the Database: only the name of the tab changes
+          const shown = document.getElementById('entry-title');
+          if (shown) {
+            shown.textContent = value;
+          }
+          message.textContent = 'The tab is called ' + value + '.';
+          rename.disabled = false;
+          return;
+        }
         try {
           const response = await fetch('../api/v2/inventory/' + context.entryId, {
             method: 'PATCH',
@@ -150,7 +160,7 @@
       });
 
       panel.append(
-        field('Entry name', title),
+        field(context.scratch ? 'Name of the tab' : 'Entry name', title),
         element('div', 'tool-actions').appendChild(rename).parentNode,
         field('Sequence name', name),
         field('Description', description),
@@ -177,6 +187,26 @@
       files.append(genbank, fasta);
       panel.append(files);
 
+      if (context.scratch) {
+        // not in the Database: it can be saved as an entry in one of your folders
+        panel.append(element('strong', 'props-heading', 'Save it in the Database'));
+        const holder = element('div');
+        panel.append(holder);
+        if (window.ToolsPcr && window.ToolsPcr.saveEntryForm) {
+          window.ToolsPcr.saveEntryForm(holder, {
+            name: (document.getElementById('entry-title') || {}).textContent || base,
+            genbank: function (fileName) {
+              return window.bioParsers.jsonToGenbank(Object.assign(cleanData(), { name: fileName }));
+            },
+            parents: context.parent ? [context.parent] : [],
+            parentLabel: 'Made from the plasmid it came from',
+            primers: [],
+            primersLabel: 'Attach primers',
+            saveLabel: 'Save as an entry',
+          });
+        }
+        return;
+      }
       panel.append(element('strong', 'props-heading', 'Alignments of this entry'));
       const list = element('div', 'tool-results');
       list.append(element('p', 'tool-muted', 'Looking for alignments...'));
