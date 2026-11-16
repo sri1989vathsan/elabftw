@@ -121,8 +121,8 @@
       return Promise.resolve(new Response(data === null ? null : JSON.stringify(data), { status: status, headers: { 'Content-Type': 'application/json' } }));
     }
     if (db.expired) { return json(401, { error: 'expired' }); }
-    if (path === '/users/@me/tasklists' && method === 'GET') { return json(200, { items: db.lists }); }
-    if (path === '/users/@me/tasklists' && method === 'POST') {
+    if (path === '/users/@me/lists' && method === 'GET') { return json(200, { items: db.lists }); }
+    if (path === '/users/@me/lists' && method === 'POST') {
       var list = { id: 'L' + db.next++, title: body.title };
       db.lists.push(list);
       save(db);

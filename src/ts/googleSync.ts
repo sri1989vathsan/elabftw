@@ -450,7 +450,7 @@ function connectCalendars(): void {
 async function findOrCreateList(token: string): Promise<string> {
   let pageToken = '';
   do {
-    const data = await google('GET', `/users/@me/tasklists?maxResults=100${pageToken}`, token) as {
+    const data = await google('GET', `/users/@me/lists?maxResults=100${pageToken}`, token) as {
       items?: { id: string; title: string }[];
       nextPageToken?: string;
     };
@@ -460,7 +460,7 @@ async function findOrCreateList(token: string): Promise<string> {
     }
     pageToken = data.nextPageToken ? `&pageToken=${encodeURIComponent(data.nextPageToken)}` : '';
   } while (pageToken);
-  const created = await google('POST', '/users/@me/tasklists', token, { title: LIST_TITLE }) as { id: string };
+  const created = await google('POST', '/users/@me/lists', token, { title: LIST_TITLE }) as { id: string };
   return created.id;
 }
 
