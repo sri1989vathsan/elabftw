@@ -106,7 +106,8 @@
   let scrolledFor = '';
   let refreshTimer: number | undefined;
   let clockTimer: number | undefined;
-  let drag: { key: string; mode: 'move' | 'resize'; start: Date; end: Date } | null = null;
+  // `from`: where the task was before the drag; `pointer`: where the mouse is (for the label that says where the task will end up)
+  let drag: { key: string; mode: 'move' | 'resize'; start: Date; end: Date; from: { start: Date; end: Date }; pointer: { x: number; y: number } } | null = null;
   let suppressClick = false;
   // a region selected with the mouse on the empty grid (minutes of the day, in the column `index`), and the new task made from it
   let selection: { index: number; lo: number; hi: number } | null = null;
@@ -436,7 +437,7 @@
       const minutes = Math.round(dy / HOUR * 60 / SNAP) * SNAP;
       if (mode === 'resize') {
         const end = new Date(Math.max(origin.start.getTime() + SNAP * 60000, origin.end.getTime() + minutes * 60000));
-        drag = { key: event.key, mode, start: origin.start, end };
+        drag = { key: event.key, mode, start: origin.start, end, from: origin, pointer: { x: e.clientX, y: e.clientY } };
         return;
       }
       let dayShift = 0;
@@ -451,7 +452,7 @@
       if (dayShift !== 0) {
         start.setTime(addDays(origin.start, dayShift).getTime() + minutes * 60000);
       }
-      drag = { key: event.key, mode, start, end: new Date(start.getTime() + (origin.end.getTime() - origin.start.getTime())) };
+      drag = { key: event.key, mode, start, end: new Date(start.getTime() + (origin.end.getTime() - origin.start.getTime())), from: origin, pointer: { x: e.clientX, y: e.clientY } };
     };
     const up = async (): Promise<void> => {
       window.removeEventListener('pointermove', move);
@@ -729,7 +730,7 @@
             <div class='cal-line' style='top:{(hour - hourSpan.first) * HOUR}px'></div>
           {/each}
           {#each days as day, index (day.getTime())}
-            <div class='cal-col' class:cal-today={sameDay(day, now)} style='left:{index / days.length * 100}%;width:{100 / days.length}%' role='presentation' on:pointerdown={(pointer) => startSelect(pointer, index)}>
+            <div class='cal-col' class:cal-today={sameDay(day, now)} class:cal-drop={drag !== null && sameDay(day, drag.start)} style='left:{index / days.length * 100}%;width:{100 / days.length}%' role='presentation' on:pointerdown={(pointer) => startSelect(pointer, index)}>
               {#each columns[index] ?? [] as event (event.key)}
                 <a
                   class='cal-ev'
@@ -751,6 +752,9 @@
                   {/if}
                 </a>
               {/each}
+              {#if drag && drag.mode === 'move' && sameDay(day, drag.from.start)}
+                <div class='cal-ghost' style='top:{((drag.from.start.getTime() - day.getTime()) / 3600000 - hourSpan.first) * HOUR}px;height:{Math.max(20, (drag.from.end.getTime() - drag.from.start.getTime()) / 3600000 * HOUR - 2)}px'></div>
+              {/if}
               {#if selection && selection.index === index}
                 <div class='cal-select-box' style='top:{(selection.lo / 60 - hourSpan.first) * HOUR}px;height:{(selection.hi - selection.lo) / 60 * HOUR}px'>
                   {hourClock(selection.lo)}–{hourClock(selection.hi)}
@@ -769,6 +773,12 @@
   </div>
   </div>
 </div>
+
+{#if drag}
+  <div class='cal-drag-tip' style='left:{drag.pointer.x + 14}px;top:{drag.pointer.y + 14}px'>
+    {drag.start.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })} · {timeText(drag.start)}–{timeText(drag.end)}
+  </div>
+{/if}
 
 {#if newTask}
   <div class='cal-modal-backdrop' role='presentation' on:mousedown|self={closeNewTask}>
@@ -891,6 +901,33 @@
   }
 
 
+
+  .cal-col.cal-drop {
+    background: color-mix(in srgb, var(--primary) 9%, transparent);
+  }
+
+  .cal-ghost {
+    border: 1.5px dashed var(--primary);
+    border-radius: 0.25rem;
+    left: 2px;
+    opacity: 0.6;
+    pointer-events: none;
+    position: absolute;
+    right: 2px;
+  }
+
+  .cal-drag-tip {
+    background: var(--primary);
+    border-radius: 0.3rem;
+    box-shadow: 0 0.2rem 0.6rem rgba(0, 0, 0, 0.3);
+    color: var(--primary-fg, #fff);
+    font-size: 0.78rem;
+    padding: 0.15rem 0.5rem;
+    pointer-events: none;
+    position: fixed;
+    white-space: nowrap;
+    z-index: 1100;
+  }
 
   .cal-select-box {
     background: color-mix(in srgb, var(--primary) 22%, transparent);
