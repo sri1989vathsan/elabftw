@@ -87,6 +87,7 @@ final class Todolist extends AbstractRest
         $description = $this->getDescription($reqBody['description'] ?? null);
         $deadline = $this->getDeadline($reqBody['deadline'] ?? null);
         $reminderMinutes = $this->getReminderMinutes($reqBody['reminder_minutes'] ?? 60);
+        $durationMinutes = $this->getDuration($reqBody['duration_minutes'] ?? null);
         $assigneeUserids = $this->getAssigneeUserids($reqBody['assignee_userids'] ?? $reqBody['assigned_userid'] ?? null);
         $primaryAssignee = $assigneeUserids[0];
         $projectId = $this->getProjectId($reqBody['project_id'] ?? null);
@@ -108,8 +109,8 @@ final class Todolist extends AbstractRest
             ? ($this->getColumnKind($explicitColumnId) ?? 'todo')
             : 'todo';
         $columnId = $this->resolveColumnIdForKind($columnKind, $projectId) ?? $explicitColumnId;
-        $sql = 'INSERT INTO todolist (body, notes, description, deadline, reminder_minutes, userid, team, assigned_userid, project_id, priority, column_id)
-            VALUES(:content, :notes, :description, :deadline, :reminder_minutes, :userid, :team, :assigned_userid, :project_id, :priority, :column_id)';
+        $sql = 'INSERT INTO todolist (body, notes, description, deadline, reminder_minutes, duration_minutes, userid, team, assigned_userid, project_id, priority, column_id)
+            VALUES(:content, :notes, :description, :deadline, :reminder_minutes, :duration_minutes, :userid, :team, :assigned_userid, :project_id, :priority, :column_id)';
         $req = $this->Db->prepare($sql);
         $req->bindValue(':content', $content);
         $req->bindValue(':notes', $notes, $notes === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
@@ -120,6 +121,7 @@ final class Todolist extends AbstractRest
             $reminderMinutes,
             $reminderMinutes === null ? PDO::PARAM_NULL : PDO::PARAM_INT,
         );
+        $req->bindValue(':duration_minutes', $durationMinutes, PDO::PARAM_INT);
         $req->bindParam(':userid', $this->userid, PDO::PARAM_INT);
         $req->bindParam(':team', $this->team, PDO::PARAM_INT);
         $req->bindParam(':assigned_userid', $primaryAssignee, PDO::PARAM_INT);
@@ -320,7 +322,7 @@ final class Todolist extends AbstractRest
         $entityLinksSelect = $includeDetails ? $this->entityLinksSubquery() : 'JSON_ARRAY()';
         $sql = "SELECT t.id, t.body, {$notesSelect}
                 DATE_FORMAT(t.deadline, '%Y-%m-%dT%H:%i:%sZ') AS deadline,
-                t.reminder_minutes, t.repeat_rule,
+                t.reminder_minutes, t.duration_minutes, t.repeat_rule,
                 DATE_FORMAT(t.completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
                 DATE_FORMAT(t.archived_at, '%Y-%m-%dT%H:%i:%sZ') AS archived_at,
                 DATE_FORMAT(t.updated_at, '%Y-%m-%dT%H:%i:%sZ') AS updated_at,
@@ -839,7 +841,7 @@ final class Todolist extends AbstractRest
         }
         $sql = "SELECT id, body, notes,
                 DATE_FORMAT(deadline, '%Y-%m-%dT%H:%i:%sZ') AS deadline,
-                reminder_minutes, repeat_rule,
+                reminder_minutes, duration_minutes, repeat_rule,
                 DATE_FORMAT(completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
                 creation_time, ordering, userid, team, assigned_userid
             FROM todolist
@@ -863,7 +865,7 @@ final class Todolist extends AbstractRest
     {
         $sql = "SELECT t.id, t.body, t.notes, t.description,
                 DATE_FORMAT(t.deadline, '%Y-%m-%dT%H:%i:%sZ') AS deadline,
-                t.reminder_minutes, t.repeat_rule,
+                t.reminder_minutes, t.duration_minutes, t.repeat_rule,
                 DATE_FORMAT(t.completed_at, '%Y-%m-%dT%H:%i:%sZ') AS completed_at,
                 DATE_FORMAT(t.archived_at, '%Y-%m-%dT%H:%i:%sZ') AS archived_at,
                 DATE_FORMAT(t.updated_at, '%Y-%m-%dT%H:%i:%sZ') AS updated_at,
@@ -1385,6 +1387,7 @@ final class Todolist extends AbstractRest
                 $this->getReminderMinutes($value),
                 PDO::PARAM_INT,
             ),
+            'duration_minutes' => array('duration_minutes', $this->getDuration($value), PDO::PARAM_INT),
             'repeat_rule' => array('repeat_rule', $this->getRepeatRule($value), PDO::PARAM_STR),
             'completed' => array('completed_at', $this->getCompletedAt($value), PDO::PARAM_STR),
             'archived' => array('archived_at', $this->getArchivedAt($value), PDO::PARAM_STR),
@@ -1610,6 +1613,7 @@ final class Todolist extends AbstractRest
             'description' => $task['description'] ?? null,
             'deadline' => $next->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z'),
             'reminder_minutes' => $task['reminder_minutes'],
+            'duration_minutes' => $task['duration_minutes'] ?? null,
             'assignee_userids' => array_map('intval', array_column($task['assignees'] ?? array(), 'userid')) ?: null,
             'project_id' => $task['project_id'],
             'priority' => $task['priority'],
@@ -1675,6 +1679,21 @@ final class Todolist extends AbstractRest
         $first = $date->modify('first day of this month')->modify(sprintf('+%d months', $months));
         $last = (int) $first->format('t');
         return $first->setDate((int) $first->format('Y'), (int) $first->format('n'), min($day, $last));
+    }
+
+    /**
+     * How long a task takes, in minutes: 30 when none is given, otherwise between 5 minutes and a day.
+     */
+    private function getDuration(mixed $value): int
+    {
+        if ($value === null || $value === '') {
+            return 30;
+        }
+        $minutes = filter_var($value, FILTER_VALIDATE_INT);
+        if ($minutes === false || $minutes < 5 || $minutes > 1440) {
+            throw new ImproperActionException(_('The duration of a task must be between 5 minutes and 24 hours.'));
+        }
+        return $minutes;
     }
 
     private function getReminderMinutes(mixed $value): ?int

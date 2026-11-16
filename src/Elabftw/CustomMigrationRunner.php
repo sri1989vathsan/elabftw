@@ -147,6 +147,7 @@ final class CustomMigrationRunner
         '106_order_upload_procurement_index.sql',
         '107_orders_list_index.sql',
         '108_google_tasks_admin_setting.sql',
+        '109_todolist_duration.sql',
     );
 
     private Db $Db;

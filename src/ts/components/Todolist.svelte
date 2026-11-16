@@ -82,6 +82,7 @@
     description: string | null;
     deadline: string | null;
     reminder_minutes: number | null;
+    duration_minutes?: number | null;
     repeat_rule?: string | null;
     creation_time: string;
     completed_at: string | null;
@@ -274,6 +275,9 @@
   let deadlineDate = readSessionDefault(SESSION_DEADLINE_DATE_KEY, initialDeadlineDate);
   let deadlineTime = readSessionDefault(SESSION_DEADLINE_TIME_KEY, initialDeadlineTime);
   let reminderChoice = '60';
+  // how long the task takes (a task is an event of this length in the calendars); 30 minutes unless changed
+  let durationMinutes = 30;
+  let editDuration = 30;
   let customReminder = 120;
   let reminderDate = '';
   let reminderTime = '';
@@ -888,6 +892,17 @@
     return parseInt(choice, 10);
   }
 
+  const DURATION_PRESETS = [15, 30, 45, 60, 90, 120, 180, 240, 480];
+  function durationLabel(minutes: number): string {
+    if (minutes < 60) return `${minutes} min`;
+    const hours = minutes / 60;
+    return `${Number.isInteger(hours) ? hours : hours.toFixed(1).replace(/\.0$/, '')} ${hours === 1 ? 'hour' : 'hours'}`;
+  }
+  // the presets, and the duration the task has when it is not one of them
+  function durationChoices(current: number): number[] {
+    return DURATION_PRESETS.includes(current) ? DURATION_PRESETS : [...DURATION_PRESETS, current].sort((a, b) => a - b);
+  }
+
   function setEditReminder(minutes: number | null, deadline: Date | null): void {
     const presets = new Set([0, 15, 60, 1440, 10080]);
     editReminderChoice = minutes === null
@@ -952,6 +967,7 @@
       editDeadlineTime = '';
     }
     setEditReminder(task.reminder_minutes, task.deadline ? new Date(task.deadline) : null);
+    editDuration = Number(task.duration_minutes) > 0 ? Number(task.duration_minutes) : 30;
     editRepeatRule = parseRepeatRule(task.repeat_rule);
     editRepeatKey += 1;
   }
@@ -1104,6 +1120,7 @@
       deadline: deadline?.toISOString() ?? null,
       repeat_rule: deadline === null ? null : editRepeatRule,
       reminder_minutes: reminderMinutes,
+      duration_minutes: editDuration,
       project_id: editProjectId,
     });
     await load();
@@ -1562,6 +1579,7 @@
       notes: draftNotes.trim() || null,
       deadline: deadline?.toISOString() ?? null,
       reminder_minutes: reminderMinutes,
+      duration_minutes: durationMinutes,
       project_id: draftProjectId,
       repeat_rule: deadline === null ? null : repeatRule,
     });
@@ -2036,6 +2054,14 @@
           </select>
         </label>
       </div>
+      <label class='mb-0'>
+        <span class='small'>{t('Duration')}</span>
+        <select class='form-control form-control-sm' bind:value={durationMinutes} disabled={!deadlineDate || !deadlineTime} title={t('How long the task takes: its length in the calendar')}>
+          {#each durationChoices(durationMinutes) as minutes (minutes)}
+            <option value={minutes}>{durationLabel(minutes)}</option>
+          {/each}
+        </select>
+      </label>
       {#if deadlineDate && deadlineTime && reminderChoice === 'custom'}
         <label class='mb-0'>
           <span class='small'>{t('Minutes before')}</span>
@@ -2564,6 +2590,14 @@
             </div>
           </div>
           <div class='pm-dialog-field'>
+            <label class='pm-label' for='todo-detail-duration'>{t('Duration')}</label>
+            <select id='todo-detail-duration' class='form-control' bind:value={editDuration} disabled={!editDeadlineDate || !editDeadlineTime} title={t('How long the task takes: its length in the calendar')}>
+              {#each durationChoices(editDuration) as minutes (minutes)}
+                <option value={minutes}>{durationLabel(minutes)}</option>
+              {/each}
+            </select>
+          </div>
+          <div class='pm-dialog-field'>
             {#key editRepeatKey}
               <RepeatControl bind:rule={editRepeatRule} disabled={!editDeadlineDate || !editDeadlineTime} />
             {/key}
@@ -2571,7 +2605,7 @@
         {:else}
           {#if detailEntry.deadline}
             <div class='small'>
-              <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>{formatDeadline(detailEntry.deadline)}
+              <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>{formatDeadline(detailEntry.deadline)}{#if Number(items.find(item => Number(item.id) === detailEntry.id)?.duration_minutes) > 0} · {durationLabel(Number(items.find(item => Number(item.id) === detailEntry.id)?.duration_minutes))}{/if}
             </div>
             {#if repeatSummary(items.find(item => Number(item.id) === detailEntry.id)?.repeat_rule)}
               <div class='small'>
