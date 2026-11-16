@@ -2527,8 +2527,8 @@
     <button type="button" class="pm-manage-btn" class:active={showArchivedProjects} title={showArchivedProjects ? t('Show active projects') : t('Show archived projects')} aria-label={showArchivedProjects ? t('Show active projects') : t('Show archived projects')} on:click={toggleShowArchivedProjects}>
       <i class="fas fa-box-archive fa-fw" aria-hidden="true"></i>
     </button>
-    <button type="button" class="pm-manage-btn ml-auto" class:active={canvasView} title={canvasView ? t('Back to the board') : t('Open the canvas')} aria-label={canvasView ? t('Back to the board') : t('Open the canvas')} aria-pressed={canvasView} on:click={toggleCanvasView}>
-      <i class="fas fa-diagram-project fa-fw" aria-hidden="true"></i>
+    <button type="button" class="pm-manage-btn ml-auto" class:active={canvasView} title={canvasView ? t('Back to the board') : t('Open the mind map')} aria-label={canvasView ? t('Back to the board') : t('Open the mind map')} aria-pressed={canvasView} on:click={toggleCanvasView}>
+      <i class="fas fa-brain fa-fw" aria-hidden="true"></i>
     </button>
     <button type="button" class="pm-manage-btn" title={cardDensity === 'compact' ? t('Switch to expanded view') : t('Switch to compact view')} aria-label={cardDensity === 'compact' ? t('Switch to expanded view') : t('Switch to compact view')} on:click={toggleCardDensity}>
       <i class="fas {cardDensity === 'compact' ? 'fa-expand' : 'fa-compress'} fa-fw" aria-hidden="true"></i>
