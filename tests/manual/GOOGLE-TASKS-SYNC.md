@@ -147,6 +147,12 @@ When the choice changes the panel says "Connect again" (one click) so Google can
 Admin setup: enable the **Google Calendar API** too, add the two scopes to the consent screen, and in the
 Content-Security-Policy add ` https://www.googleapis.com` to `connect-src` (next to `https://tasks.googleapis.com`).
 
+Where to link Google: in the to-do panel, open the **By date** tab; the Google section is under the private calendar link
+(choose Google Tasks / Google Calendar, then **Connect**). The calendar page also has a **Calendars** dropdown in its toolbar
+with a **Connect Google** button, and the calendar and project choices (tasks are shown per project, Google per calendar).
+A task has a begin and an end time (the end is kept as its length); the end is set in the task editor or by dragging the lower
+edge on the calendar page.
+
 How a task is written: a task with a deadline is an event that starts at the deadline and lasts the duration of the task
 (30 minutes unless changed in the task editor, or by dragging its lower edge on the calendar page), with a popup reminder
 of the task's reminder, a link back to the task in the description, and a hidden private property `elabftwTask=<id>`
@@ -178,3 +184,16 @@ Rules (same ideas as for Google Tasks; judged against a snapshot of what was wri
 
 `tests/googleCalendarSync.test.cjs` covers the logic; `tests/manual/google-calendar-check.js` runs C1-C7 against
 `tests/manual/google-stub.js`. Real Google has not been tried.
+
+## Calendars from a web address (.ics)
+
+The **Calendars** dropdown of the calendar page can also show any calendar that has an address (a Google "Secret address in
+iCal format", Outlook, a university, ...). The address is read by the browser (the server has no internet), kept in this browser
+for this account only, and read again every 15 minutes while the page is open. Repeating events, all-day events and time zones
+are understood (`src/ts/icalFeed.ts`, `tests/icalFeed.test.cjs`). Two things must allow it:
+
+- the site must send CORS headers (Google's secret address does not, most university and Outlook feeds do not either: then the
+  dropdown says the address could not be read);
+- the Content-Security-Policy `connect-src` must contain the host (or `https:`).
+
+`tests/manual/test-feed.ics` is a feed for trying it on the dev proxy (`/__tests/test-feed.ics`, same origin so no CORS).
