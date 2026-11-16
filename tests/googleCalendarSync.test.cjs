@@ -185,6 +185,32 @@ test('new events of the calendar become to-dos when asked, once, and are marked'
   assert.deepEqual(again.calls, []);
 });
 
+test('events of other types (birthdays, mail, focus time) are not brought in', async () => {
+  const api = mockCalendar([
+    { summary: 'Birthday', eventType: 'birthday', start: { dateTime: '2026-11-18T13:00:00Z' }, end: { dateTime: '2026-11-18T14:00:00Z' } },
+    { summary: 'Focus', eventType: 'focusTime', start: { dateTime: '2026-11-18T15:00:00Z' }, end: { dateTime: '2026-11-18T16:00:00Z' } },
+    { summary: 'Normal', eventType: 'default', start: { dateTime: '2026-11-18T17:00:00Z' }, end: { dateTime: '2026-11-18T18:00:00Z' } },
+  ]);
+  const local = mockLocal();
+  const result = await syncCalendar(api, [], opts({ local, importEvents: true }));
+  assert.equal(result.imported, 1);
+  assert.deepEqual(json(local.calls.map(call => call[1].title)), ['Normal']);
+});
+
+test('when Google refuses to mark an imported event the run goes on, and the event is not brought in again', async () => {
+  const api = mockCalendar([{ summary: 'Odd one', start: { dateTime: '2026-11-18T13:00:00Z' }, end: { dateTime: '2026-11-18T14:00:00Z' } }]);
+  const refuse = async () => { throw new Error('Google Calendar said 400.'); };
+  const first = await syncCalendar({ ...api, patchEvent: refuse }, [], opts({ local: mockLocal(), importEvents: true }));
+  assert.equal(first.imported, 1);
+  assert.equal(first.unmarked, 1);
+  assert.deepEqual(Object.keys(json(first.snapshot)), ['901']);
+  const again = mockLocal();
+  const second = await syncCalendar(api, [{ id: 901, body: 'Odd one', deadline: '2026-11-18T13:00:00Z', duration_minutes: 60 }], opts({ local: again, importEvents: true, snapshot: first.snapshot }));
+  assert.equal(second.imported, 0);
+  assert.deepEqual(again.calls, []);
+  assert.deepEqual(api.calls, []);
+});
+
 test('events are not brought in without the box, or in one-way', async () => {
   const events = [{ summary: 'Lab meeting', start: { dateTime: '2026-11-18T13:00:00Z' }, end: { dateTime: '2026-11-18T14:00:00Z' } }];
   const local = mockLocal();
