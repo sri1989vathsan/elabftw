@@ -76,18 +76,17 @@ Connect fails with a message and the rest of eLabFTW is unaffected.
 4. In Sysconfig, section "Google Tasks sync": tick *Offer Google Tasks sync in the
    to-do panel*. Optionally enter the client ID there (it is not secret) so users
    do not have to; otherwise each user pastes it into the panel once per browser.
-5. Allow Google in the Content-Security-Policy. In
-   `containers/elabimg/nginx/common.conf`, the default policy (the
-   `Content-Security-Policy` line near `Strict-Transport-Security`) needs:
+5. Allow Google in the Content-Security-Policy: set `GOOGLE_SYNC_CSP=true` in the environment of the web container
+   (`docker-compose.yml`, see `containers/elabimg/docker-compose.yml-EXAMPLE`) and restart it. This adds to the main policy:
 
    - `script-src` + ` https://accounts.google.com/gsi/client`
-   - `connect-src` + ` https://tasks.googleapis.com https://accounts.google.com/gsi/`
-   - `frame-src https://accounts.google.com/gsi/` (add the directive)
+   - `connect-src` + ` https://tasks.googleapis.com https://www.googleapis.com https://accounts.google.com/gsi/`
+   - `frame-src` + ` https://accounts.google.com/gsi/`
 
-   This is deliberately NOT in the committed default: widening the policy is a
-   decision for whoever runs the server, and an organization's IT security team
-   will want to review it. It means the eLabFTW page may load Google's sign-in
-   script and connect to Google's APIs.
+   It is off by default (the policy is then exactly as before): widening the policy is a decision for whoever runs the
+   server, and an organization's IT security team will want to review it. It means the eLabFTW page may load Google's
+   sign-in script and connect to Google's APIs. The placeholders are filled by `docker-entrypoint.sh`
+   (`%GOOGLE_SCRIPT_SRC%`, `%GOOGLE_CONNECT_SRC%`, `%GOOGLE_FRAME_SRC%` in `nginx/common.conf`).
 
 ## Things a security review will ask
 

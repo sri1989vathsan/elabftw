@@ -292,6 +292,11 @@ services:
         # example value: https://example.com https://example.org
         #- CUSTOM_CONNECT_SRC=
 
+        # fork: allow the optional Google Tasks/Calendar sync (the browser loads Google's sign-in and calls its APIs):
+        # adds https://accounts.google.com/gsi/ and the Google API addresses to the Content-Security-Policy
+        # default value: false
+        #- GOOGLE_SYNC_CSP=false
+
         ###########
         # PLUGINS #
         ###########
