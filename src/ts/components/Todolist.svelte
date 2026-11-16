@@ -17,6 +17,7 @@
   import { applyMention, extractMentionQuery, wrapMentionsAsHtml, stripMentionHtml } from '../mentions';
   import { fetchLinkPreviewLabel, handleLinkPreviewPaste } from '../linkPreview';
   import RepeatControl, { type RepeatRule } from './RepeatControl.svelte';
+  import { endChoices, endTimeOf, endsNextDay, lengthOf } from '../taskTimes';
 
   // Closes the @mention dropdown on any click outside its own container --
   // it otherwise stayed open until a mention was picked, even after
@@ -278,6 +279,27 @@
   // how long the task takes (a task is an event of this length in the calendars); 30 minutes unless changed
   let durationMinutes = 30;
   let editDuration = 30;
+  // the end time of the day of the new task and of the task that is edited: made from the begin time and the length, and changed with it
+  let endTime = '';
+  let editEndTime = '';
+  $: endTime = endTimeOf(deadlineTime, durationMinutes);
+  $: editEndTime = endTimeOf(editDeadlineTime, editDuration);
+  function changeEnd(): void {
+    const minutes = lengthOf(deadlineTime, endTime);
+    if (minutes === null) {
+      endTime = endTimeOf(deadlineTime, durationMinutes);
+    } else {
+      durationMinutes = minutes;
+    }
+  }
+  function changeEditEnd(): void {
+    const minutes = lengthOf(editDeadlineTime, editEndTime);
+    if (minutes === null) {
+      editEndTime = endTimeOf(editDeadlineTime, editDuration);
+    } else {
+      editDuration = minutes;
+    }
+  }
   let customReminder = 120;
   let reminderDate = '';
   let reminderTime = '';
@@ -892,15 +914,10 @@
     return parseInt(choice, 10);
   }
 
-  const DURATION_PRESETS = [15, 30, 45, 60, 90, 120, 180, 240, 480];
-  function durationLabel(minutes: number): string {
-    if (minutes < 60) return `${minutes} min`;
-    const hours = minutes / 60;
-    return `${Number.isInteger(hours) ? hours : hours.toFixed(1).replace(/\.0$/, '')} ${hours === 1 ? 'hour' : 'hours'}`;
-  }
-  // the presets, and the duration the task has when it is not one of them
-  function durationChoices(current: number): number[] {
-    return DURATION_PRESETS.includes(current) ? DURATION_PRESETS : [...DURATION_PRESETS, current].sort((a, b) => a - b);
+  // the end time of the day of a task, for the details
+  function endLabel(task: Todo | undefined): string {
+    if (!task || !task.deadline || !(Number(task.duration_minutes) > 0)) return '';
+    return endTimeOf(toLocalInput(new Date(task.deadline)).slice(11, 16), Number(task.duration_minutes));
   }
 
   function setEditReminder(minutes: number | null, deadline: Date | null): void {
@@ -2026,7 +2043,7 @@
           <button type='button' class='btn btn-sm btn-outline-secondary align-self-end' on:click={setDeadlineToday} title={t('Set the date to today')}>{t('Today')}</button>
         {/if}
         <label class='mb-0'>
-          <span class='small'>{t('Time')}</span>
+          <span class='small'>{t('Begin time')}</span>
           <select class='form-control form-control-sm' bind:value={deadlineTime} on:change={persistDeadlineDefaults}>
             <option value=''>—</option>
             {#each timeOptions as time}
@@ -2055,10 +2072,10 @@
         </label>
       </div>
       <label class='mb-0'>
-        <span class='small'>{t('Duration')}</span>
-        <select class='form-control form-control-sm' bind:value={durationMinutes} disabled={!deadlineDate || !deadlineTime} title={t('How long the task takes: its length in the calendar')}>
-          {#each durationChoices(durationMinutes) as minutes (minutes)}
-            <option value={minutes}>{durationLabel(minutes)}</option>
+        <span class='small'>{t('End time')}{#if endsNextDay(deadlineTime, durationMinutes)} <span class='text-muted'>({t('next day')})</span>{/if}</span>
+        <select class='form-control form-control-sm' bind:value={endTime} on:change={changeEnd} disabled={!deadlineDate || !deadlineTime} title={t('When the task ends: its length in the calendar')}>
+          {#each endChoices(timeOptions, endTime) as time (time)}
+            <option value={time}>{time}</option>
           {/each}
         </select>
       </label>
@@ -2580,7 +2597,7 @@
               </div>
             </div>
             <div class='pm-dialog-field flex-grow-1'>
-              <label class='pm-label' for='todo-detail-deadline-time'>{t('Deadline time')}</label>
+              <label class='pm-label' for='todo-detail-deadline-time'>{t('Begin time')}</label>
               <select id='todo-detail-deadline-time' class='form-control' bind:value={editDeadlineTime}>
                 <option value=''>{t('None')}</option>
                 {#each timeOptions as timeOption (timeOption)}
@@ -2590,10 +2607,10 @@
             </div>
           </div>
           <div class='pm-dialog-field'>
-            <label class='pm-label' for='todo-detail-duration'>{t('Duration')}</label>
-            <select id='todo-detail-duration' class='form-control' bind:value={editDuration} disabled={!editDeadlineDate || !editDeadlineTime} title={t('How long the task takes: its length in the calendar')}>
-              {#each durationChoices(editDuration) as minutes (minutes)}
-                <option value={minutes}>{durationLabel(minutes)}</option>
+            <label class='pm-label' for='todo-detail-end-time'>{t('End time')}{#if endsNextDay(editDeadlineTime, editDuration)} <span class='text-muted'>({t('next day')})</span>{/if}</label>
+            <select id='todo-detail-end-time' class='form-control' bind:value={editEndTime} on:change={changeEditEnd} disabled={!editDeadlineDate || !editDeadlineTime} title={t('When the task ends: its length in the calendar')}>
+              {#each endChoices(timeOptions, editEndTime) as timeOption (timeOption)}
+                <option value={timeOption}>{timeOption}</option>
               {/each}
             </select>
           </div>
@@ -2605,7 +2622,7 @@
         {:else}
           {#if detailEntry.deadline}
             <div class='small'>
-              <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>{formatDeadline(detailEntry.deadline)}{#if Number(items.find(item => Number(item.id) === detailEntry.id)?.duration_minutes) > 0} · {durationLabel(Number(items.find(item => Number(item.id) === detailEntry.id)?.duration_minutes))}{/if}
+              <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>{formatDeadline(detailEntry.deadline)}{#if endLabel(items.find(item => Number(item.id) === detailEntry.id))} – {endLabel(items.find(item => Number(item.id) === detailEntry.id))}{/if}
             </div>
             {#if repeatSummary(items.find(item => Number(item.id) === detailEntry.id)?.repeat_rule)}
               <div class='small'>
