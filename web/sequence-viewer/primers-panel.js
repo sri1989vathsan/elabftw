@@ -486,10 +486,26 @@
           if (made && made.size !== found.size) {
             top.querySelector('.primers-chip').textContent += ' (' + made.size + ' bp with the tails)';
           }
+          // the products appear in the card itself, in this panel: select, copy, files, save as an entry
+          const outcome = element('div', 'primers-pcr-result');
           const pcr = action('Run PCR', function () {
-            if (window.ToolsPcr && window.ToolsPcr.show) {
-              window.ToolsPcr.show(pair[0].sequence, pair[1].sequence);
+            const now = current();
+            outcome.textContent = '';
+            if (!now || !window.ToolsPcr || !window.ToolsPcr.cards) {
+              return;
             }
+            const byBases = {};
+            attachedPrimers.forEach(function (p) {
+              if (p.sequence) {
+                byBases[tools.clean(p.sequence)] = p;
+              }
+            });
+            const list = window.ToolsPcr.products(now.sequence, !!now.circular, tools.clean(pair[0].sequence), tools.clean(pair[1].sequence));
+            if (list.length === 0) {
+              outcome.append(element('p', 'primers-muted', 'No product: the primers do not face each other on this sequence.'));
+              return;
+            }
+            window.ToolsPcr.cards(outcome, list, editor, { entryId: entryId, name: now.name }, byBases);
           }, 'primary');
           pcr.title = 'In silico PCR on this sequence: the product is a linear double-stranded sequence that can be selected, run on a gel or saved as a new entry';
           pcr.disabled = !product;
@@ -503,7 +519,7 @@
               say(error.message || String(error), true);
             }
           }));
-          box.append(foot);
+          box.append(foot, outcome);
           sectionPairs.append(box);
         });
         lonely.forEach(function (p) {

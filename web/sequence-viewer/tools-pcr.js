@@ -243,43 +243,9 @@
     });
   }
 
-  async function pcr(editor, context) {
-    const box = element('div', 'tools-block');
-    box.append(element('p', 'tool-muted', 'The products two primers make on this sequence, tails included. Choose primers attached to the entry or type them.'));
-    let list = [];
-    try {
-      if (context.entryId) {
-        list = (await tools.attached(context.entryId)).primers.filter(function (p) {
-          return p.sequence;
-        });
-      }
-    } catch (error) {
-      list = [];
-    }
-    const one = primerChooser('Primer 1', list);
-    const two = primerChooser('Primer 2', list);
-    // the primers of the list by their bases (the products name them and attach them)
-    const byBases = {};
-    list.forEach(function (primer) {
-      byBases[tools.clean(primer.sequence)] = primer;
-    });
-    const result = element('div');
-    const go = element('button', 'tool-btn tool-btn-primary', 'Find the products');
-    go.type = 'button';
-    go.addEventListener('click', function () {
-      result.textContent = '';
-      const a = tools.clean(one.value());
-      const b = tools.clean(two.value());
-      if (a.length < 12 || b.length < 12) {
-        result.append(element('p', 'tool-message error', 'Both primers need at least 12 bases.'));
-        return;
-      }
-      const data = editor.getState().sequenceData;
-      const found = products(data.sequence, !!data.circular, a, b);
-      if (found.length === 0) {
-        result.append(element('p', 'tool-message error', 'No product: the primers do not face each other on the sequence (or do not bind it).'));
-        return;
-      }
+  // the cards of the products found: select, copy, gel, files, save as an entry (used here and by the Pairs of the Primers tab)
+  function productCards(result, found, editor, context, byBases) {
+    const data = editor.getState().sequenceData;
       result.append(element('p', 'tool-muted', found.length + (found.length === 1 ? ' product' : ' products') + ':'));
       window.DigestCompare = window.DigestCompare || {};
       window.DigestCompare.pcrLanes = found.slice(0, 6).map(function (item, index) {
@@ -342,6 +308,46 @@
         card.append(actions);
         result.append(card);
       });
+  }
+
+  async function pcr(editor, context) {
+    const box = element('div', 'tools-block');
+    box.append(element('p', 'tool-muted', 'The products two primers make on this sequence, tails included. Choose primers attached to the entry or type them.'));
+    let list = [];
+    try {
+      if (context.entryId) {
+        list = (await tools.attached(context.entryId)).primers.filter(function (p) {
+          return p.sequence;
+        });
+      }
+    } catch (error) {
+      list = [];
+    }
+    const one = primerChooser('Primer 1', list);
+    const two = primerChooser('Primer 2', list);
+    // the primers of the list by their bases (the products name them and attach them)
+    const byBases = {};
+    list.forEach(function (primer) {
+      byBases[tools.clean(primer.sequence)] = primer;
+    });
+    const result = element('div');
+    const go = element('button', 'tool-btn tool-btn-primary', 'Find the products');
+    go.type = 'button';
+    go.addEventListener('click', function () {
+      result.textContent = '';
+      const a = tools.clean(one.value());
+      const b = tools.clean(two.value());
+      if (a.length < 12 || b.length < 12) {
+        result.append(element('p', 'tool-message error', 'Both primers need at least 12 bases.'));
+        return;
+      }
+      const data = editor.getState().sequenceData;
+      const found = products(data.sequence, !!data.circular, a, b);
+      if (found.length === 0) {
+        result.append(element('p', 'tool-message error', 'No product: the primers do not face each other on the sequence (or do not bind it).'));
+        return;
+      }
+      productCards(result, found, editor, context, byBases);
     });
     box.append(one.box, two.box, go, result);
     // two primers chosen elsewhere (the Primers tab): they are put in and the products are looked for
@@ -447,6 +453,7 @@
   window.ToolsTab.add({ id: 'mutagenesis', title: 'Mutagenesis', build: mutagenesis });
   window.ToolsPcr = {
     products: products,
+    cards: productCards,
     saveEntryForm: saveEntryForm,
     // the PCR section of the Tools panel is opened with two primers in it (called by the Primers tab)
     show: function (a, b) {
