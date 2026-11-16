@@ -79,6 +79,7 @@ final class TodolistCanvas extends AbstractRest
         if ($projectId === null) {
             throw new ImproperActionException(_('A project is required.'));
         }
+        $this->followTaskProjects();
         $projectIds = array($projectId);
         if ($query->getInt('include_subprojects') === 1) {
             $req = $this->Db->prepare('SELECT id FROM todolist_projects WHERE parent_id = :parent AND team = :team AND archived = 0');
@@ -115,6 +116,46 @@ final class TodolistCanvas extends AbstractRest
         }
 
         return array('nodes' => $nodes, 'edges' => $edges);
+    }
+
+    /**
+     * A task card belongs to the project its task is in now: when the project of a task is changed on the board, its card moves
+     * to that project's frame of the canvas (below the cards already there; its arrows stay). A task without a project stays where it is,
+     * and so does a card whose task is already on the canvas of the new project (no second card of the same task).
+     */
+    private function followTaskProjects(): void
+    {
+        $req = $this->Db->prepare('SELECT n.id, n.task_id, t.project_id AS task_project
+            FROM todolist_canvas_nodes AS n
+            INNER JOIN todolist AS t ON t.id = n.task_id AND t.team = n.team
+            WHERE n.team = :team AND n.type = "task" AND t.project_id IS NOT NULL AND t.project_id <> n.project_id');
+        $req->bindParam(':team', $this->team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        foreach ($req->fetchAll() as $row) {
+            $target = (int) $row['task_project'];
+            $nodeId = (int) $row['id'];
+            $check = $this->Db->prepare('SELECT COUNT(*) AS cards, MIN(x) AS min_x, MAX(y) AS max_y,
+                    SUM(task_id = :task) AS same
+                FROM todolist_canvas_nodes WHERE team = :team AND project_id = :project AND id <> :id');
+            $check->bindValue(':task', (int) $row['task_id'], PDO::PARAM_INT);
+            $check->bindParam(':team', $this->team, PDO::PARAM_INT);
+            $check->bindValue(':project', $target, PDO::PARAM_INT);
+            $check->bindValue(':id', $nodeId, PDO::PARAM_INT);
+            $this->Db->execute($check);
+            $there = $check->fetch();
+            if ($there === false || (int) $there['same'] > 0) {
+                continue;
+            }
+            $x = (int) $there['cards'] > 0 ? (int) $there['min_x'] : 0;
+            $y = (int) $there['cards'] > 0 ? (int) $there['max_y'] + 170 : 0;
+            $move = $this->Db->prepare('UPDATE todolist_canvas_nodes SET project_id = :project, x = :x, y = :y WHERE id = :id AND team = :team');
+            $move->bindValue(':project', $target, PDO::PARAM_INT);
+            $move->bindValue(':x', $x, PDO::PARAM_INT);
+            $move->bindValue(':y', $y, PDO::PARAM_INT);
+            $move->bindValue(':id', $nodeId, PDO::PARAM_INT);
+            $move->bindParam(':team', $this->team, PDO::PARAM_INT);
+            $this->Db->execute($move);
+        }
     }
 
     #[Override]
