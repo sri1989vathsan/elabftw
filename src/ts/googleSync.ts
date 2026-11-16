@@ -207,7 +207,15 @@ async function google(method: string, path: string, token: string, body?: unknow
     throw new AuthError('Google access expired.');
   }
   if (!response.ok) {
-    throw new Error(`Google ${base === CALENDAR_API ? 'Calendar' : 'Tasks'} said ${response.status}.`);
+    // what Google says is wrong, when it says
+    let reason = '';
+    try {
+      const detail = await response.json() as { error?: { message?: string; errors?: { reason?: string }[] } };
+      reason = [detail.error?.message, detail.error?.errors?.[0]?.reason].filter(Boolean).join(' / ');
+    } catch {
+      // no readable body
+    }
+    throw new Error(`Google ${base === CALENDAR_API ? 'Calendar' : 'Tasks'} said ${response.status}${reason ? `: ${reason}` : ''}.`);
   }
   return response.status === 204 ? null : response.json();
 }
