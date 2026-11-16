@@ -103,6 +103,13 @@
   let hiddenProjects: number[] = readHidden();
   let googleState: 'unknown' | 'off' | 'needs' | 'ready' = 'unknown';
   let googleCalendars: GoogleCalendar[] = [];
+  let menuOpen = false;
+  let menuEl: HTMLElement | undefined;
+  function closeMenu(event: Event): void {
+    if (menuOpen && menuEl && !menuEl.contains(event.target as Node)) {
+      menuOpen = false;
+    }
+  }
 
   function readHidden(): number[] {
     try {
@@ -121,6 +128,8 @@
       : Array.from({ length: 42 }, (_, index) => addDays(mondayOf(new Date(cursor.getFullYear(), cursor.getMonth(), 1)), index));
   $: rangeKey = `${view}|${days[0].getTime()}|${days.length}`;
   $: if (rangeKey) void load();
+  $: shownCount = usedProjects.filter(id => !hiddenProjects.includes(id)).length + googleCalendars.filter(calendar => calendar.shown).length;
+  $: totalCount = usedProjects.length + googleCalendars.length;
   $: shownGoogle = new Set(googleCalendars.filter(calendar => calendar.shown).map(calendar => calendar.id));
   $: events = [
     ...tasks.filter(task => !hiddenProjects.includes(task.project ?? 0)),
@@ -417,6 +426,8 @@
   }
 </script>
 
+<svelte:window on:click={closeMenu} on:keydown={event => { if (event.key === 'Escape') { menuOpen = false; } }} />
+
 <div class='cal-page'>
   <div class='cal-toolbar'>
     <div class='cal-nav'>
@@ -425,6 +436,7 @@
       <button type='button' class='btn btn-ghost btn-sm' aria-label={t('Next')} on:click={() => go(1)}><i class='fas fa-chevron-right' aria-hidden='true'></i></button>
       <h2 class='cal-title'>{title}</h2>
     </div>
+    <div class='cal-right'>
     <div class='cal-views' role='group' aria-label={t('View')}>
       {#each ['day', 'week', 'month'] as mode (mode)}
         <button type='button' class='btn btn-sm' class:btn-primary={view === mode} class:btn-ghost={view !== mode} aria-pressed={view === mode} on:click={() => { view = mode as View; }}>
@@ -432,40 +444,47 @@
         </button>
       {/each}
     </div>
-  </div>
-
-  <div class='cal-sources'>
-    <div class='cal-sources-row'>
-      <span class='cal-sources-title'>{t('My tasks')}</span>
-      {#each usedProjects as id (id)}
-        <label class='cal-source' class:cal-off={hiddenProjects.includes(id)} style='--c:{projectColor(id)}'>
-          <input type='checkbox' checked={!hiddenProjects.includes(id)} on:change={() => toggleProject(id)} />
-          <span class='cal-dot'></span>{id === 0 ? t('No project') : projectName(id)}
-        </label>
-      {:else}
-        <span class='pm-muted small'>{t('No tasks in these days')}</span>
-      {/each}
-      {#if usedProjects.length > 1}
-        <button type='button' class='btn btn-ghost btn-sm' on:click={() => setAllProjects(true)}>{t('All')}</button>
-        <button type='button' class='btn btn-ghost btn-sm' on:click={() => setAllProjects(false)}>{t('None')}</button>
-      {/if}
-    </div>
-    {#if googleState !== 'unknown'}
-      <div class='cal-sources-row'>
-        <span class='cal-sources-title'>{t('Google calendars')}</span>
-        {#if googleState === 'ready'}
-          {#each googleCalendars as calendar (calendar.id)}
-            <label class='cal-source' class:cal-off={!calendar.shown} style='--c:{calendar.color}'>
-              <input type='checkbox' checked={calendar.shown} on:change={() => toggleGoogle(calendar)} />
-              <span class='cal-dot'></span>{calendar.summary}
-            </label>
-          {/each}
-        {:else}
-          <button type='button' class='btn btn-secondary btn-sm' on:click={connectGoogle}>{googleState === 'needs' ? t('Show my Google calendars') : t('Connect Google')}</button>
-          <span class='pm-muted small'>{googleState === 'needs' ? t('Allow Google Calendar once to choose which calendars are shown here.') : t('Connect your Google account to show its calendars here.')}</span>
+      <div class='cal-menu' bind:this={menuEl}>
+        <button type='button' class='btn btn-secondary btn-sm' aria-haspopup='true' aria-expanded={menuOpen} on:click={() => { menuOpen = !menuOpen; }}>
+          <i class='fas fa-layer-group fa-fw mr-1' aria-hidden='true'></i>{t('Calendars')} <span class='cal-menu-count'>{shownCount}/{totalCount}</span> <i class='fas fa-caret-down' aria-hidden='true'></i>
+        </button>
+        {#if menuOpen}
+          <div class='cal-menu-panel' role='group' aria-label={t('Calendars')}>
+            <div class='cal-menu-head'>
+              <span class='cal-sources-title'>{t('My tasks')}</span>
+              {#if usedProjects.length > 1}
+                <span>
+                  <button type='button' class='btn btn-ghost btn-sm' on:click={() => setAllProjects(true)}>{t('All')}</button>
+                  <button type='button' class='btn btn-ghost btn-sm' on:click={() => setAllProjects(false)}>{t('None')}</button>
+                </span>
+              {/if}
+            </div>
+            {#each usedProjects as id (id)}
+              <label class='cal-source' class:cal-off={hiddenProjects.includes(id)} style='--c:{projectColor(id)}'>
+                <input type='checkbox' checked={!hiddenProjects.includes(id)} on:change={() => toggleProject(id)} />
+                <span class='cal-dot'></span>{id === 0 ? t('No project') : projectName(id)}
+              </label>
+            {:else}
+              <span class='pm-muted small'>{t('No tasks in these days')}</span>
+            {/each}
+            <div class='cal-menu-head'><span class='cal-sources-title'>{t('Google calendars')}</span></div>
+            {#if googleState === 'ready'}
+              {#each googleCalendars as calendar (calendar.id)}
+                <label class='cal-source' class:cal-off={!calendar.shown} style='--c:{calendar.color}'>
+                  <input type='checkbox' checked={calendar.shown} on:change={() => toggleGoogle(calendar)} />
+                  <span class='cal-dot'></span>{calendar.summary}
+                </label>
+              {/each}
+            {:else if googleState === 'unknown'}
+              <span class='pm-muted small'>{t('Google is not set up here: ask the administrator to turn on the Google sync.')}</span>
+            {:else}
+              <button type='button' class='btn btn-secondary btn-sm' on:click={connectGoogle}>{googleState === 'needs' ? t('Show my Google calendars') : t('Connect Google')}</button>
+              <span class='pm-muted small'>{googleState === 'needs' ? t('Allow Google Calendar once to choose which calendars are shown here.') : t('Connect your Google account to show its calendars here.')}</span>
+            {/if}
+          </div>
         {/if}
       </div>
-    {/if}
+    </div>
   </div>
 
   {#if view === 'month'}
@@ -577,35 +596,59 @@
     gap: 0.25rem;
   }
 
-  .cal-sources {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .cal-sources-row {
-    align-items: center;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem 0.6rem;
-  }
-
   .cal-sources-title {
     font-size: 0.72rem;
     font-weight: 600;
     text-transform: uppercase;
   }
 
+  .cal-right {
+    align-items: center;
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .cal-menu {
+    position: relative;
+  }
+
+  .cal-menu-count {
+    opacity: 0.75;
+  }
+
+  .cal-menu-panel {
+    background: var(--mainbackground, #fff);
+    border: 1px solid var(--cal-line);
+    border-radius: 0.4rem;
+    box-shadow: 0 0.25rem 0.8rem rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    max-height: 70vh;
+    min-width: 17rem;
+    overflow: auto;
+    padding: 0.5rem 0.65rem;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    z-index: 30;
+  }
+
+  .cal-menu-head {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.3rem;
+  }
+
   .cal-source {
     align-items: center;
-    border: 1px solid var(--c);
-    border-radius: 999px;
     cursor: pointer;
-    display: inline-flex;
-    font-size: 0.78rem;
-    gap: 0.3rem;
+    display: flex;
+    font-size: 0.85rem;
+    gap: 0.4rem;
     margin: 0;
-    padding: 0.05rem 0.55rem 0.05rem 0.4rem;
+    padding: 0.1rem 0;
   }
 
   .cal-source input {
@@ -613,7 +656,6 @@
   }
 
   .cal-source.cal-off {
-    border-style: dashed;
     opacity: 0.55;
   }
 
