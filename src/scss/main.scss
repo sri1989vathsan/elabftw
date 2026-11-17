@@ -3500,6 +3500,7 @@ tr:first-child td {
 }
 
 // ---- Search panel (favourite filters and the results) ----
+// One row (search box plus two small icon buttons), the type tabs, the chips, one muted results line, a divider, then the results.
 #favoritesPanel {
   .input-group-text {
     background: transparent;
@@ -3511,16 +3512,109 @@ tr:first-child td {
   .favorite-filter-text-group {
     background: var(--fx-hover);
     border-radius: 4px;
-    margin-bottom: 0.3rem !important;
+    flex-wrap: nowrap;
+    min-width: 0;
 
     .form-control {
       background: transparent;
+      min-width: 0;
     }
   }
 
   .favorite-filter-toolbar {
-    gap: 0.2rem;
-    margin-bottom: 0.3rem;
+    gap: 0;
+  }
+
+  .favorite-icon-btn {
+    height: var(--fx-ctl);
+    min-width: var(--fx-ctl);
+    padding: 0;
+    width: var(--fx-ctl);
+  }
+
+  // All / Exp / Res / templates: the same segmented look as Exp / Res / All in the folders panel
+  .favorite-target-tabs {
+    background: var(--fx-hover);
+    border: 0;
+    border-radius: 6px;
+    display: flex;
+    gap: 0.1rem;
+    height: var(--fx-ctl);
+    padding: 0.1rem;
+
+    button {
+      background: transparent;
+      border: 0;
+      border-radius: 4px;
+      color: var(--fx-muted);
+      flex: 1 1 0;
+      font-size: 0.7rem;
+      line-height: 1;
+      min-width: 0;
+      overflow: hidden;
+      padding: 0;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+
+      &:hover {
+        color: var(--fx-fg);
+      }
+
+      &.active {
+        background: var(--primary);
+        color: var(--primary-fg, #fff);
+      }
+    }
+  }
+
+  // the results line: label and count on the left, "Full list ›" on the right edge
+  .favorite-results-line {
+    align-items: center;
+    display: flex;
+    gap: 0.35rem;
+    min-height: var(--fx-row);
+    padding: 0 var(--fx-pad);
+  }
+
+  .favorite-results-label {
+    color: var(--fx-muted);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    margin: 0 !important;
+    text-transform: uppercase;
+  }
+
+  .favorite-results-line .badge {
+    background: transparent;
+    color: var(--fx-muted);
+    padding: 0;
+  }
+
+  .favorite-full-list {
+    color: var(--fx-fg) !important;
+    font-size: 0.72rem;
+    margin-left: auto;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  .favorite-results-status {
+    color: var(--fx-muted) !important;
+    font-size: 0.68rem;
+    margin: 0 0 0.2rem;
+    overflow: hidden;
+    padding: 0 var(--fx-pad);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .favorite-filter-results {
+    border-top: 1px solid var(--fx-line);
+    padding-top: 0.2rem;
   }
 
   .favorite-filter-section-summary {
@@ -3542,7 +3636,9 @@ tr:first-child td {
     text-transform: uppercase;
   }
 
+  // a result: the title on one line and one muted line under it
   .favorite-filter-result {
+    border: 0;
     border-radius: 4px;
     min-height: var(--fx-row);
     padding: 0.15rem var(--fx-pad);
@@ -3554,14 +3650,21 @@ tr:first-child td {
 
   .favorite-filter-result-link {
     color: var(--fx-fg) !important;
+    display: block;
     font-size: inherit;
     font-weight: 600;
+    overflow: hidden;
     text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .favorite-filter-result-meta {
     color: var(--fx-muted);
     font-size: 0.7rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 

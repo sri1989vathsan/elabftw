@@ -226,9 +226,20 @@ export default class FavoriteFilters extends SidePanel {
         input.disabled = !isActive;
       });
     });
+    this.syncTargetTabs();
     this.resultsLoaded = false;
     const panel = document.getElementById(this.panelId);
     if (panel && !panel.hasAttribute('hidden')) void this.loadResults();
+  }
+
+  // The All / Exp / Res / templates tabs above the results follow the (hidden) Type select, whoever changed it.
+  private syncTargetTabs(): void {
+    const value = (document.getElementById('favoriteFilterTarget') as HTMLSelectElement | null)?.value;
+    document.querySelectorAll<HTMLElement>('[data-action="select-favorite-target"]').forEach(tab => {
+      const on = tab.dataset.targetValue === value;
+      tab.classList.toggle('active', on);
+      tab.setAttribute('aria-pressed', String(on));
+    });
   }
 
   apply(): void {

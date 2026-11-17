@@ -1042,6 +1042,14 @@ on('destroy-favtags', (el: HTMLElement) => {
   }
 });
 
+// the All / Exp / Res / templates tabs of the search panel set the (hidden) Type select, which FavoriteFilters reads
+on('select-favorite-target', (el: HTMLElement) => {
+  const select = document.getElementById('favoriteFilterTarget') as HTMLSelectElement | null;
+  if (!select || !el.dataset.targetValue || select.value === el.dataset.targetValue) return;
+  select.value = el.dataset.targetValue;
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+});
+
 // Categories and statuses are only listed once a specific Type is selected, so a
 // favourite added while "All" is selected would be saved but stay hidden. Switch to
 // its own type so it shows up right away.
