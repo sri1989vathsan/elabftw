@@ -151,6 +151,21 @@
     if (menuOpen && menuEl && !menuEl.contains(event.target as Node)) {
       menuOpen = false;
     }
+    if (jumpOpen && jumpEl && !jumpEl.contains(event.target as Node)) {
+      jumpOpen = false;
+    }
+  }
+
+  // the title opens a small window to go to any month and year
+  let jumpOpen = false;
+  let jumpEl: HTMLElement | undefined;
+  $: jumpYears = Array.from({ length: 41 }, (_, index) => cursor.getFullYear() - 20 + index);
+  $: jumpMonths = Array.from({ length: 12 }, (_, index) => new Date(2000, index, 1).toLocaleDateString(undefined, { month: 'long' }));
+
+  function jumpTo(year: number, month: number): void {
+    // the same day of the month when it exists there (the 31st in a month of 30 days goes to the 1st)
+    const day = cursor.getDate() <= new Date(year, month + 1, 0).getDate() ? cursor.getDate() : 1;
+    cursor = startOfDay(new Date(year, month, view === 'month' ? 1 : day));
   }
 
   function isWeekend(date: Date): boolean {
@@ -174,8 +189,6 @@
       : Array.from({ length: 42 }, (_, index) => addDays(mondayOf(new Date(cursor.getFullYear(), cursor.getMonth(), 1)), index)).filter(day => prefs.weekends || !isWeekend(day));
   $: rangeKey = `${view}|${days[0].getTime()}|${days.length}`;
   $: if (rangeKey) void load();
-  $: shownCount = usedProjects.filter(id => !hiddenProjects.includes(id)).length + googleCalendars.filter(calendar => calendar.shown).length + feeds.filter(feed => feed.shown).length;
-  $: totalCount = usedProjects.length + googleCalendars.length + feeds.length;
   // the events of the calendars from web addresses, for the days read
   $: feedEvents = ((): CalEvent[] => {
     if (days.length === 0) return [];
@@ -619,7 +632,7 @@
   }
 </script>
 
-<svelte:window on:click={closeMenu} on:keydown={event => { if (event.key === 'Escape') { menuOpen = false; newTask = null; } }} />
+<svelte:window on:click={closeMenu} on:keydown={event => { if (event.key === 'Escape') { menuOpen = false; jumpOpen = false; newTask = null; } }} />
 
 <div class='cal-page'>
   <div class='cal-toolbar'>
@@ -627,7 +640,25 @@
       <button type='button' class='btn btn-secondary btn-sm' on:click={today}>{t('Today')}</button>
       <button type='button' class='btn btn-ghost btn-sm' aria-label={t('Previous')} on:click={() => go(-1)}><i class='fas fa-chevron-left' aria-hidden='true'></i></button>
       <button type='button' class='btn btn-ghost btn-sm' aria-label={t('Next')} on:click={() => go(1)}><i class='fas fa-chevron-right' aria-hidden='true'></i></button>
-      <h2 class='cal-title'>{title}</h2>
+      <div class='cal-jump' bind:this={jumpEl}>
+        <button type='button' class='cal-title-button' aria-haspopup='true' aria-expanded={jumpOpen} title={t('Go to a month or year')} on:click={() => { jumpOpen = !jumpOpen; }}>
+          <h2 class='cal-title'>{title}</h2><i class='fas fa-caret-down ml-1' aria-hidden='true'></i>
+        </button>
+        {#if jumpOpen}
+          <div class='cal-jump-panel' role='group' aria-label={t('Go to a month or year')}>
+            <select class='form-control form-control-sm' aria-label={t('Month')} value={cursor.getMonth()} on:change={event => jumpTo(cursor.getFullYear(), Number(event.currentTarget.value))}>
+              {#each jumpMonths as name, index (index)}
+                <option value={index}>{name}</option>
+              {/each}
+            </select>
+            <select class='form-control form-control-sm' aria-label={t('Year')} value={cursor.getFullYear()} on:change={event => jumpTo(Number(event.currentTarget.value), cursor.getMonth())}>
+              {#each jumpYears as year (year)}
+                <option value={year}>{year}</option>
+              {/each}
+            </select>
+          </div>
+        {/if}
+      </div>
     </div>
     <div class='cal-right'>
     <div class='cal-views' role='group' aria-label={t('View')}>
@@ -639,7 +670,7 @@
     </div>
       <div class='cal-menu' bind:this={menuEl}>
         <button type='button' class='btn btn-secondary btn-sm' aria-haspopup='true' aria-expanded={menuOpen} on:click={() => { menuOpen = !menuOpen; }}>
-          <i class='fas fa-layer-group fa-fw mr-1' aria-hidden='true'></i><span class='cal-btn-label'>{t('Calendars')}</span> <span class='cal-menu-count'>{shownCount}/{totalCount}</span> <i class='fas fa-caret-down' aria-hidden='true'></i>
+          <i class='fas fa-layer-group fa-fw mr-1' aria-hidden='true'></i><span class='cal-btn-label'>{t('Calendars')}</span> <i class='fas fa-caret-down' aria-hidden='true'></i>
         </button>
         {#if menuOpen}
           <div class='cal-menu-panel' role='group' aria-label={t('Calendars')}>
@@ -701,13 +732,15 @@
                 </label>
               {/each}
             {/if}
-            <span class='pm-muted small'>{t('Connect Google, add a calendar from a web address or share your tasks in Settings.')}</span>
+            <div class='cal-menu-foot'>
+              <button type='button' class='btn btn-ghost btn-sm' on:click={() => { menuOpen = false; openCalendarSettings(); }}>
+                <i class='fas fa-gear fa-fw mr-1' aria-hidden='true'></i>{t('Settings')}
+              </button>
+              <span class='pm-muted small'>{t('Connect Google, add a calendar from a web address or share your tasks in Settings.')}</span>
+            </div>
           </div>
         {/if}
       </div>
-      <button type='button' class='btn btn-secondary btn-sm' title={t('Calendar settings')} aria-label={t('Calendar settings')} on:click={openCalendarSettings}>
-        <i class='fas fa-gear fa-fw' aria-hidden='true'></i><span class='cal-btn-label'> {t('Settings')}</span>
-      </button>
     </div>
   </div>
 
@@ -881,7 +914,41 @@
 
   .cal-title {
     font-size: 1.15rem;
-    margin: 0 0 0 0.5rem;
+    margin: 0;
+  }
+
+  .cal-jump {
+    margin-left: 0.5rem;
+    position: relative;
+  }
+
+  .cal-title-button {
+    align-items: center;
+    background: none;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    display: flex;
+    padding: 0.1rem 0.3rem;
+  }
+
+  .cal-title-button:hover {
+    background: color-mix(in srgb, var(--secondary, #888) 15%, transparent);
+    border-radius: 0.3rem;
+  }
+
+  .cal-jump-panel {
+    background: var(--mainbackground, #fff);
+    border: 1px solid var(--cal-line);
+    border-radius: 0.4rem;
+    box-shadow: 0 0.3rem 1rem rgba(0, 0, 0, 0.2);
+    display: flex;
+    gap: 0.4rem;
+    left: 0;
+    padding: 0.5rem;
+    position: absolute;
+    top: 100%;
+    z-index: 20;
   }
 
   .cal-views {
@@ -916,7 +983,6 @@
 
     .cal-title {
       font-size: 1rem;
-      margin-left: 0.25rem;
     }
   }
 
@@ -924,8 +990,10 @@
     position: relative;
   }
 
-  .cal-menu-count {
-    opacity: 0.75;
+  .cal-menu-foot {
+    border-top: 1px solid var(--cal-line);
+    margin-top: 0.4rem;
+    padding-top: 0.3rem;
   }
 
   .cal-menu-panel {
