@@ -270,7 +270,19 @@ try {
             $design['margin_' . $side . '_mm'] = max(-10.0, min(10.0, (float) $payload['margins'][$side]));
         }
     }
+    // formatting of the lines typed in the dialog (by the number of the line in the text): a size (mm), bold, italic, left / center / right
+    $styleOf = static function (int $index) use ($payload): ?array {
+        $given = is_array($payload['styles'] ?? null) && is_array($payload['styles'][$index] ?? null) ? $payload['styles'][$index] : null;
+        if ($given === null) {
+            return null;
+        }
+        $align = in_array($given['align'] ?? 'left', array('left', 'center', 'right'), true) ? (string) ($given['align'] ?? 'left') : 'left';
+        $size = isset($given['size_mm']) && is_numeric($given['size_mm']) ? max(1.0, min(20.0, (float) $given['size_mm'])) : 0.0;
+        $style = array('size_mm' => $size, 'bold' => !empty($given['bold']), 'italic' => !empty($given['italic']), 'align' => $align);
+        return $style['size_mm'] > 0 || $style['bold'] || $style['italic'] || $align !== 'left' ? $style : null;
+    };
     $lines = array();
+    $lineStyles = array();
     foreach ($design['lines'] ?? array() as $template) {
         // a line is left out when one of its fields is empty
         $empty = false;
@@ -281,14 +293,16 @@ try {
         }, (string) $template));
         if ($line !== '' && !$empty) {
             $lines[] = $line;
+            $lineStyles[] = null;
         }
     }
 
     // the text typed in the print dialog goes below: one line each, a few at most
-    foreach (array_slice(explode("\n", (string) ($payload['custom'] ?? '')), 0, $generic ? 8 : 4) as $custom) {
+    foreach (array_slice(explode("\n", (string) ($payload['custom'] ?? '')), 0, $generic ? 8 : 4) as $index => $custom) {
         $custom = trim(mb_substr($custom, 0, $generic ? 80 : 60));
         if ($custom !== '') {
             $lines[] = $custom;
+            $lineStyles[] = $styleOf($index);
         }
     }
 
@@ -320,6 +334,7 @@ try {
     // the printer puts things
     if (!empty($payload['test'])) {
         $lines = array();
+        $lineStyles = array();
         $qrSize = 0;
         $zpl[] = sprintf('^FO0,0^GB%d,%d,3^FS', $width, $height);
         $zpl[] = sprintf('^FO%d,%d^GB%d,%d,1^FS', max(0, $left), max(0, $top), max(1, $width - $left - $right), max(1, $height - $top - $bottom));
@@ -344,16 +359,58 @@ try {
         return array_map(static fn(string $row): string => mb_substr($row, 0, $chars), array_slice($out, 0, $rows));
     };
     $charsAt = static fn(int $size): int => max(1, (int) floor($textWidth / ($size * 0.56)));
+    // a line with bold, italic or centering is drawn as a picture with a real font (the printer's own font cannot do these) and sent as a
+    // graphic; the preview shows that same picture
+    $fontDir = __DIR__ . '/../vendor/mpdf/mpdf/ttfonts/';
+    $fontFile = static function (array $style) use ($fontDir): string {
+        return $fontDir . 'DejaVuSansCondensed' . ($style['bold'] || $style['italic'] ? '-' : '') . ($style['bold'] ? 'Bold' : '') . ($style['italic'] ? 'Oblique' : '') . '.ttf';
+    };
+    $canDraw = function_exists('imagettftext') && is_file($fontDir . 'DejaVuSansCondensed.ttf');
+    $needsPicture = static fn(?array $style): bool => $canDraw && $style !== null && ($style['bold'] || $style['italic'] || $style['align'] !== 'left');
+    $inkWidth = static function (string $text, int $size, array $style) use ($fontFile): int {
+        $box = imagettfbbox($size * 0.75, 0, $fontFile($style), $text);
+        return $box === false ? 0 : (int) ($box[2] - $box[0]);
+    };
     // a text that does not fit in one row gets a smaller font and up to two rows, so that nothing is cut
-    $small = max(8, (int) round($font * 0.75));
     $plan = array();
-    foreach ($lines as $line) {
-        if (mb_strlen($line) <= $charsAt($font)) {
-            $plan[] = array('size' => $font, 'text' => $line);
+    foreach ($lines as $number => $line) {
+        $style = $lineStyles[$number] ?? null;
+        $own = $style !== null && $style['size_mm'] > 0 ? (int) min($dots($style['size_mm']), $usable) : $font;
+        if ($needsPicture($style)) {
+            $size = $own;
+            if ($inkWidth($line, $size, $style) <= $textWidth) {
+                $plan[] = array('size' => $size, 'text' => $line, 'style' => $style);
+                continue;
+            }
+            $size = max(8, (int) round($own * 0.75));
+            // broken after a space or a hyphen, by the real width; a word that is still too wide gets a smaller font
+            $rows = array();
+            $current = '';
+            foreach (preg_split('/(?<=[\s-])/u', $line, -1, PREG_SPLIT_NO_EMPTY) ?: array($line) as $piece) {
+                if ($current !== '' && $inkWidth(rtrim($current . $piece), $size, $style) > $textWidth) {
+                    $rows[] = rtrim($current);
+                    $current = $piece;
+                } else {
+                    $current .= $piece;
+                }
+            }
+            $rows[] = rtrim($current);
+            foreach (array_slice($rows, 0, 2) as $row) {
+                $rowSize = $size;
+                while ($rowSize > 8 && $inkWidth($row, $rowSize, $style) > $textWidth) {
+                    --$rowSize;
+                }
+                $plan[] = array('size' => $rowSize, 'text' => $row, 'style' => $style);
+            }
             continue;
         }
-        foreach ($wrap($line, $charsAt($small), 2) as $part) {
-            $plan[] = array('size' => $small, 'text' => $part);
+        if (mb_strlen($line) <= $charsAt($own)) {
+            $plan[] = array('size' => $own, 'text' => $line, 'style' => null);
+            continue;
+        }
+        $ownSmall = max(8, (int) round($own * 0.75));
+        foreach ($wrap($line, $charsAt($ownSmall), 2) as $part) {
+            $plan[] = array('size' => $ownSmall, 'text' => $part, 'style' => null);
         }
     }
     // when the rows do not fit the height of the label, every font gets smaller by the same part
@@ -370,7 +427,56 @@ try {
             break;
         }
         $baseline = $cursor + (int) round($size * 0.8);
-        $cursor += (int) ceil($size * 1.15);
+        $boxHeight = (int) ceil($size * 1.15);
+        if ($needsPicture($item['style'])) {
+            // the picture is the width of the text area, black on white, one bit per dot; turned by 180 degrees when the label is
+            $style = $item['style'];
+            $file = $fontFile($style);
+            $image = imagecreatetruecolor($textWidth, $boxHeight);
+            $white = (int) imagecolorallocate($image, 255, 255, 255);
+            $black = (int) imagecolorallocate($image, 0, 0, 0);
+            imagefilledrectangle($image, 0, 0, $textWidth - 1, $boxHeight - 1, $white);
+            $ink = $inkWidth($item['text'], $size, $style);
+            $inkX = $style['align'] === 'center' ? (int) floor(($textWidth - $ink) / 2) : ($style['align'] === 'right' ? $textWidth - $ink : 0);
+            imagettftext($image, $size * 0.75, 0, max(0, $inkX), (int) round($size * 0.8), $black, $file, $item['text']);
+            if ($rotated) {
+                $image = imagerotate($image, 180, $white) ?: $image;
+            }
+            $rowBytes = (int) ceil($textWidth / 8);
+            $hex = '';
+            $flat = imagecreatetruecolor($textWidth, $boxHeight);
+            $flatWhite = (int) imagecolorallocate($flat, 255, 255, 255);
+            $flatBlack = (int) imagecolorallocate($flat, 0, 0, 0);
+            imagefilledrectangle($flat, 0, 0, $textWidth - 1, $boxHeight - 1, $flatWhite);
+            for ($py = 0; $py < $boxHeight; ++$py) {
+                for ($bx = 0; $bx < $rowBytes; ++$bx) {
+                    $byte = 0;
+                    for ($bit = 0; $bit < 8; ++$bit) {
+                        $px = $bx * 8 + $bit;
+                        if ($px < $textWidth && ((imagecolorat($image, $px, $py) >> 8) & 0xFF) < 160) {
+                            $byte |= 0x80 >> $bit;
+                            imagesetpixel($flat, $px, $py, $flatBlack);
+                        }
+                    }
+                    $hex .= sprintf('%02X', $byte);
+                }
+            }
+            ob_start();
+            imagepng($flat);
+            $png = (string) ob_get_clean();
+            $readX = $left + $offX;
+            $readY = $cursor + $offY;
+            $x = max(0, $rotated ? $width - $readX - $textWidth : $readX);
+            $y = max(0, $rotated ? $height - $readY - $boxHeight : $readY);
+            $total = $rowBytes * $boxHeight;
+            $zpl[] = sprintf('^FO%d,%d^GFA,%d,%d,%d,%s^FS', $x, $y, $total, $total, $rowBytes, $hex);
+            $previewX = $rotated ? $width - $left - $textWidth : $left;
+            $previewY = $rotated ? $height - $cursor - $boxHeight : $cursor;
+            $elements[] = array('type' => 'image', 'x' => $previewX, 'y' => $previewY, 'w' => $textWidth, 'h' => $boxHeight, 'src' => 'data:image/png;base64,' . base64_encode($png));
+            $cursor += $boxHeight;
+            continue;
+        }
+        $cursor += $boxHeight;
         $readX = $left + $offX;
         $readY = $baseline + $offY;
         $x = max(0, $rotated ? $width - $readX : $readX);
