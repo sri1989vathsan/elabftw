@@ -3089,6 +3089,32 @@ tr:first-child td {
   }
 }
 
+// ---- Contents panel (entry pages) ----
+#tocPanel {
+  .input-group-text {
+    background: transparent;
+    border: 0;
+    color: var(--fx-muted);
+    padding: 0 0.3rem;
+  }
+
+  .input-group {
+    background: var(--fx-hover);
+    border-radius: 4px;
+
+    .form-control {
+      background: transparent;
+    }
+  }
+
+  .toc-section-filter-summary {
+    align-items: center;
+    display: flex;
+    min-height: var(--fx-row);
+    padding: 0 var(--fx-pad);
+  }
+}
+
 // the message after a file or folder was moved by dragging (folder-dragdrop.ts): on the page, not in the panel
 .folder-move-toast {
   align-items: center;
