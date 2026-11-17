@@ -1845,7 +1845,26 @@ tr:first-child td {
   }
 
   .folder-level-bar .folder-path-crumb {
+    align-items: center;
     color: inherit;
+    display: inline-flex;
+    gap: 0.35rem;
+  }
+
+  .folder-level-bar .folder-path-part {
+    align-items: center;
+    display: inline-flex;
+    gap: 0.25rem;
+    white-space: nowrap;
+  }
+
+  .folder-level-bar {
+    column-gap: 0.25rem;
+    row-gap: 0.15rem;
+  }
+
+  .folder-level-bar .folder-path-crumb .fa-folder {
+    margin-right: 0;
   }
 
   // the parts that move to another level are buttons: without this they keep the browser's pale button fill and border
@@ -2098,6 +2117,11 @@ tr:first-child td {
         color: inherit;
       }
     }
+  }
+
+  // a long title must not squeeze the icon: it would then sit further left than the icons of short titles
+  .folder-file-icon {
+    flex: 0 0 auto;
   }
 
   .folder-file-title {

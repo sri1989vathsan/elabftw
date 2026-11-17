@@ -504,14 +504,17 @@ function levelPathBar(all: FolderRow[]): HTMLElement {
     ...ancestorChain(all, level).map(folder => ({ id: folder.id, name: folder.name, icon: 'fa-folder' })),
   ];
   crumbs.forEach((crumb, index) => {
-    if (index > 0) nav.append(element('i', 'fas fa-chevron-right folder-path-sep'));
+    // the chevron and the part after it stay together, so a wrapped line never starts with a lone chevron
+    const group = element('span', 'folder-path-part');
+    if (index > 0) group.append(element('i', 'fas fa-chevron-right folder-path-sep'));
     const last = index === crumbs.length - 1;
     const part = last
       ? element('span', 'folder-path-crumb')
       : levelButton('folder-path-crumb', crumb.id, '', crumb.name);
     if (last) part.setAttribute('aria-current', 'location');
     part.replaceChildren(element('i', `fas ${crumb.icon} fa-fw`), document.createTextNode(crumb.name));
-    nav.append(part);
+    group.append(part);
+    nav.append(group);
   });
   return nav;
 }
