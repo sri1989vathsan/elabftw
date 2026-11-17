@@ -1876,7 +1876,7 @@ tr:first-child td {
     align-items: center;
     display: flex;
     flex-wrap: wrap;
-    gap: 0.1rem;
+    gap: 0.05rem;
     margin-bottom: 0.5rem;
     position: relative;
   }
@@ -1894,7 +1894,7 @@ tr:first-child td {
     .fas {
       display: inline-block;
       text-align: center;
-      width: 1rem;
+      width: 0.9rem;
     }
 
     &:hover,
@@ -2258,6 +2258,24 @@ tr:first-child td {
   .is-drop-target {
     background: rgba(127, 127, 127, 0.28);
     outline: 1.5px dashed var(--primary);
+  }
+
+  // a folder's buttons (bookmark, README, three dots) show while the pointer or the keyboard is on its row, so a narrow panel
+  // keeps its room for the name; a bookmarked folder keeps its star
+  .folder-row .folder-action-btn,
+  .folder-flat-row .folder-action-btn:not(.folder-up-button),
+  .folder-card .folder-action-btn {
+    display: none;
+  }
+
+  .folder-row:hover .folder-action-btn,
+  .folder-row:focus-within .folder-action-btn,
+  .folder-flat-row:hover .folder-action-btn,
+  .folder-flat-row:focus-within .folder-action-btn,
+  .folder-card:hover .folder-action-btn,
+  .folder-card:focus-within .folder-action-btn,
+  .folder-action-btn.favorite-folder-star:has(.fas) {
+    display: inline-flex;
   }
 
   // the switches that hide parts of the explorer
