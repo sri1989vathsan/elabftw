@@ -69,12 +69,6 @@
       </select>
     </div>
 
-    {# The two quick links of the old dropdown, as rows. Unfiled also takes experiments and resources dropped on it. #}
-    <div class='mb-2'>
-      <a class='folder-quick-row' data-folder-quick='all' data-drop-folder='root' href='{{ folderEntityType == 'items' ? 'database.php' : 'experiments.php' }}'><i class='fas fa-folder-tree fa-fw' aria-hidden='true'></i><span>{{ 'All'|trans }}</span></a>
-      <a class='folder-quick-row' data-folder-quick='unfiled' data-drop-folder='unfiled' href='{{ folderEntityType == 'items' ? 'database.php' : 'experiments.php' }}?folder=0'><i class='fas fa-inbox fa-fw' aria-hidden='true'></i><span>{{ 'Unfiled'|trans }}</span></a>
-    </div>
-
     <ul class='nav nav-tabs nav-fill mb-2 folder-scope-tabs' role='tablist' aria-label='{{ 'Folder visibility'|trans }}'>
       <li class='nav-item'>
         <button type='button' class='nav-link active w-100' data-action='select-folder-scope' data-scope='mine' role='tab' aria-selected='true' title='{{ 'My folders'|trans }}'>
@@ -88,7 +82,14 @@
       </li>
     </ul>
 
+    {# The selected folder as a path; the x shows all again (what the old "All" row did). Filled by folder-views.ts, hidden when no folder is selected. Dropping a folder on it moves it to the top level. #}
+    <nav id='folderCrumb' class='folder-crumb' aria-label='{{ 'Selected folder'|trans }}' data-drop-folder='root' hidden></nav>
+
     <div id='experimentsFoldersContent'>
+      {# Unfiled is the first row of the folder list. It also takes experiments and resources dropped on it. #}
+      <div class='folder-unfiled-wrap'>
+        <a class='folder-quick-row' data-folder-quick='unfiled' data-drop-folder='unfiled' href='{{ folderEntityType == 'items' ? 'database.php' : 'experiments.php' }}?folder=0'><i class='fas fa-inbox fa-fw' aria-hidden='true'></i><span>{{ 'Unfiled'|trans }}</span></a>
+      </div>
       {# Render exactly one branch for each root folder. Children only exist inside their parent branch. #}
       {% macro renderFolderBranch(folders, folder, depth, currentFolderId, folderBookmarkIds, folderPage, folderEntityType) %}
         <div

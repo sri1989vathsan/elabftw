@@ -543,6 +543,42 @@ function ensureFlatContainer(tree: HTMLElement): HTMLElement {
   return flat;
 }
 
+/**
+ * The selected folder as a path under the tabs ("Vatsi › EV Project  ×"): each part opens that folder in the page, the x shows
+ * everything again. Hidden when no folder is selected (or when the selection is "Unfiled", which has its own row).
+ */
+function syncFolderCrumb(entityType: string): void {
+  const nav = document.getElementById('folderCrumb');
+  if (!nav) return;
+  const currentId = document.getElementById('experimentsFoldersSidebar')?.dataset.currentFolderId ?? '';
+  const tree = document.getElementById('experimentsFoldersTree');
+  const node = /^[1-9]\d*$/.test(currentId) ? tree?.querySelector<HTMLElement>(`.folder-node[data-folder-id="${currentId}"]`) ?? null : null;
+  if (!node) {
+    nav.hidden = true;
+    nav.replaceChildren();
+    return;
+  }
+  const chain: HTMLElement[] = [];
+  for (let el: HTMLElement | null = node; el; el = el.parentElement?.closest<HTMLElement>('.folder-node') ?? null) chain.unshift(el);
+  const parts: Node[] = [];
+  chain.forEach((folder, index) => {
+    const link = folder.querySelector<HTMLAnchorElement>(':scope > .folder-row [data-folder-entity-link]');
+    const name = folder.querySelector(':scope > .folder-row .folder-name')?.textContent?.trim() ?? '';
+    if (index > 0) parts.push(element('span', 'folder-crumb-sep', '›'));
+    const part = element('a', `folder-crumb-part${index === chain.length - 1 ? ' is-current' : ''}`, name);
+    part.href = link?.href ?? '#';
+    part.title = folder.dataset.folderFullPath ?? name;
+    parts.push(part);
+  });
+  const option = document.querySelector<HTMLOptionElement>('#folderQuickLinkSelect option[value="all"]');
+  const clear = element('a', 'folder-crumb-clear', '×');
+  clear.href = (entityType === 'items' ? option?.dataset.itemsHref : option?.dataset.experimentsHref) ?? 'experiments.php';
+  clear.title = i18next.t('Show all folders');
+  clear.setAttribute('aria-label', i18next.t('Show all folders'));
+  nav.replaceChildren(...parts, clear);
+  nav.hidden = false;
+}
+
 /** The parts of the panel that every view shares: the Exp / Res / All switch, the quick links, the option switches, the page classes. */
 function syncPanelChrome(): void {
   const current = panelPrefs();
@@ -560,6 +596,7 @@ function syncPanelChrome(): void {
     if (href) link.href = href;
     link.classList.toggle('font-weight-bold', option?.selected === true);
   });
+  syncFolderCrumb(entityType);
   document.querySelectorAll<HTMLElement>('[data-folder-pref]').forEach(button => {
     const key = button.dataset.folderPref as keyof PanelPrefs;
     button.setAttribute('aria-checked', String(current[key]));

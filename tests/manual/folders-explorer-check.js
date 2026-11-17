@@ -1,5 +1,5 @@
 /**
- * Check of the Folders panel as a narrow explorer: bar, Exp / Res / All switch, All / Unfiled rows, the three views,
+ * Check of the Folders panel as a narrow explorer: bar, Exp / Res / All switch, Unfiled row and breadcrumb, the three views,
  * the option switches, the favourites list, and dragging a file onto a folder (with Undo).
  *
  * On http://localhost:8973/experiments.php, logged in (see TEST-ACCOUNTS.md), run:
@@ -47,7 +47,9 @@ window.foldersExplorerCheck = async function () {
     check('E1 the panel is open', visible(panel), 'panel hidden');
     check('E2 the explorer bar has favourites, three views, options and close', !!$('.folder-explorer-bar [data-popover="folderFavoritesMenu"]') && document.querySelectorAll('.folder-view-switch [data-action="select-folder-view"]').length === 3 && !!$('.folder-explorer-bar [data-popover="folderOptionsMenu"]') && !!$('.folder-explorer-bar [data-action="toggle-sidepanel"]'), 'bar incomplete');
     check('E3 the two old dropdowns are out of sight', !visible($('#folderEntityTypeSelect')) && !visible($('#folderQuickLinkSelect')), 'a select is visible');
-    check('E4 All and Unfiled rows exist', !!$('[data-folder-quick="all"]') && !!$('[data-folder-quick="unfiled"]'), 'rows missing');
+    check('E4 the All row is gone, Unfiled is the first row of the list, and the breadcrumb is hidden with no folder selected',
+      !$('[data-folder-quick="all"]') && !!$('[data-folder-quick="unfiled"]') && !!$('#folderCrumb') && $('#folderCrumb').hidden
+      && $('#experimentsFoldersContent').firstElementChild.contains($('[data-folder-quick="unfiled"]')), 'structure differs');
 
     // Exp / Res / All
     click('[data-action="select-folder-type"][data-type="items"]');
@@ -144,6 +146,44 @@ window.foldersExplorerCheck = async function () {
       var oneData = (await api('GET', 'experiments_folders/' + one)).json;
       check('E22 a folder dropped onto itself is not moved', !oneData.parent_id, 'parent_id ' + oneData.parent_id);
     }
+
+    // Unfiled (the first row of the list) takes a file out of its folder, and Undo puts it back
+    await reloadPanel();
+    click('[data-action="select-folder-view"][data-view="list"]');
+    await wait(500);
+    var oneLink2 = Array.prototype.find.call(document.querySelectorAll('#experimentsFoldersFlat [data-action="open-folder-level"]'), function (a) { return /XPL one/.test(a.textContent); });
+    if (oneLink2) oneLink2.click();
+    await wait(1800);
+    var fileRow2 = Array.prototype.find.call(document.querySelectorAll('#experimentsFoldersFlat .folder-file-row'), function (r) { return /XPL file/.test(r.textContent); });
+    var unfiledRow = $('[data-folder-quick="unfiled"]');
+    if (fileRow2 && unfiledRow) {
+      var litU = drag(fileRow2, unfiledRow);
+      check('E23 the Unfiled row lights up while a file is over it', litU, 'no highlight');
+      await wait(2500);
+      var out = (await api('GET', 'experiments/' + exp)).json;
+      check('E24 the file is now unfiled', !out.folder_id, 'folder_id ' + out.folder_id);
+      var undoU = $('#folderMoveToast .folder-move-toast-undo');
+      if (undoU) {
+        undoU.click();
+        await wait(2500);
+        var back2 = (await api('GET', 'experiments/' + exp)).json;
+        check('E25 Undo puts it back in XPL one', Number(back2.folder_id) === one, 'folder_id ' + back2.folder_id);
+      }
+    } else {
+      check('E23 the Unfiled row and the file are there', false, 'file row ' + !!fileRow2 + ', unfiled row ' + !!unfiledRow);
+    }
+    // the breadcrumb: shown for a selected folder with a clear x, hidden again without one
+    var sidebar = $('#experimentsFoldersSidebar');
+    var wasId = sidebar.dataset.currentFolderId;
+    sidebar.dataset.currentFolderId = String(one);
+    document.dispatchEvent(new Event('elabftw:folders-panel-loaded'));
+    await wait(600);
+    var crumb = $('#folderCrumb');
+    check('E26 a selected folder shows the breadcrumb with its name and a clear x', crumb && !crumb.hidden && /XPL one/.test(crumb.textContent) && !!crumb.querySelector('.folder-crumb-clear'), crumb ? crumb.textContent : 'no crumb');
+    sidebar.dataset.currentFolderId = wasId || '';
+    document.dispatchEvent(new Event('elabftw:folders-panel-loaded'));
+    await wait(600);
+    check('E27 with no folder selected the breadcrumb is hidden again', $('#folderCrumb').hidden, 'still shown');
 
     // ---- more moves: folder into folder, the top level, a resource, a parent onto its child, someone else's experiment ----
     await reloadPanel();
