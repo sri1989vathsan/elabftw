@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-copy-widths', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -1683,6 +1683,45 @@ async function spreadsheetSoak(options = {}) {
       await enterAgain(uid);
       await verify('paste-external: edited', true);
       await consistency('paste-external: inline, popup and stored HTML agree', true);
+    },
+    // A copy of one of our own spreadsheets, pasted through the editor's paste handler (not insertContent), must keep the
+    // source's column widths: the conversion to a new sheet used to read row heights but not the <colgroup>.
+    async 'paste-copy-widths'() {
+      const original = await createTable('width source', { rows: 4, cols: 3 });
+      if (!original) return;
+      await typeInto(original, 0, 0, 'keep-me');
+      // the typed value reaches the table's own cells when the sheet is saved, and the table is what a copy reads
+      await save();
+      // what the browser puts on the clipboard when the whole table is selected: the table as it stands in the editor
+      const sourceTable = editor.getBody().querySelector(`table[data-elabftw-spreadsheet-uid="${original}"]`);
+      if (!sourceTable) { fail('could not find the spreadsheet to copy'); return; }
+      const copyTable = sourceTable.cloneNode(true);
+      const wanted = [210, 64, 150];
+      const gutter = copyTable.querySelector('.spreadsheet-coordinate') ? 1 : 0;
+      const sourceCols = [...copyTable.querySelectorAll('colgroup > col')].slice(gutter);
+      if (sourceCols.length !== wanted.length) { fail(`the copy has ${sourceCols.length} data columns, expected ${wanted.length}`); return; }
+      sourceCols.forEach((col, i) => { col.style.width = `${wanted[i]}px`; });
+      // without the editor's own rich-selection marker, so the paste takes the same road as a copy from a table that was just selected
+      const html = `<html><body>${copyTable.outerHTML}</body></html>`.replace(/\sdata-elabftw-rich-selection(="[^"]*")?/g, '');
+      layoutDirty = true;
+      const before = new Set(api.snapshot(false).map(snap => snap.uid));
+      editor.selection.select(editor.getBody(), true); editor.selection.collapse(false);
+      const dt = new DataTransfer(); dt.setData('text/html', html); dt.setData('text/plain', 'keep-me\t\t\n\t\t');
+      editor.getDoc().dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+      await sleep(1200);
+      const added = api.snapshot(true).filter(snap => !before.has(snap.uid));
+      if (added.length !== 1) { fail(`pasting a copy made ${added.length} spreadsheets, expected 1`); return; }
+      const uid = added[0].uid;
+      const pasted = editor.getBody().querySelector(`table[data-elabftw-spreadsheet-uid="${uid}"]`);
+      let pastedGrid = models.get(original).grid.map(r => r.slice());
+      try { pastedGrid = JSON.parse(atob(pasted.getAttribute('data-spreadsheet'))).data; } catch { /* the model of the original is the fallback */ }
+      if (String(pastedGrid[0]?.[0]) !== 'keep-me') fail(`a pasted copy lost its cell contents (first cell is "${pastedGrid[0]?.[0]}")`);
+      models.set(uid, { label: 'width copy', grid: pastedGrid, plate: false });
+      const got = pasted ? [...pasted.querySelectorAll('colgroup > col')].slice(gutter).map(col => Math.round(Number.parseFloat(col.style.width))) : [];
+      if (got.join(',') !== wanted.join(',')) fail(`a pasted copy has column widths ${got.join(', ')}, the source had ${wanted.join(', ')}`);
+      await live(uid);
+      await consistency('paste-copy-widths: inline, popup and stored HTML agree', true);
+      await save();
     },
     // After Tab (or Shift+Enter) the cursor is on another cell, and typing or Enter must act on that one.
     async 'tab-then-type'() {
