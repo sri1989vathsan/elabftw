@@ -2757,7 +2757,14 @@ tr:first-child td {
     display: inline-flex;
     height: var(--fx-ctl);
     justify-content: center;
-    margin: 0.1rem 0.5rem 0 0 !important;
+    // in the top right corner, over the same right edge as the content (the panel's p-3 padding); positioned, not floated, so
+    // it does not squeeze the rows beside it (the refresh button sat left of it because of the float)
+    float: none;
+    margin: 0 !important;
+    position: absolute;
+    right: 1rem;
+    top: 0.25rem;
+    z-index: 2;
     padding: 0;
     width: var(--fx-ctl);
 
@@ -2975,6 +2982,78 @@ tr:first-child td {
 
   .todo-entry-overdue {
     box-shadow: inset 2px 0 0 var(--side-panel-danger);
+  }
+
+  // header rows: the title and the refresh button, the label and the three view buttons, each on one centre line and one grid
+  > .p-3 > .d-flex {
+    align-items: center !important;
+    margin-bottom: 0.4rem !important;
+    min-height: var(--fx-ctl);
+
+    > h3,
+    > h3.h5 {
+      margin: 0 !important;
+    }
+  }
+
+  // the quick add box is only as tall as its input; the gap to the form below belongs to the form
+  .todo-create {
+    > .input-group {
+      margin-bottom: 0 !important;
+    }
+
+    > .input-group ~ * {
+      margin-top: 0.4rem;
+    }
+  }
+
+  // the loading text starts on the same left edge as the box above it
+  #todolist > p {
+    margin: 0 0 0.4rem;
+    padding: 0;
+  }
+
+  // the check, edit and drag buttons of a tile are fixed squares of the shared control size, so the titles share one left edge
+  .todo-group-entry .btn-group {
+    flex: none;
+  }
+
+  .todo-group-entry .btn-group .btn {
+    flex: none;
+    height: var(--fx-ctl);
+    min-width: var(--fx-ctl);
+    padding: 0;
+    width: var(--fx-ctl);
+  }
+
+  .todo-group-entry .todo-drag-handle {
+    flex: none;
+    height: var(--fx-ctl);
+    padding: 0;
+    width: 1rem;
+  }
+
+  // group headings (overdue, today, a date): flat muted rows with one left edge and a small count at the right edge
+  .todo-due-heading,
+  .todo-due-heading.overdue-heading {
+    background: transparent;
+    border: 0;
+    border-left: 3px solid transparent;
+    border-radius: 0;
+    padding: 0 var(--fx-pad) 0 0.3rem;
+  }
+
+  .todo-due-heading .badge {
+    background: transparent;
+    color: var(--fx-muted);
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 0;
+  }
+
+  .todo-due-heading.overdue-heading .badge {
+    background: transparent;
+    color: var(--side-panel-danger);
   }
 
   // ---- the "Add task" form ----
