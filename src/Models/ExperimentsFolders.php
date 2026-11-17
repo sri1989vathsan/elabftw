@@ -325,7 +325,8 @@ final class ExperimentsFolders extends AbstractRest
 
         // Handle moving to a different parent
         if (array_key_exists('parent_id', $params)) {
-            $this->moveToParent(Filter::intOrNull($params['parent_id']));
+            // null (the top level, as a script or the panel's drag and drop may send it) used to crash here: intOrNull takes text or a number
+            $this->moveToParent(Filter::intOrNull((string) ($params['parent_id'] ?? '')));
         }
 
         // Handle renaming

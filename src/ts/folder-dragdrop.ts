@@ -68,9 +68,9 @@ function resolveDrop(dragged: Dragged, targetValue: string): { folder: string | 
 
 async function moveDragged(dragged: Dragged, folder: string | null): Promise<void> {
   const ApiC = new Api();
-  const value = folder === null ? null : Number(folder);
-  if (dragged.kind === 'entry') await ApiC.patch(`${dragged.type}/${dragged.id}`, { folder_id: value, notifOnSaved: 0 });
-  else await ApiC.patch(`experiments_folders/${dragged.id}`, { parent_id: value, notifOnSaved: 0 });
+  // "no folder" / "top level" is null for a file and 0 for a folder's parent
+  if (dragged.kind === 'entry') await ApiC.patch(`${dragged.type}/${dragged.id}`, { folder_id: folder === null ? null : Number(folder), notifOnSaved: 0 });
+  else await ApiC.patch(`experiments_folders/${dragged.id}`, { parent_id: folder === null ? 0 : Number(folder), notifOnSaved: 0 });
 }
 
 function folderLabel(folder: string | null): string {
