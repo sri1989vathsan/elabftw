@@ -2229,6 +2229,40 @@ tr:first-child td {
   }
 }
 
+// the message after a file or folder was moved by dragging (folder-dragdrop.ts): on the page, not in the panel
+.folder-move-toast {
+  align-items: center;
+  background: var(--chrome-bg, #2b2f36);
+  border: 1px solid var(--chrome-muted, #888);
+  border-radius: 6px;
+  bottom: 1rem;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  color: var(--chrome-fg, #fff);
+  display: flex;
+  gap: 0.75rem;
+  left: 1rem;
+  max-width: min(26rem, calc(100vw - 2rem));
+  padding: 0.5rem 0.75rem;
+  position: fixed;
+  z-index: 1060;
+}
+
+.folder-move-toast-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-move-toast-undo {
+  background: transparent;
+  border: 0;
+  color: var(--primary-fg, #8ec5ff);
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0;
+}
+
 .folder-action-btn {
   align-items: center;
   background: transparent;

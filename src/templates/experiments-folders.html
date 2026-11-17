@@ -97,7 +97,8 @@
           data-folder-owner-id='{{ folder.userid }}'
           data-folder-full-path='{{ folder.full_path|e('html_attr') }}'
         >
-          <div class='d-flex align-items-center folder-row'>
+          {# Dragging the row moves the folder; dropping a folder or a file on it files that in here (folder-dragdrop.ts). #}
+          <div class='d-flex align-items-center folder-row' draggable='true' data-drag-kind='folder' data-drag-id='{{ folder.id }}' data-drop-folder='{{ folder.id }}'>
             {% if folder.children_count > 0 %}
               <span class='folder-toggle mr-1' data-action='toggle-folder-children' data-folder-id='{{ folder.id }}' role='button' tabindex='0' title='{{ 'Toggle visibility'|trans }}' style='cursor:pointer;width:16px;text-align:center'>
                 <i class='fas fa-caret-right fa-fw fa-xs'></i>
