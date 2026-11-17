@@ -12,6 +12,25 @@
     link.href = 'planned.css?v=' + Math.floor(Date.now() / 3600000);
     document.head.append(link);
   }
+  // a label of any text, on any of the label sizes that exist: an item of the + menu of the top bar
+  (function () {
+    const menu = document.getElementById('navbar-create-dropdown');
+    if (!menu || menu.querySelector('[data-action="print-generic-label"]')) {
+      return;
+    }
+    const item = document.createElement('div');
+    item.className = 'dropdown-item';
+    item.setAttribute('data-action', 'print-generic-label');
+    item.title = 'Print a label with the text you type, on one of the label sizes';
+    item.style.cursor = 'pointer';
+    const icon = document.createElement('i');
+    icon.className = 'fas fa-print fa-fw mr-1';
+    item.append(icon, document.createTextNode('Print a label'));
+    item.addEventListener('click', function () {
+      window.dispatchEvent(new CustomEvent('registry:print-label', { detail: { generic: true, title: '' } }));
+    });
+    menu.append(item);
+  })();
   // one of your own folders holds entries of My entries (not listed in the lab database): its list is the one of My entries
   (function () {
     const query = new URLSearchParams(window.location.search);
@@ -102,14 +121,6 @@
       box.append(b);
     });
     nav.insertAdjacentElement('beforebegin', box);
-    // a label of any text, on any of the label sizes that exist
-    const generic = element('button', 'btn btn-outline-secondary btn-sm ml-2 mt-2', 'Print a label');
-    generic.type = 'button';
-    generic.title = 'Print a label with the text you type, on one of the label sizes';
-    generic.addEventListener('click', function () {
-      window.dispatchEvent(new CustomEvent('registry:print-label', { detail: { generic: true, title: '' } }));
-    });
-    box.insertAdjacentElement('afterend', generic);
     // in My entries: the toggle In database filters the entries by whether they are in the lab Database
     if (mine) {
       const toggle = element('div', 'btn-group btn-group-sm ml-2 mt-2 id-filter');
