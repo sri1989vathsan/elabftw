@@ -5,6 +5,11 @@
  */
 (function () {
   'use strict';
+  // the footer loads this on every page, and the Database pages load it themselves too: once is enough
+  if (window.__plannedLoaded) {
+    return;
+  }
+  window.__plannedLoaded = true;
   if (!document.querySelector('link[href^="planned.css"]')) {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
