@@ -128,6 +128,8 @@ interface ClipboardTable {
   data: AOA;
   cellStyles?: CellStyles;
   rowHeights?: RowHeights;
+  /** Column widths of a table copied from another eLabFTW spreadsheet (never read from Excel, Sheets or Word). */
+  colWidths?: ColWidths;
 }
 
 export interface FlattenedClipboardSuggestion {
@@ -1695,10 +1697,30 @@ function parseClipboardHtmlTable(html: string): ClipboardTable | null {
     }));
   }
 
+  // A table copied from another eLabFTW spreadsheet carries its column widths as <col style="width:Xpx">. Those are the
+  // sheet's own layout (unlike the widths Excel, Sheets or Word put on their tables, which are dropped on purpose), so
+  // they come along. The leading <col> is the row-number gutter when the table has one. The widths are used only when
+  // they line up with the copied columns: a partial copy keeps the default width.
+  let colWidths: ColWidths | undefined;
+  if (isFormulaSpreadsheet) {
+    const hasGutter = table.querySelector('.spreadsheet-coordinate') !== null;
+    const sourceCols = Array.from(table.querySelectorAll<HTMLTableColElement>('colgroup > col')).slice(hasGutter ? 1 : 0);
+    const copiedCols = rows.reduce((maximum, row) => Math.max(maximum, row.length), 0);
+    if (sourceCols.length === copiedCols) {
+      const widths: ColWidths = {};
+      sourceCols.forEach((col, colIndex) => {
+        const width = Number.parseFloat(col.style.width);
+        if (Number.isFinite(width)) widths[String(colIndex)] = Math.max(MIN_DATA_COL_WIDTH, Math.min(MAX_DATA_COL_WIDTH, Math.round(width)));
+      });
+      if (Object.keys(widths).length > 0) colWidths = widths;
+    }
+  }
+
   return {
     data: rows,
     cellStyles: Object.keys(cellStyles).length > 0 ? cellStyles : undefined,
     rowHeights: Object.keys(rowHeights).length > 0 ? rowHeights : undefined,
+    colWidths,
   };
 }
 
@@ -1752,6 +1774,7 @@ export function spreadsheetFromClipboard(html: string, plainText: string): Sprea
     caption: '',
     cellStyles: normalizeCellStyles(richTextStyles, rows, cols),
     rowHeights: normalizeRowHeights(clipboardTable?.rowHeights, rows),
+    colWidths: normalizeColWidths(clipboardTable?.colWidths, cols),
     appearance,
   };
 }
