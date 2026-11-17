@@ -3147,10 +3147,11 @@ function readRenderedColWidths(container: HTMLElement): ColWidths | undefined {
 // doesn't depend on the cell's current layout at all) -- shared by
 // openSpreadsheetModal's and buildReadOnlySpreadsheetHost's own double-
 // click-a-column-border-to-autofit gesture, matching Excel/Sheets.
+let measureCanvas: HTMLCanvasElement | null = null;
 function measureNaturalCellWidth(cell: HTMLElement): number {
   const computedStyle = window.getComputedStyle(cell);
-  const canvas = document.createElement('canvas');
-  const context = canvas.getContext('2d');
+  measureCanvas ??= document.createElement('canvas');
+  const context = measureCanvas.getContext('2d');
   if (!context) return cell.scrollWidth;
   context.font = [
     computedStyle.fontStyle,
@@ -3271,15 +3272,41 @@ function applySpreadsheetRowHeights(
  * the first <col> there is the row-index gutter (sized separately by
  * applyCoordinateHeaderDimensions()), so data columns start at index 1.
  */
+/** A column nobody sized grows to fit its longest value (never shrinks, never past this width: longer text wraps). */
+const AUTO_FIT_MAX_COL_WIDTH = 360;
+const AUTO_FIT_MAX_CELLS = 2500;
+function fitUnsizedColumns(
+  container: HTMLElement,
+  dataCols: HTMLTableColElement[],
+  sized: ColWidths,
+): void {
+  const cells = container.querySelectorAll<HTMLElement>('.jss_worksheet > tbody td[data-x][data-y]');
+  if (cells.length === 0 || cells.length > AUTO_FIT_MAX_CELLS) return;
+  const widest = new Map<number, number>();
+  cells.forEach(cell => {
+    const col = Number.parseInt(cell.dataset.x ?? '', 10);
+    if (!Number.isInteger(col) || sized[String(col)] !== undefined || (cell.textContent ?? '').trim() === '') return;
+    widest.set(col, Math.max(widest.get(col) ?? 0, measureNaturalCellWidth(cell)));
+  });
+  widest.forEach((natural, col) => {
+    const colElement = dataCols[col];
+    if (!colElement) return;
+    const current = Number.parseFloat(colElement.getAttribute('width') ?? '') || 0;
+    const target = Math.min(AUTO_FIT_MAX_COL_WIDTH, Math.max(MIN_DATA_COL_WIDTH, natural));
+    if (target > current) colElement.setAttribute('width', String(target));
+  });
+}
+
 function applySpreadsheetColWidths(
   container: HTMLElement,
   worksheet: JssInstance,
   colWidths: ColWidths | undefined,
 ): void {
-  if (!colWidths) return;
   const dataCols = Array.from(
     container.querySelectorAll<HTMLTableColElement>('.jss_worksheet > colgroup > col'),
   ).slice(1);
+  if (colWidths) fitUnsizedColumns(container, dataCols, colWidths);
+  if (!colWidths) return;
   Object.entries(colWidths).forEach(([colKey, width]) => {
     const col = Number.parseInt(colKey, 10);
     if (!Number.isInteger(col) || !Number.isFinite(width)) return;
