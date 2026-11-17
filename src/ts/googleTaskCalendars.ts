@@ -8,6 +8,8 @@ import { core } from './core';
 const KEY = 'googleSyncTaskCalendars';
 
 const key = (): string => `${KEY}:${core.currentUserid ?? 0}`;
+// the same for a whole project (0 is "no project"): its tasks go to that calendar unless a task has one of its own
+const projectKey = (): string => `googleSyncProjectCalendars:${core.currentUserid ?? 0}`;
 
 export type PickableCalendar = { id: string; summary: string; color: string; primary: boolean };
 
@@ -23,6 +25,34 @@ export function readTaskCalendars(): Record<string, string> {
     return Object.fromEntries(Object.entries(parsed as Record<string, unknown>).filter(([, value]) => typeof value === 'string')) as Record<string, string>;
   } catch {
     return {};
+  }
+}
+
+function readMap(storageKey: string): Record<string, string> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(storageKey) ?? '{}') as unknown;
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {};
+    }
+    return Object.fromEntries(Object.entries(parsed as Record<string, unknown>).filter(([, value]) => typeof value === 'string')) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+export const readProjectCalendars = (): Record<string, string> => readMap(projectKey());
+
+export function setProjectCalendar(projectId: number | string, calendarId: string | null): void {
+  const map = readProjectCalendars();
+  if (calendarId) {
+    map[String(projectId)] = calendarId;
+  } else {
+    delete map[String(projectId)];
+  }
+  try {
+    localStorage.setItem(projectKey(), JSON.stringify(map));
+  } catch {
+    // storage unavailable (private mode): the choice is not remembered
   }
 }
 

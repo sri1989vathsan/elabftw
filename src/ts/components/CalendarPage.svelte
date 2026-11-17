@@ -14,7 +14,7 @@
     viewPrefs as prefsStore,
   } from '../calendarSettings';
   import { parseFeed } from '../icalFeed';
-  import { setTaskCalendar, watchCalendarChoices, type CalendarChoices } from '../googleTaskCalendars';
+  import { readProjectCalendars, setProjectCalendar, setTaskCalendar, watchCalendarChoices, type CalendarChoices } from '../googleTaskCalendars';
   import { Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
 
@@ -119,6 +119,14 @@
   // the Google calendar of the new task, when the to-dos go to a Google Calendar (empty: the calendar of the sync settings)
   let calendarChoices: CalendarChoices = { usable: false, calendars: [], target: 'primary' };
   let newCalendar = '';
+  // the Google calendar of each project (0 is no project), chosen in the Calendars menu
+  let projectCalendars: Record<string, string> = readProjectCalendars();
+  function chooseProjectCalendar(id: number, calendarId: string): void {
+    setProjectCalendar(id, calendarId || null);
+    projectCalendars = readProjectCalendars();
+    // the sync puts the events of the project's tasks on that calendar
+    window.dispatchEvent(new CustomEvent('todolist-changed'));
+  }
   let stopCalendars: (() => void) | null = null;
   let newTitle = '';
   let newProject: number | null = null;
@@ -652,6 +660,20 @@
             {:else}
               <span class='pm-muted small'>{t('No tasks in these days')}</span>
             {/each}
+            {#if calendarChoices.usable && usedProjects.length > 0}
+              <div class='cal-menu-head'><span class='cal-sources-title'>{t('Google calendar of each project')}</span></div>
+              {#each usedProjects as id (id)}
+                <label class='cal-project-calendar small'>
+                  <span class='cal-project-name' style='--c:{projectColor(id)}'><span class='cal-dot'></span>{id === 0 ? t('No project') : projectName(id)}</span>
+                  <select class='form-control form-control-sm' value={projectCalendars[String(id)] ?? ''} on:change={event => chooseProjectCalendar(id, event.currentTarget.value)}>
+                    <option value=''>{t('The sync settings')}</option>
+                    {#each calendarChoices.calendars as calendar (calendar.id)}
+                      <option value={calendar.id}>{calendar.summary}</option>
+                    {/each}
+                  </select>
+                </label>
+              {/each}
+            {/if}
             <div class='cal-menu-head'><span class='cal-sources-title'>{t('Google calendars')}</span></div>
             {#if googleState === 'ready'}
               {#each googleCalendars as calendar (calendar.id)}
@@ -819,7 +841,7 @@
         <label class='cal-modal-field'>
           <span class='small'>{t('Google calendar')}</span>
           <select class='form-control' bind:value={newCalendar}>
-            <option value=''>{t('The calendar of the sync settings')}</option>
+            <option value=''>{t('The calendar of the project or of the sync settings')}</option>
             {#each calendarChoices.calendars as calendar (calendar.id)}
               <option value={calendar.id}>{calendar.summary}</option>
             {/each}
@@ -949,6 +971,29 @@
 
   .cal-col.cal-drop {
     background: color-mix(in srgb, var(--primary) 9%, transparent);
+  }
+
+  .cal-project-calendar {
+    align-items: center;
+    display: flex;
+    gap: 0.4rem;
+    justify-content: space-between;
+    margin: 0.15rem 0;
+  }
+
+  .cal-project-name {
+    align-items: center;
+    display: flex;
+    gap: 0.35rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cal-project-calendar select {
+    flex: none;
+    width: 8.5rem;
   }
 
   .cal-ghost {
