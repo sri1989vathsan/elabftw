@@ -95,7 +95,7 @@ are new in this round and have not been looked at in a browser yet unless it say
 | F1 | Cmd/Ctrl+X on one cell: the cell is empty in the grid and in the saved table at once, and the text is on the clipboard (paste it elsewhere) | inline, popup | `cut-undo` | | |
 | F2 | Cmd/Ctrl+X on a dragged range: every cell of the range is emptied, one Cmd/Ctrl+Z brings all of them back (grid and saved table), Cmd/Ctrl+Shift+Z cuts them again | inline, popup | `cut-undo` | | |
 | F3 | Cut, then reload: the cut cells are still empty; undo, save, reload: they are back | inline, popup | `cut-undo` (+ `spreadsheetSoakAfterReload`) | | |
-| F4 | Cell padding is roomier (5 px above and below, 9 px at the sides), in the page, the popup and the view page; text never touches the grid lines | inline, popup, view | `padding-fit` | | |
+| F4 | Default cell padding is 8 px all round (was 6; a table that already stores its own padding keeps it, the Cell padding box changes it), in the page, the popup and the view page; text never touches the grid lines | inline, popup, view | `padding-fit` | | |
 | F5 | A column nobody sized grows to fit its longest value (up to 360 px) when the table is opened; a column you sized is left alone; the table does not shrink | inline, popup, view | `padding-fit` | | |
 
 ## G. Soak coverage (`spreadsheet-soak.js`, run `spreadsheetSoak({ seed: 1, sessions: 1 })`)
