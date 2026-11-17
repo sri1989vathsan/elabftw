@@ -192,7 +192,8 @@
     ...feedEvents,
     ...external.filter(event => googleState !== 'ready' || event.calendar === undefined || shownGoogle.has(event.calendar)),
   ].map(event => (event.kind === 'task' ? { ...event, color: projectColor(event.project ?? 0) } : event));
-  $: events = undragged.map(applyDrag);
+  // `drag` is passed in so that the blocks are placed again whenever the mouse moves (Svelte only watches what the statement names)
+  $: events = undragged.map(event => applyDrag(event, drag));
   // the project calendars: a colour each, a project with a parent is written "Parent / Project"
   $: projectChoices = [...projects].sort((a, b) => projectName(a.id).localeCompare(projectName(b.id)));
   $: sorted = [...projects].sort((a, b) => a.id - b.id);
@@ -243,8 +244,8 @@
   }
   $: try { window.localStorage.setItem(account(VIEW_KEY), view); } catch { /* the view is then just not remembered */ }
 
-  function applyDrag(event: CalEvent): CalEvent {
-    return drag && drag.key === event.key ? { ...event, start: drag.start, end: drag.end } : event;
+  function applyDrag(event: CalEvent, current: typeof drag): CalEvent {
+    return current && current.key === event.key ? { ...event, start: current.start, end: current.end } : event;
   }
 
   function isAllDay(event: CalEvent): boolean {
