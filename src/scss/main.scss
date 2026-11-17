@@ -3767,6 +3767,13 @@ body.html-tool-workspace-open:not(.html-tool-workspace-is-maximized) .inline-spr
   white-space: pre-wrap;
 }
 
+/* Roomier cells: the library's 4 px all round left text touching the grid lines */
+.inline-spreadsheet-container .jss_worksheet td[data-x][data-y],
+.elabftw-spreadsheet-readonly-view .jss_worksheet td[data-x][data-y],
+.elabftw-spreadsheet-readonly-grid .jss_worksheet td[data-x][data-y] {
+  padding: 5px 9px;
+}
+
 /* The editor's Find and replace marks its matches in the stored table, which is hidden behind the grid: the grid cells that hold a
  * match are marked the same way (see mirrorFindHighlights in SpreadsheetExtension.ts). */
 .elabftw-spreadsheet-editor-overlay .jss_worksheet td.elabftw-find-match {
