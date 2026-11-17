@@ -2988,6 +2988,41 @@ tr:first-child td {
   }
 }
 
+// ---- Activity calendar panel ----
+#calendarActivityPanel {
+  .calendar-activity-picker,
+  .calendar-todo-month {
+    background: rgba(255, 255, 255, 0.05);
+    border: 0;
+    border-radius: 6px;
+  }
+
+  .calendar-view-toggle,
+  .calendar-activity-toggles {
+    @include fx-segmented;
+  }
+
+  .calendar-view-controls {
+    gap: 0.3rem;
+  }
+
+  .calendar-month-actions .btn {
+    height: var(--fx-ctl);
+  }
+
+  .calendar-agenda-eyebrow {
+    color: var(--fx-muted);
+    font-size: 0.68rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  .calendar-legend {
+    color: var(--fx-muted);
+    font-size: 0.7rem;
+  }
+}
+
 // the message after a file or folder was moved by dragging (folder-dragdrop.ts): on the page, not in the panel
 .folder-move-toast {
   align-items: center;
