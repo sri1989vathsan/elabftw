@@ -7950,7 +7950,8 @@ button.wp-legend-item {
   padding: 0.5rem 0.25rem;
   /* always visible: it stays at the bottom of the window until the page's own end is reached */
   position: sticky;
-  z-index: 900;
+  /* above the page, below the menu bar (z-index 100): an open menu, such as the More menu, must not go behind it */
+  z-index: 90;
 }
 
 .folder-path-bar .folder-path-crumb {
