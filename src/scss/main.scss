@@ -2428,6 +2428,12 @@ tr:first-child td {
       }
     }
 
+    // the Favourites switch in the options hides the star button and the stars of the rows (the display set above must not win)
+    &.folders-no-favorites [data-popover='folderFavoritesMenu'],
+    &.folders-no-favorites .favorite-folder-star {
+      display: none;
+    }
+
     // ---- Exp / Res / All and My / Shared ----
     .folder-type-switch {
       border: 0;
