@@ -16,6 +16,7 @@
   import { parseFeed } from '../icalFeed';
   import { readProjectCalendars, setProjectCalendar, setTaskCalendar, watchCalendarChoices, type CalendarChoices } from '../googleTaskCalendars';
   import { Model } from '../interfaces';
+  import { saveUserPref, syncUserPrefs } from '../userPrefs';
   import { Notification as AppNotification } from '../Notifications.class';
 
   // The calendar page: the to-do tasks of the user (the deadline is when a task starts, its duration how long it lasts) in a day, week
@@ -268,7 +269,7 @@
     const todayShown = days.some(day => sameDay(day, now));
     gridEl.scrollTop = Math.max(0, ((todayShown ? now.getHours() - 1 : prefs.start) - hourSpan.first) * HOUR);
   }
-  $: try { window.localStorage.setItem(account(VIEW_KEY), view); } catch { /* the view is then just not remembered */ }
+  $: try { window.localStorage.setItem(account(VIEW_KEY), view); saveUserPref(account(VIEW_KEY), view); } catch { /* the view is then just not remembered */ }
 
   function applyDrag(event: CalEvent, current: typeof drag): CalEvent {
     return current && current.key === event.key ? { ...event, start: current.start, end: current.end } : event;
@@ -392,12 +393,12 @@
 
   function toggleProject(id: number): void {
     hiddenProjects = hiddenProjects.includes(id) ? hiddenProjects.filter(value => value !== id) : [...hiddenProjects, id];
-    try { window.localStorage.setItem(account(HIDDEN_KEY), JSON.stringify(hiddenProjects)); } catch { /* not remembered */ }
+    try { window.localStorage.setItem(account(HIDDEN_KEY), JSON.stringify(hiddenProjects)); saveUserPref(account(HIDDEN_KEY), JSON.stringify(hiddenProjects)); } catch { /* not remembered */ }
   }
 
   function setAllProjects(on: boolean): void {
     hiddenProjects = on ? [] : usedProjects;
-    try { window.localStorage.setItem(account(HIDDEN_KEY), JSON.stringify(hiddenProjects)); } catch { /* not remembered */ }
+    try { window.localStorage.setItem(account(HIDDEN_KEY), JSON.stringify(hiddenProjects)); saveUserPref(account(HIDDEN_KEY), JSON.stringify(hiddenProjects)); } catch { /* not remembered */ }
   }
 
   // a Google calendar is shown or hidden by the sync (the same choice as in the panel of the to-dos)
@@ -599,6 +600,12 @@
   }
 
   onMount(() => {
+    // the view and the hidden projects chosen in another browser
+    void syncUserPrefs().then(changed => {
+      if (!changed) return;
+      view = savedView();
+      hiddenProjects = readHidden();
+    });
     window.addEventListener('todolist-changed', load);
     window.addEventListener('elabftw:calendar-events', onExternal);
     window.addEventListener('elabftw:calendar-list', onGoogleList);

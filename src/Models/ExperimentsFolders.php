@@ -295,6 +295,15 @@ final class ExperimentsFolders extends AbstractRest
             return array('folder_view' => $this->setFolderView((string) ($params['view'] ?? '')));
         }
 
+        // Small interface settings of the current user (calendar page, Google calendar sync choices), kept per user
+        if (isset($params['action']) && $params['action'] === 'get_user_prefs') {
+            return array('prefs' => $this->getUserPrefs());
+        }
+        if (isset($params['action']) && $params['action'] === 'set_user_pref') {
+            $this->setUserPref((string) ($params['key'] ?? ''), isset($params['value']) ? (string) $params['value'] : null);
+            return array('saved' => true);
+        }
+
         if (isset($params['action']) && $params['action'] === 'set_folder_permissions') {
             return $this->setFolderPermissions($params);
         }
@@ -588,6 +597,57 @@ final class ExperimentsFolders extends AbstractRest
         );
         $Timer->finish(count($rows));
         return $rows;
+    }
+
+    /** The settings a user may keep on the server (the Google sign-in token and sync snapshots stay in the browser). */
+    private const USER_PREF_KEYS = array(
+        'elabftw-calendar-page-view',
+        'elabftw-calendar-page-hidden-projects',
+        'googleSyncEnabled',
+        'googleSyncTwoWay',
+        'googleSyncDetails',
+        'googleSyncTarget',
+        'googleSyncCalendar',
+        'googleSyncCalendarsShown',
+        'googleSyncImportEvents',
+    );
+
+    /** @return array<string, string> */
+    public function getUserPrefs(): array
+    {
+        $req = $this->Db->prepare('SELECT pref_key, pref_value FROM custom_user_ui_prefs WHERE users_id = :userid');
+        $req->bindValue(':userid', $this->requester->userData['userid'], PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $prefs = array();
+        foreach ($req->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $prefs[(string) $row['pref_key']] = (string) $row['pref_value'];
+        }
+        return $prefs;
+    }
+
+    /** A null value removes the setting. */
+    private function setUserPref(string $key, ?string $value): void
+    {
+        if (!in_array($key, self::USER_PREF_KEYS, true)) {
+            throw new ImproperActionException('Unknown setting.');
+        }
+        if ($value === null) {
+            $req = $this->Db->prepare('DELETE FROM custom_user_ui_prefs WHERE users_id = :userid AND pref_key = :key');
+            $req->bindValue(':userid', $this->requester->userData['userid'], PDO::PARAM_INT);
+            $req->bindValue(':key', $key);
+            $this->Db->execute($req);
+            return;
+        }
+        if (strlen($value) > 8000) {
+            throw new ImproperActionException('Setting too long.');
+        }
+        $sql = 'INSERT INTO custom_user_ui_prefs (users_id, pref_key, pref_value) VALUES (:userid, :key, :value)
+            ON DUPLICATE KEY UPDATE pref_value = VALUES(pref_value)';
+        $req = $this->Db->prepare($sql);
+        $req->bindValue(':userid', $this->requester->userData['userid'], PDO::PARAM_INT);
+        $req->bindValue(':key', $key);
+        $req->bindValue(':value', $value);
+        $this->Db->execute($req);
     }
 
     private const FOLDER_VIEWS = array('tree', 'list', 'details');
