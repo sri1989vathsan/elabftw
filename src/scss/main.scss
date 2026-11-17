@@ -3766,6 +3766,18 @@ body.html-tool-workspace-open:not(.html-tool-workspace-is-maximized) .inline-spr
   overflow: hidden;
   white-space: pre-wrap;
 }
+
+/* The editor's Find and replace marks its matches in the stored table, which is hidden behind the grid: the grid cells that hold a
+ * match are marked the same way (see mirrorFindHighlights in SpreadsheetExtension.ts). */
+.elabftw-spreadsheet-editor-overlay .jss_worksheet td.elabftw-find-match {
+  background-color: #ffe27a !important;
+}
+
+.elabftw-spreadsheet-editor-overlay .jss_worksheet td.elabftw-find-match-current {
+  background-color: #ffb454 !important;
+  outline: 2px solid #e8590c;
+  outline-offset: -2px;
+}
 /* stylelint-enable selector-class-pattern */
 
 /* jspreadsheet-ce already tags the current selection (.highlight/

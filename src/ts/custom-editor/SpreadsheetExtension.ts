@@ -2103,6 +2103,55 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     extractionObserver?.disconnect();
     extractionObserver = null;
   });
+
+  // Find and replace (the editor's own) marks its matches in the stored table, which is hidden behind the grid: the
+  // matches were counted but nothing showed. The grid cells that hold a match get the same mark, and the current one a
+  // stronger one, so searching in a spreadsheet looks like searching anywhere else (see .elabftw-find-match in main.scss).
+  const FIND_MATCH_CLASS = 'elabftw-find-match';
+  const FIND_CURRENT_CLASS = 'elabftw-find-match-current';
+  let findMarkedCells: HTMLElement[] = [];
+  let findMirrorQueued = false;
+  const mirrorFindHighlights = (): void => {
+    findMirrorQueued = false;
+    const body = editor.getBody();
+    if (!body) return;
+    const markers = body.querySelectorAll<HTMLElement>('.mce-match-marker');
+    if (markers.length === 0 && findMarkedCells.length === 0) return;
+    findMarkedCells.forEach(cell => cell.classList.remove(FIND_MATCH_CLASS, FIND_CURRENT_CLASS));
+    findMarkedCells = [];
+    markers.forEach(marker => {
+      const cell = marker.closest('td');
+      const row = cell?.parentElement as HTMLTableRowElement | null;
+      const table = cell?.closest('table.elabftw-spreadsheet') as HTMLTableElement | null;
+      const entry = table ? spreadsheetOverlays.get(table) : undefined;
+      if (!cell || !row || !table || !entry) return;
+      // the stored table has a header row and a header column of coordinates: the grid's cells count from the data
+      const x = Array.from(row.cells).filter(candidate => candidate.tagName === 'TD').indexOf(cell);
+      const y = Array.from(table.querySelectorAll(':scope > tbody > tr')).indexOf(row);
+      const target = entry.el.querySelector<HTMLElement>(`td[data-x="${x}"][data-y="${y}"]`);
+      if (!target) return;
+      target.classList.add(FIND_MATCH_CLASS);
+      if (marker.classList.contains('mce-match-marker-selected')) target.classList.add(FIND_CURRENT_CLASS);
+      findMarkedCells.push(target);
+    });
+  };
+  const queueFindMirror = (): void => {
+    if (findMirrorQueued) return;
+    findMirrorQueued = true;
+    // a timer, not an animation frame: a page in the background gets no frames and the marks would wait until it is shown
+    window.setTimeout(mirrorFindHighlights, 30);
+  };
+  let findObserver: MutationObserver | null = null;
+  const attachFindObserver = (): void => {
+    const body = editor.getBody();
+    if (!body || findObserver) return;
+    findObserver = new MutationObserver(queueFindMirror);
+    findObserver.observe(body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
+  };
+  editor.on('remove', () => {
+    findObserver?.disconnect();
+    findObserver = null;
+  });
   const extractCached = (table: HTMLTableElement): SpreadsheetData => {
     const observer = ensureExtractionObserver();
     // Apply any mutations not yet delivered before trusting the cache.
@@ -2138,6 +2187,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // just that table and selects the cell that was clicked.
   const mountPreview = (table: HTMLTableElement): void => {
     if (!editor.getBody().contains(table)) return;
+    // the first grid to mount: the editor's body exists for sure now, so Find and replace can be followed from here on
+    attachFindObserver();
     if (spreadsheetOverlays.has(table)) return;
     // A compact plate is cheap to build, so it is mounted live straight away (no cheap stand-in needed).
     if (table.dataset.spreadsheetStyle === 'well-plate' && extractCached(table).plateView !== 'sheet') {

@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'drag-select', 'formulas-and-structure', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'drag-select', 'formulas-and-structure', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -1998,6 +1998,42 @@ async function spreadsheetSoak(options = {}) {
       if (!/255,\s*0,\s*0|#ff0000/i.test(stored(1, 1, 'backgroundColor') || '')) dataLoss.push({ context, where: 'stored table', problem: 'a fill colour picked live in the popup was not saved' });
       if (!/0,\s*0,\s*255|#0000ff/i.test(stored(1, 2, 'color') || '')) dataLoss.push({ context, where: 'stored table', problem: 'a text colour picked live in the popup was not saved' });
       await verify('colour-live: values unchanged', true);
+    },
+    // The editor's Find and replace marks its matches in the stored table, hidden behind the grid: the grid cells that hold a match
+    // must be marked too (the current one stronger), and the marks must go when the search is closed.
+    async 'find-in-grid'() {
+      const uid = await createTable('find in grid', { rows: 4, cols: 3 });
+      if (!uid) return;
+      await typeInto(uid, 1, 2, 'zebrafinch');
+      await typeInto(uid, 3, 0, 'another zebrafinch here');
+      // the typed text reaches the stored table (where Find looks) once the grid has written it out: settle first
+      await verify('find-in-grid: typed', true);
+      const search = editor.plugins?.searchreplace;
+      if (!search) { fail('the editor has no Find and replace'); return; }
+      const grid = () => api.overlayElement(uid) || document;
+      const marked = () => [...grid().querySelectorAll('td.elabftw-find-match')].map(td => `${td.dataset.x},${td.dataset.y}`);
+      const currentCount = () => grid().querySelectorAll('td.elabftw-find-match-current').length;
+      // the marks follow the editor with a short delay (a page in the background runs timers slowly): wait for them
+      const until = async (condition, ms = 4000) => {
+        const started = Date.now();
+        while (Date.now() - started < ms) { if (condition()) return true; await sleep(100); }
+        return condition();
+      };
+      const found = search.find('zebrafinch', true, false);
+      if (found < 2) fail(`Find counted ${found} matches of a text that is in two cells`);
+      await until(() => marked().length >= 2 && currentCount() === 1);
+      const now = marked();
+      if (!now.includes('2,1') || !now.includes('0,3')) dataLoss.push({ context, table: models.get(uid)?.label, problem: `the cells that hold a match were not marked in the grid (marked: ${now.join(' ') || 'none'})` });
+      if (currentCount() !== 1) dataLoss.push({ context, table: models.get(uid)?.label, problem: 'exactly one cell should be marked as the current match' });
+      const before = grid().querySelector('td.elabftw-find-match-current')?.dataset.x;
+      search.next();
+      await until(() => currentCount() === 1 && grid().querySelector('td.elabftw-find-match-current')?.dataset.x !== before);
+      if (currentCount() !== 1) dataLoss.push({ context, table: models.get(uid)?.label, problem: 'after Next exactly one cell should be marked as the current match' });
+      search.done();
+      await until(() => marked().length === 0);
+      if (marked().length > 0) dataLoss.push({ context, table: models.get(uid)?.label, problem: `the marks stayed in the grid after the search was closed (${marked().join(' ')})` });
+      note('find-in-grid');
+      await verify('find-in-grid: values unchanged', true);
     },
     // Dragging over cells: the selection follows, the fill handle lets go of the pointer meanwhile and comes back.
     async 'drag-select'() {
