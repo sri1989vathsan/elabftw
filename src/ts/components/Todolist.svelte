@@ -1993,6 +1993,14 @@
           </select>
         </label>
         <label class='mb-0'>
+          <span class='small'>{t('End time')}{#if endsNextDay(deadlineTime, durationMinutes)} <span class='text-muted'>({t('next day')})</span>{/if}</span>
+          <select class='form-control form-control-sm' bind:value={endTime} on:change={changeEnd} disabled={!deadlineDate || !deadlineTime} title={t('When the task ends: its length in the calendar')}>
+            {#each endChoices(timeOptions, endTime) as time (time)}
+              <option value={time}>{time}</option>
+            {/each}
+          </select>
+        </label>
+        <label class='mb-0'>
           <span class='small'>{t('Reminder')}</span>
           <select
             class='form-control form-control-sm'
@@ -2012,14 +2020,6 @@
           </select>
         </label>
       </div>
-      <label class='mb-0'>
-        <span class='small'>{t('End time')}{#if endsNextDay(deadlineTime, durationMinutes)} <span class='text-muted'>({t('next day')})</span>{/if}</span>
-        <select class='form-control form-control-sm' bind:value={endTime} on:change={changeEnd} disabled={!deadlineDate || !deadlineTime} title={t('When the task ends: its length in the calendar')}>
-          {#each endChoices(timeOptions, endTime) as time (time)}
-            <option value={time}>{time}</option>
-          {/each}
-        </select>
-      </label>
       {#if deadlineDate && deadlineTime && reminderChoice === 'custom'}
         <label class='mb-0'>
           <span class='small'>{t('Minutes before')}</span>

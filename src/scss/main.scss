@@ -3068,6 +3068,125 @@ tr:first-child td {
     border-left-color: var(--side-panel-danger);
   }
 
+  // ---- the "Add task" form ----
+  .todo-create {
+    .input-group {
+      border-radius: 4px;
+      flex-wrap: nowrap;
+      overflow: hidden;
+    }
+
+    .input-group .form-control {
+      background: var(--fx-hover);
+      border-radius: 0;
+      height: var(--fx-ctl);
+    }
+
+    .input-group-prepend .btn {
+      background: rgba(255, 255, 255, 0.16);
+      border-radius: 0;
+      color: var(--fx-fg);
+    }
+
+    .input-group-append .btn {
+      border-radius: 0;
+    }
+  }
+
+  // labels, fields and gaps of the full form: one control height, one gap, one left and right edge
+  .todo-create-options {
+    gap: 0.4rem;
+
+    label {
+      display: block;
+      margin: 0;
+      min-width: 0;
+      width: 100%;
+    }
+
+    label > .small {
+      color: var(--fx-muted);
+      display: block;
+      font-size: 0.68rem;
+      line-height: 1.2;
+      margin-bottom: 0.15rem;
+    }
+
+    .form-control,
+    select.form-control,
+    input.form-control {
+      background: var(--fx-hover);
+      border: 0;
+      color: var(--fx-fg);
+      height: var(--fx-ctl);
+      line-height: 1.2;
+      min-height: var(--fx-ctl);
+      padding: 0 var(--fx-pad);
+      width: 100%;
+    }
+
+    // the notes box is taller, in the same tint as the other fields
+    textarea.form-control {
+      height: auto;
+      padding: 0.25rem var(--fx-pad);
+    }
+  }
+
+  // date and today, begin and end side by side, the reminder across the whole width
+  .todo-date-time-row {
+    column-gap: 0.4rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    row-gap: 0.4rem;
+
+    > label {
+      flex: none;
+    }
+
+    > .btn {
+      align-self: end;
+      justify-self: start;
+    }
+
+    // the reminder is the last field of the row
+    > label:last-child {
+      grid-column: 1 / -1;
+    }
+  }
+
+  // in a narrow panel the date takes the whole width and "Today" sits across under it
+  .todo-create-options {
+    container-type: inline-size;
+  }
+
+  @container (max-width: 17rem) {
+    .todo-date-time-row > label:has(input[type='date']) {
+      grid-column: 1 / -1;
+    }
+
+    .todo-date-time-row > .btn {
+      grid-column: 1 / -1;
+      justify-self: stretch;
+    }
+  }
+
+  textarea.form-control {
+    background: var(--fx-hover);
+    border: 0;
+    color: var(--fx-fg);
+    font-size: inherit;
+  }
+
+  // "Add task" and "Clear": one size, left aligned, the first one in the primary colour
+  .todo-create-options > .d-flex {
+    gap: 0.4rem !important;
+
+    .btn {
+      flex: 0 0 auto;
+      min-width: 5.5rem;
+    }
+  }
+
   .todo-drag-handle,
   .todo-secondary-text,
   .todo-item-deadline {
