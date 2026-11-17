@@ -3501,27 +3501,215 @@ tr:first-child td {
 
 // ---- Contents panel (entry pages) ----
 #tocPanel {
-  .input-group-text {
-    background: transparent;
-    border: 0;
-    color: var(--fx-muted);
-    padding: 0 0.3rem;
-  }
-
+  // the filter row is one input group: one height, one tint, square buttons of equal width, a proper focus ring only from the keyboard
   .input-group {
     background: var(--fx-hover);
     border-radius: 4px;
+    flex-wrap: nowrap;
+    margin-bottom: 0.4rem !important;
+    overflow: hidden;
 
     .form-control {
       background: transparent;
+      border-radius: 0;
+    }
+
+    .btn {
+      align-items: center;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+      color: var(--fx-muted);
+      display: inline-flex;
+      flex: 0 0 var(--fx-ctl);
+      height: var(--fx-ctl);
+      justify-content: center;
+      min-width: var(--fx-ctl);
+      outline: 0;
+      padding: 0;
+      width: var(--fx-ctl);
+
+      .fas {
+        color: inherit;
+      }
+
+      &:hover {
+        background: var(--fx-hover);
+        color: var(--fx-fg);
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: -2px;
+      }
+    }
+
+    #tocSearchAdd {
+      color: var(--fx-fg);
     }
   }
 
-  .toc-section-filter-summary {
+  // "Match" and its select: one row of the control height, on the same left and right edges
+  .p-3 > .d-flex.align-items-center {
+    margin-bottom: 0.4rem !important;
+    min-height: var(--fx-ctl);
+
+    > label {
+      color: var(--fx-muted);
+      font-size: 0.68rem !important;
+      margin: 0 0.4rem 0 0 !important;
+      white-space: nowrap;
+    }
+
+    > .form-control {
+      flex: 1 1 auto;
+    }
+  }
+
+  // no empty spacing: containers with nothing in them take no room
+  .toc-search-filters {
+    margin: 0 !important;
+
+    &:empty,
+    &:not(:has(*)) {
+      display: none;
+    }
+
+    &:has(*) {
+      margin-bottom: 0.4rem !important;
+    }
+  }
+
+  // "Select headings to filter or print": a small muted line that opens the list, not a boxed heading
+  .toc-section-filter-picker {
+    border: 0;
+    margin-bottom: 0.4rem !important;
+    padding: 0;
+
+    > summary {
+      align-items: center;
+      color: var(--fx-muted);
+      display: flex;
+      font-size: 0.72rem;
+      font-weight: 400;
+      margin: 0;
+      min-height: var(--fx-row);
+      padding: 0 var(--fx-pad);
+    }
+
+    &[open] > summary {
+      color: var(--fx-fg);
+    }
+  }
+
+  .toc-section-filter-tree {
+    border: 0;
+    border-top: 1px solid var(--fx-line);
+    border-radius: 0;
+    height: auto;
+    max-height: 14rem;
+  }
+
+  .toc-section-filter-option {
+    border-bottom: 0;
+    min-height: var(--fx-row);
+    padding-bottom: 0;
+    padding-top: 0;
+
+    &.selected {
+      background: color-mix(in srgb, var(--primary) 22%, transparent);
+    }
+
+    &:hover {
+      background: var(--fx-hover);
+    }
+  }
+
+  .toc-section-filter-label {
+    font-size: inherit;
+  }
+
+  // the "Show spreadsheets / pictures" toggles: the shared checkbox size, one row, the label centred and in the list's text size
+  .toc-leaf-toggle.custom-control {
     align-items: center;
     display: flex;
     min-height: var(--fx-row);
-    padding: 0 var(--fx-pad);
+    padding-left: 1.4rem;
+
+    .custom-control-label {
+      align-items: center;
+      display: flex;
+      font-size: inherit !important;
+      line-height: 1.3;
+      margin: 0;
+      min-height: var(--fx-row);
+    }
+
+    .custom-control-label::before,
+    .custom-control-label::after {
+      height: 0.9rem;
+      left: -1.4rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 0.9rem;
+    }
+
+    .custom-control-input:focus ~ .custom-control-label::before {
+      box-shadow: none;
+    }
+
+    .custom-control-input:focus-visible ~ .custom-control-label::before {
+      box-shadow: 0 0 0 2px var(--primary);
+    }
+  }
+
+  // the heading list: one row height, one selected tint, one hover tint, equal indent steps, icons in one right-hand column
+  .toc-items-container {
+    .toc-entry {
+      min-height: var(--fx-row);
+    }
+
+    .toc-link {
+      border-radius: 4px;
+      font-size: inherit !important;
+      font-weight: 400;
+      padding: 0 var(--fx-pad) !important;
+
+      &.font-weight-bold {
+        font-weight: 600;
+      }
+
+      &:hover {
+        background: var(--fx-hover);
+      }
+
+      &.active {
+        background: color-mix(in srgb, var(--primary) 22%, transparent);
+        color: var(--fx-fg);
+        font-weight: 600;
+      }
+    }
+
+    .toc-entry-action {
+      align-items: center;
+      color: var(--fx-muted);
+      display: inline-flex;
+      height: 1.25rem;
+      justify-content: center;
+      padding: 0;
+      width: 1.25rem;
+
+      .fas {
+        color: inherit;
+        font-size: 0.7rem;
+      }
+
+      &:focus,
+      &:hover {
+        color: var(--fx-fg);
+      }
+    }
   }
 }
 
