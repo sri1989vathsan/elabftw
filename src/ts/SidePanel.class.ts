@@ -12,7 +12,8 @@ import { Model } from './interfaces';
 export default class SidePanel {
   private static readonly WIDTH_KEY = 'sidepanel-width';
   private static readonly WIDTH_PROPERTY = '--side-panel-width';
-  private static readonly MIN_WIDTH = 280;
+  // narrow enough for the Folders explorer to be kept as a slim strip beside the page
+  private static readonly MIN_WIDTH = 140;
   private static readonly MAX_WIDTH = 720;
   private static currentWidth = 0;
   private static widthInitialized = false;
