@@ -1963,7 +1963,7 @@
         <label class='mb-0'>
           <span class='small'>{t('Google calendar')}</span>
           <select class='form-control form-control-sm' bind:value={draftCalendar}>
-            <option value=''>{t('The calendar of the sync settings')}</option>
+            <option value=''>{t('The calendar of the project or of the sync settings')}</option>
             {#each calendarChoices.calendars as calendar (calendar.id)}
               <option value={calendar.id}>{calendar.summary}</option>
             {/each}
@@ -2449,7 +2449,7 @@
             <div class='pm-dialog-field'>
               <label class='pm-label' for='todo-detail-calendar'>{t('Google calendar')}</label>
               <select id='todo-detail-calendar' class='form-control' bind:value={editCalendar}>
-                <option value=''>{t('The calendar of the sync settings')}</option>
+                <option value=''>{t('The calendar of the project or of the sync settings')}</option>
                 {#each calendarChoices.calendars as calendar (calendar.id)}
                   <option value={calendar.id}>{calendar.summary}</option>
                 {/each}

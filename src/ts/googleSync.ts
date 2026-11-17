@@ -17,7 +17,7 @@ import { ApiC } from './api';
 import { core } from './core';
 import { Model } from './interfaces';
 import { stripMentionHtml } from './mentions';
-import { readTaskCalendars } from './googleTaskCalendars';
+import { readProjectCalendars, readTaskCalendars } from './googleTaskCalendars';
 import {
   buildDesired,
   syncTasks,
@@ -594,9 +594,12 @@ async function syncToCalendar(token: string, todos: Todo[], twoWay: boolean, inc
   const writable = new Set(calendars.filter(calendar => calendar.writable).map(calendar => normal(calendar.id)));
   const defaultId = normal(calendarTargetId());
   const chosen = readTaskCalendars();
-  // a calendar that is gone or cannot be written to any more: the task goes to the calendar of the settings
+  const ofProject = readProjectCalendars();
+  // the calendar of the task, else the one of its project, else the one of the settings; a calendar that is gone or cannot be written to
+  // any more is skipped
   const calendarOf = (todo: Todo): string => {
-    const wanted = chosen[String(todo.id)];
+    const project = (todo as unknown as { project_id?: number | null }).project_id ?? 0;
+    const wanted = chosen[String(todo.id)] ?? ofProject[String(project)];
     return wanted && writable.has(normal(wanted)) ? normal(wanted) : defaultId;
   };
   const groups = new Map<string, Todo[]>([[defaultId, []]]);

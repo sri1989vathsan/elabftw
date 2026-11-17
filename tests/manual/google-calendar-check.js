@@ -40,7 +40,7 @@ window.googleCalendarCheck = async function () {
       await wait(1200);
     }
     __gstub.reset();
-    Object.keys(localStorage).filter(function (k) { return /^googleSync(Calendar|Target|ImportEvents|CalendarsShown|TaskCalendars|Token)/.test(k); }).forEach(function (k) { localStorage.removeItem(k); });
+    Object.keys(localStorage).filter(function (k) { return /^googleSync(Calendar|Target|ImportEvents|CalendarsShown|TaskCalendars|ProjectCalendars|Token)/.test(k); }).forEach(function (k) { localStorage.removeItem(k); });
     for (var spec of [{ content: 'GCAL alpha', deadline: at(1, 14, 30).toISOString(), duration_minutes: 90 }, { content: 'GCAL beta', deadline: at(2, 9, 0).toISOString() }]) {
       created.push(Number((await api('POST', 'todolist', spec)).loc.split('/').pop()));
     }
@@ -137,11 +137,29 @@ window.googleCalendarCheck = async function () {
     await sync();
     check('C10f a calendar that cannot be written to is ignored', mine().some(function (e) { return /GCAL beta/.test(e.summary); }), mine());
     localStorage.removeItem(chosenKey);
+
+    // a project on a calendar: its tasks go there, a task of its own choice wins, and without the project's choice they are back
+    var project = await api('POST', 'todolist_projects', { name: 'GCAL project' });
+    var projectId = Number(project.loc.split('/').pop());
+    await api('PATCH', 'todolist/' + betaId, { project_id: projectId });
+    var projectKey = 'googleSyncProjectCalendars:' + userid;
+    localStorage.setItem(projectKey, JSON.stringify({ [projectId]: 'work@x' }));
+    await sync();
+    check('C11 the tasks of a project go to the calendar of the project', inWork().length === 1 && !mine().some(function (e) { return /GCAL beta/.test(e.summary); }), { work: inWork(), mine: mine() });
+    localStorage.setItem(chosenKey, JSON.stringify({ [betaId]: 'primary' }));
+    await sync();
+    check('C11b a calendar chosen for the task wins over the one of its project', inWork().length === 0 && mine().some(function (e) { return /GCAL beta/.test(e.summary); }), { work: inWork(), mine: mine() });
+    localStorage.removeItem(chosenKey);
+    localStorage.removeItem(projectKey);
+    await sync();
+    check('C11c without the choices the task is on the calendar of the settings', inWork().length === 0 && mine().some(function (e) { return /GCAL beta/.test(e.summary); }), { work: inWork(), mine: mine() });
+    await api('PATCH', 'todolist/' + betaId, { project_id: null });
+    await api('DELETE', 'todolist_projects/' + projectId);
   } catch (error) {
     check('no error', false, String(error && error.stack || error));
   }
   for (var id of created) { await api('DELETE', 'todolist/' + id); }
-  Object.keys(localStorage).filter(function (k) { return /^googleSync(Calendar|Target|ImportEvents|CalendarsShown|TaskCalendars|Token)/.test(k); }).forEach(function (k) { localStorage.removeItem(k); });
+  Object.keys(localStorage).filter(function (k) { return /^googleSync(Calendar|Target|ImportEvents|CalendarsShown|TaskCalendars|ProjectCalendars|Token)/.test(k); }).forEach(function (k) { localStorage.removeItem(k); });
   __gstub.reset();
   return { pass: results.every(function (r) { return r.ok; }), results: results };
 };
