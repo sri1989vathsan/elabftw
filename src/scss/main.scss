@@ -3142,6 +3142,218 @@ tr:first-child td {
   }
 }
 
+// ---- Task rows of the Activity calendar's agenda ----
+// One line per task: the check button, the title (cut with an ellipsis) and a short due label at the right edge. Everything else
+// (notes, reminder, entry) is in the row's tooltip; the drag handle shows only on hover or focus.
+// Overdue is a red bar and red due text, nothing else. Flat rows with a thin divider, no boxes.
+#calendarActivityPanel .calendar-todo-entry {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--fx-line);
+  border-left: 3px solid var(--primary);
+  border-radius: 0 !important;
+  color: var(--fx-fg);
+  margin: 0;
+  min-height: 1.9rem;
+  padding: 0 var(--fx-pad) 0 0.3rem;
+  position: relative;
+
+  > .d-flex {
+    align-items: center !important;
+    flex-wrap: nowrap;
+    gap: 0.2rem;
+    min-height: 1.9rem;
+  }
+
+  &:hover {
+    background: var(--fx-hover);
+  }
+
+  .btn-ghost {
+    padding: 0 0.3rem;
+  }
+
+  // the check button is the shared control size
+  .btn:has(.fa-check) {
+    padding: 0;
+    width: var(--fx-ctl);
+  }
+
+  // the small "task" icon in front of the title is not needed on a one-line row
+  > .d-flex > .fa-list-check {
+    display: none;
+  }
+}
+
+#calendarActivityPanel .calendar-todo-entry.calendar-todo-overdue {
+  background: transparent;
+  border-left-color: var(--side-panel-danger);
+
+  &:hover {
+    background: var(--fx-hover);
+  }
+}
+
+#calendarActivityPanel .calendar-todo-entry {
+  > .d-flex > .flex-grow-1 {
+    align-items: center;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.4rem;
+
+    // the "Task" label and the lines the row does not show (see the tooltip)
+    > .calendar-entry-source,
+    > :not(strong):not(.calendar-todo-deadline) {
+      display: none;
+    }
+
+    > strong {
+      flex: 1 1 0;
+      font-weight: 600;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    > .calendar-todo-deadline {
+      color: var(--fx-muted);
+      flex: 0 0 auto;
+      font-size: 0.68rem;
+      margin-left: auto;
+      white-space: nowrap;
+
+      .fa-clock {
+        display: none;
+      }
+    }
+  }
+
+  &.calendar-todo-overdue .calendar-todo-deadline {
+    color: var(--side-panel-danger);
+  }
+
+  // the check button first; the drag handle only on hover or focus
+  > .d-flex > .btn:has(.fa-check) {
+    order: -1;
+  }
+
+  .calendar-task-drag-handle {
+    display: none;
+    order: 5;
+  }
+
+  &:hover .calendar-task-drag-handle:not([disabled]),
+  &:focus-within .calendar-task-drag-handle:not([disabled]) {
+    display: inline-flex;
+  }
+
+  .calendar-completed-icon {
+    margin: 0 !important;
+  }
+}
+
+// the agenda's stacked boxes (the agenda, each group, its list, each entry card) are flattened into plain rows
+#calendarActivityPanel {
+  .calendar-todo-agenda {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    margin-top: 0.4rem !important;
+    padding: 0;
+  }
+
+  .calendar-activity-group {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    margin-bottom: 0.2rem;
+  }
+
+  .calendar-activity-group > summary {
+    background: transparent;
+  }
+
+  .calendar-activity-tree,
+  .calendar-entity-list {
+    margin: 0;
+    padding: 0;
+  }
+
+  .calendar-entity-node {
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--fx-line);
+    border-left: 3px solid #1677b8;
+    border-radius: 0;
+    margin: 0;
+  }
+
+  .calendar-activity-group-items .calendar-entity-node {
+    border-left-color: #2e8b57;
+  }
+
+  .calendar-entity-summary {
+    font-size: inherit;
+    font-weight: 600;
+    min-height: 1.9rem;
+    padding: 0 var(--fx-pad) 0 0.3rem;
+
+    a {
+      color: var(--fx-fg);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .fas {
+      color: var(--fx-muted);
+      margin: 0 var(--fx-gap) 0 0 !important;
+    }
+  }
+
+  .calendar-entity-date {
+    background: transparent;
+    color: var(--fx-muted);
+    font-size: 0.68rem;
+    font-weight: 400;
+    padding: 0;
+  }
+
+  .calendar-entity-no-headings {
+    display: none;
+  }
+
+  .calendar-heading-tree {
+    border-top: 0;
+    padding: 0 0 0.2rem;
+  }
+
+  .calendar-heading-node {
+    min-height: 1.5rem;
+    padding-bottom: 0;
+    padding-top: 0;
+  }
+}
+
+// day groups of the agenda: one small muted heading row each
+#calendarActivityPanel .calendar-activity-group > summary {
+  align-items: center;
+  color: var(--fx-muted);
+  display: flex;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  min-height: var(--fx-row);
+  padding: 0 var(--fx-pad);
+  text-transform: uppercase;
+
+  .fas {
+    color: inherit;
+    margin: 0 var(--fx-gap) 0 0 !important;
+  }
+}
+
 // ---- Search panel (favourite filters and the results) ----
 #favoritesPanel {
   .input-group-text {

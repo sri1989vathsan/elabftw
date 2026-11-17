@@ -6,6 +6,7 @@
   import { EntityType, Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
   import StepModel from '../Step.class';
+  import { shortDue } from '../shortDue';
 
   // This whole component mounts inside the Activity Calendar side panel
   // (#calendarActivity), which carries the [hidden] attribute whenever that
@@ -1358,6 +1359,7 @@
               class:calendar-todo-completed={entry.completedAt !== null}
               class:calendar-todo-highlight={isHighlighted(entry)}
               class='list-group-item calendar-todo-entry'
+              title={[entry.body, entry.entityTitle, entry.notes, entry.reminderMinutes === null ? '' : (entry.reminderMinutes === 0 ? t('At deadline') : `${entry.reminderMinutes} ${t('minutes before')}`)].filter(Boolean).join(' — ')}
               id={entry.source === 'todo' ? `calendar-todo-${entry.id}` : undefined}
             >
               <div class='d-flex align-items-start'>
@@ -1386,9 +1388,9 @@
                   {#if entry.source === 'step'}
                     <div class='small'><a href={`${entry.entityPage}?mode=view&id=${entry.entityId}#step_view_${entry.id}`}>{entry.entityTitle}</a></div>
                   {/if}
-                  <div class:font-weight-bold={isOverdue(entry)} class='small calendar-todo-deadline'>
-                    <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>{formatDeadline(entry.deadline)}
-                    {#if isOverdue(entry)} · {t('Overdue')}{/if}
+                  <div class:font-weight-bold={isOverdue(entry)} class='small calendar-todo-deadline' title={formatDeadline(entry.deadline)}>
+                    <i class='fas fa-clock fa-fw mr-1' aria-hidden='true'></i>{shortDue(entry.deadline, locale)}
+                    {#if isOverdue(entry)}<span class='sr-only'> · {t('Overdue')}</span>{/if}
                   </div>
                   {#if entry.completedAt}<div class='small calendar-task-completed'><i class='fas fa-check fa-fw mr-1' aria-hidden='true'></i>{t('Completed')} {formatDeadline(entry.completedAt)}</div>{/if}
                   {#if entry.notes}<p class='small mb-1 mt-1 calendar-task-notes'>{entry.notes}</p>{/if}
