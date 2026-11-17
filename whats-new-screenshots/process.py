@@ -81,7 +81,11 @@ def process(entry: dict, region: dict, source: Path) -> None:
 
 
 def main() -> int:
-    regions = json.loads((ROOT / 'regions.json').read_text()) if (ROOT / 'regions.json').exists() else {}
+    regions = {}
+    # regions.json is the shared file; regions-inventory.json holds this branch's own entries and wins
+    for name in ('regions.json', 'regions-inventory.json'):
+        if (ROOT / name).exists():
+            regions.update(json.loads((ROOT / name).read_text()))
     entries = json.loads(ENTRIES.read_text())
     wanted = set(sys.argv[1:])
     done = []

@@ -18,9 +18,11 @@ use function array_filter;
 use function array_map;
 use function array_values;
 use function bin2hex;
+use function array_merge;
 use function dirname;
 use function file_get_contents;
 use function file_put_contents;
+use function getenv;
 use function getimagesize;
 use function in_array;
 use function is_array;
@@ -56,7 +58,15 @@ final class WhatsNewStore
 {
     public const int MAX_IMAGE_BYTES = 8_000_000;
 
+    // The guide of the Orders branch is whats-new.json (shared, never edited on this branch); this branch's own guide is
+    // whats-new-inventory.json. Which one is shown is set by the environment variable ELABFTW_WHATS_NEW or, without it, by the
+    // one word in whats-new-source.txt: "inventory" (this branch's own guide, the default), "orders" (the shared guide alone)
+    // or "both" (the two together; an entry of this branch replaces the shared one with the same id).
     private const string SHIPPED_ENTRIES = __DIR__ . '/../whats-new.json';
+
+    private const string SHIPPED_ENTRIES_INVENTORY = __DIR__ . '/../whats-new-inventory.json';
+
+    private const string SOURCE_SETTING_FILE = __DIR__ . '/../whats-new-source.txt';
 
     private const string SHIPPED_IMAGES = __DIR__ . '/../../web/assets/images/whats-new';
 
@@ -70,13 +80,38 @@ final class WhatsNewStore
     );
 
     /**
+     * @return array<int, array<string, mixed>> the entries that ship with the code, as the chosen source gives them
+     */
+    private function shippedEntries(): array
+    {
+        $mode = getenv('ELABFTW_WHATS_NEW');
+        if ($mode === false || $mode === '') {
+            $mode = is_file(self::SOURCE_SETTING_FILE) ? trim((string) file_get_contents(self::SOURCE_SETTING_FILE)) : 'inventory';
+        }
+        $shared = $this->readList(self::SHIPPED_ENTRIES);
+        $own = is_file(self::SHIPPED_ENTRIES_INVENTORY) ? $this->readList(self::SHIPPED_ENTRIES_INVENTORY) : array();
+        if ($mode === 'orders') {
+            return $shared;
+        }
+        if ($mode === 'both') {
+            $byId = array();
+            foreach (array_merge($shared, $own) as $entry) {
+                $byId[$entry['id']] = $entry;
+            }
+            return array_values($byId);
+        }
+
+        return $own === array() ? $shared : $own;
+    }
+
+    /**
      * @return array<int, array<string, mixed>> newest first
      */
     public function all(): array
     {
         $state = $this->readState();
         $byId = array();
-        foreach ($this->readList(self::SHIPPED_ENTRIES) as $entry) {
+        foreach ($this->shippedEntries() as $entry) {
             if (!in_array($entry['id'], $state['deleted'], true)) {
                 $byId[$entry['id']] = $entry;
             }
@@ -162,7 +197,7 @@ final class WhatsNewStore
         $state = $this->readState();
         $previous = $this->find($id);
         unset($state['entries'][$id]);
-        $shippedIds = array_map(static fn(array $e): string => $e['id'], $this->readList(self::SHIPPED_ENTRIES));
+        $shippedIds = array_map(static fn(array $e): string => $e['id'], $this->shippedEntries());
         if (in_array($id, $shippedIds, true) && !in_array($id, $state['deleted'], true)) {
             $state['deleted'][] = $id;
         }
