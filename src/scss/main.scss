@@ -2302,6 +2302,423 @@ tr:first-child td {
     display: inline-flex;
   }
 
+  // The Folders explorer, on one grid. Every size, gap and colour below comes from these few tokens, so a control or a row in
+  // any of the three views (tree, list, cards) lines up with every other one:
+  //  - controls (bar buttons, Exp/Res/All, My/Shared, +) are all --fx-ctl high with --fx-icon-size icons;
+  //  - rows are --fx-row high, start at --fx-pad, keep a --fx-lead column free for a caret (tree) so icons share a column,
+  //    and end at --fx-pad where counts and buttons sit on one right edge;
+  //  - text is the panel's light colour, icons and secondary text its muted one, hover one tint, selected the primary colour.
+  &#foldersPanel {
+    --fx-ctl: 1.4rem;
+    --fx-row: 1.5rem;
+    --fx-pad: 0.35rem;
+    --fx-lead: 1.25rem;
+    --fx-gap: 0.35rem;
+    --fx-icon-size: 0.78rem;
+    --fx-icon-col: 1rem;
+    --fx-fg: var(--chrome-fg);
+    --fx-muted: var(--chrome-muted);
+    --fx-hover: rgba(255, 255, 255, 0.09);
+    --fx-line: rgba(255, 255, 255, 0.12);
+    --fx-star: #f0ad4e;
+
+    color: var(--fx-fg);
+    font-size: 0.78rem;
+    line-height: 1.3;
+
+    // no default link blue and no second white: names and links take the panel's text colour
+    a,
+    a:hover,
+    a:focus,
+    .color-medium,
+    .btn-link {
+      color: var(--fx-fg) !important;
+      text-decoration: none;
+    }
+
+    // every icon in a row or control: one size, one muted colour (inline colours of the tree's stars are overridden)
+    .folder-row .fas,
+    .folder-row .far,
+    .folder-flat-row .fas,
+    .folder-flat-row .far,
+    .folder-quick-row .fas,
+    .folder-file-row .fas,
+    .folder-card .fas,
+    .folder-file-card .fas,
+    .other-folders-header .fas,
+    .folder-bar-btn .fas,
+    .folder-scope-tabs .fas,
+    .folder-create-toggle .fas {
+      color: var(--fx-muted);
+      font-size: var(--fx-icon-size);
+    }
+
+    .folder-row .fas.fa-star,
+    .folder-flat-row .fas.fa-star,
+    .folder-card .fas.fa-star,
+    .folder-row .far.fa-star,
+    .folder-flat-row .far.fa-star {
+      color: var(--fx-muted) !important;
+    }
+
+    .folder-row .fas.fa-star,
+    .folder-flat-row .fas.fa-star,
+    .folder-card .fas.fa-star,
+    .bookmarked-folders-section .folder-tree-section-label .fas {
+      color: var(--fx-star) !important;
+    }
+
+    // ---- the bar ----
+    .folder-explorer-bar {
+      gap: 0.2rem;
+      margin-bottom: 0.3rem;
+    }
+
+    .folder-bar-group {
+      align-items: center;
+      background: var(--fx-hover);
+      border-radius: 6px;
+      display: inline-flex;
+      gap: 0;
+      padding: 0.1rem;
+    }
+
+    .folder-view-switch {
+      border: 0;
+      border-radius: 0;
+      display: inline-flex;
+    }
+
+    .folder-bar-btn {
+      align-items: center;
+      border-radius: 4px;
+      display: inline-flex;
+      height: var(--fx-ctl);
+      justify-content: center;
+      padding: 0;
+      width: var(--fx-ctl);
+
+      .fas {
+        text-align: center;
+        width: var(--fx-icon-col);
+      }
+    }
+
+    .folder-bar-btn:hover,
+    .folder-bar-btn:focus-visible,
+    .folder-quick-row:hover,
+    .folder-quick-row:focus-visible,
+    .folder-row:hover,
+    .folder-flat-row:hover,
+    .folder-file-row:hover,
+    .other-folders-header:hover,
+    .folder-card:hover,
+    .folder-file-card:hover {
+      background: var(--fx-hover);
+      color: var(--fx-fg);
+    }
+
+    .folder-bar-btn.active,
+    .folder-bar-btn[aria-expanded='true'] {
+      background: var(--primary);
+      color: var(--primary-fg, #fff);
+
+      .fas {
+        color: inherit;
+      }
+    }
+
+    // ---- Exp / Res / All and My / Shared ----
+    .folder-type-switch {
+      border: 0;
+      border-radius: 6px;
+      background: var(--fx-hover);
+      gap: 0.1rem;
+      height: var(--fx-ctl);
+      margin-bottom: 0.3rem;
+      padding: 0.1rem;
+
+      button {
+        border-radius: 4px;
+        color: var(--fx-muted);
+        font-size: 0.72rem;
+        line-height: 1;
+        padding: 0;
+      }
+
+      button:hover {
+        color: var(--fx-fg);
+      }
+
+      button.active {
+        background: var(--primary);
+        color: var(--primary-fg, #fff);
+      }
+    }
+
+    .folder-scope-tabs {
+      background: var(--fx-hover);
+      border: 0;
+      border-radius: 6px;
+      gap: 0.1rem;
+      height: var(--fx-ctl);
+      margin-bottom: 0.3rem !important;
+      padding: 0.1rem;
+
+      .nav-item {
+        margin: 0;
+      }
+
+      .nav-link {
+        align-items: center;
+        border: 0;
+        border-radius: 4px;
+        display: flex;
+        font-size: 0.72rem;
+        height: calc(var(--fx-ctl) - 0.2rem);
+        justify-content: center;
+        line-height: 1;
+        margin: 0;
+        padding: 0 !important;
+      }
+
+      .nav-link:hover {
+        background: var(--fx-hover);
+      }
+
+      .nav-link.active {
+        background: var(--primary);
+        color: var(--primary-fg, #fff);
+
+        .fas {
+          color: inherit;
+        }
+      }
+    }
+
+    // ---- rows: one height, one left edge, one right edge ----
+    .folder-quick-row,
+    .folder-row,
+    .folder-flat-row,
+    .folder-file-row,
+    .other-folders-header {
+      align-items: center;
+      border-radius: 4px;
+      display: flex;
+      gap: var(--fx-gap);
+      min-height: var(--fx-row);
+      padding: 0 var(--fx-pad);
+    }
+
+    .folder-row .folder-toggle,
+    .folder-row > span:first-child {
+      flex: 0 0 var(--fx-lead);
+      margin: 0 !important;
+      width: var(--fx-lead) !important;
+    }
+
+    .other-folders-header {
+      color: var(--fx-muted);
+      font-size: inherit;
+      width: 100%;
+    }
+
+    // names fill the row; counts and buttons end on the right edge
+    .folder-row > [data-folder-entity-link],
+    .folder-flat-link {
+      align-items: center;
+      display: flex;
+      flex: 1 1 auto;
+      gap: var(--fx-gap);
+      min-width: 0;
+    }
+
+    .folder-row .folder-name,
+    .folder-flat-link .folder-name,
+    .folder-file-title {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .folder-row .fa-fw,
+    .folder-flat-row .fa-fw,
+    .folder-quick-row .fa-fw,
+    .folder-file-row .fa-fw {
+      flex: 0 0 var(--fx-icon-col);
+      margin: 0 !important;
+      text-align: center;
+      width: var(--fx-icon-col);
+    }
+
+    .folder-entity-count,
+    .folder-entity-count.badge {
+      background: transparent;
+      color: var(--fx-muted);
+      font-size: 0.68rem;
+      font-weight: 400;
+      margin: 0 0 0 auto !important;
+      padding: 0;
+    }
+
+    .folder-actions {
+      gap: 0.05rem;
+      padding-left: 0.2rem;
+    }
+
+    // (shown or hidden by the hover rules further down; only the size is set here)
+    .folder-action-btn {
+      align-items: center;
+      height: 1.25rem;
+      justify-content: center;
+      padding: 0;
+      width: 1.25rem;
+    }
+
+    .folder-up-button {
+      font-size: inherit;
+      padding: 0;
+    }
+
+    .folder-up-row .folder-up-button .fas {
+      margin: 0 var(--fx-gap) 0 0 !important;
+    }
+
+    #folderFlatFilter {
+      background: var(--fx-hover);
+      border: 0;
+      color: var(--fx-fg);
+      font-size: inherit;
+      height: var(--fx-ctl);
+      margin-bottom: 0.3rem !important;
+      padding: 0 var(--fx-pad);
+    }
+
+    #folderFlatFilter::placeholder {
+      color: var(--fx-muted);
+    }
+
+    .folder-path-crumb .fas {
+      color: var(--fx-muted);
+    }
+
+    .folder-node {
+      margin-bottom: 0 !important;
+    }
+
+    .folder-tree-list {
+      min-height: 0;
+    }
+
+    .folder-tree-section-label {
+      font-size: 0.66rem;
+      margin-bottom: 0 !important;
+      padding: 0.15rem var(--fx-pad);
+    }
+
+    .bookmarked-folders-section {
+      border-bottom-color: var(--fx-line);
+      margin-bottom: 0.25rem !important;
+      padding-bottom: 0.2rem;
+    }
+
+    // ---- New folder and the "+" ----
+    .folder-create-section {
+      border-color: var(--fx-line) !important;
+      margin-top: 0.3rem !important;
+      padding-top: 0.25rem !important;
+    }
+
+    .folder-create-section summary {
+      align-items: center;
+      display: flex;
+      font-size: inherit;
+      font-weight: 400;
+      gap: var(--fx-gap);
+      margin: 0 !important;
+      min-height: var(--fx-row);
+      padding: 0 var(--fx-pad);
+
+      .fa-fw {
+        flex: 0 0 var(--fx-icon-col);
+        margin: 0 !important;
+        text-align: center;
+      }
+    }
+
+    .folder-create-section[data-folder-create='flat'] {
+      border-top: 0 !important;
+      margin-top: 0.1rem !important;
+      padding-top: 0 !important;
+    }
+
+    .folder-create-toggle {
+      align-items: center;
+      background: transparent;
+      border: 0;
+      display: inline-flex;
+      height: var(--fx-ctl);
+      justify-content: center;
+      margin-left: 0;
+      padding: 0;
+      width: var(--fx-ctl);
+    }
+
+    // ---- path bar, cards, preview ----
+    .folder-path-bar,
+    .folder-level-bar {
+      background: transparent;
+      border-top: 1px solid var(--fx-line);
+      font-size: 0.72rem;
+      margin-top: 0.3rem;
+      padding: 0.2rem var(--fx-pad);
+      position: static;
+    }
+
+    .folder-level-bar .folder-path-crumb {
+      padding: 0.05rem 0.2rem;
+    }
+
+    .folder-file-cards {
+      gap: 0.2rem;
+    }
+
+    .folder-card,
+    .folder-file-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 0;
+      border-radius: 4px;
+      color: var(--fx-fg);
+      padding: 0.25rem var(--fx-pad);
+    }
+
+    .folder-card.is-active {
+      box-shadow: inset 2px 0 0 var(--primary);
+    }
+
+    // a card's own first line is a row: same icon column and height as the rows
+    .folder-card > .d-flex {
+      min-height: var(--fx-row);
+    }
+
+    .folder-file-row.is-selected {
+      background: var(--primary);
+      color: var(--primary-fg, #fff);
+
+      .fas {
+        color: inherit;
+      }
+    }
+
+    .folder-preview {
+      border-top-color: var(--fx-line);
+      margin-top: 0.3rem;
+      padding-top: 0.3rem;
+    }
+  }
+
   // the switches that hide parts of the explorer
   &.folders-no-favorites .favorite-folder-star,
   &.folders-no-favorites [data-popover='folderFavoritesMenu'] {

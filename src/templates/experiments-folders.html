@@ -16,12 +16,14 @@
   >
     {# The explorer bar: favourites, the three views (tree, list with preview, cards), options, close. Kept to one slim row. #}
     <div class='folder-explorer-bar'>
-      <button type='button' class='folder-bar-btn' data-action='toggle-folder-popover' data-popover='folderFavoritesMenu' aria-haspopup='true' aria-expanded='false' title='{{ 'Favourites'|trans }}' aria-label='{{ 'Favourites'|trans }}'><i class='fas fa-star fa-fw' aria-hidden='true'></i></button>
+      <div class='folder-bar-group'>
+        <button type='button' class='folder-bar-btn' data-action='toggle-folder-popover' data-popover='folderFavoritesMenu' aria-haspopup='true' aria-expanded='false' title='{{ 'Favourites'|trans }}' aria-label='{{ 'Favourites'|trans }}'><i class='fas fa-star fa-fw' aria-hidden='true'></i></button>
       {# Tree (nested, as before), list (one level with a preview of the picked file) or cards; the choice is remembered. #}
       <div class='folder-view-switch' role='group' aria-label='{{ 'Folder view'|trans }}'>
         <button type='button' class='folder-bar-btn active' data-action='select-folder-view' data-view='tree' title='{{ 'Tree view'|trans }}' aria-label='{{ 'Tree view'|trans }}' aria-pressed='true'><i class='fas fa-sitemap fa-fw' aria-hidden='true'></i></button>
         <button type='button' class='folder-bar-btn' data-action='select-folder-view' data-view='list' title='{{ 'List view'|trans }}' aria-label='{{ 'List view'|trans }}' aria-pressed='false'><i class='fas fa-list fa-fw' aria-hidden='true'></i></button>
         <button type='button' class='folder-bar-btn' data-action='select-folder-view' data-view='cards' title='{{ 'Cards view'|trans }}' aria-label='{{ 'Cards view'|trans }}' aria-pressed='false'><i class='fas fa-rectangle-list fa-fw' aria-hidden='true'></i></button>
+      </div>
       </div>
       <span class='folder-bar-spacer'></span>
       <button type='button' class='folder-bar-btn' data-action='toggle-folder-popover' data-popover='folderOptionsMenu' aria-haspopup='true' aria-expanded='false' title='{{ 'Options'|trans }}' aria-label='{{ 'Options'|trans }}'><i class='fas fa-ellipsis fa-fw' aria-hidden='true'></i></button>
