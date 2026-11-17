@@ -376,6 +376,10 @@ export function getTinymceBaseConfig(page: string): object {
         // spreadsheet data and display preset. Do not normalize them into a
         // generic pasted table or discard their explicit dimensions.
         if (isElabftwRichSelection) return;
+        // A copy of a whole spreadsheet table (selected in the editor, then Ctrl+C) carries no marker, but the table
+        // holds its own data and column widths: the table width and the <col> widths are the layout of the sheet, not
+        // leftovers of another application, so they stay. Tables from Excel, Sheets or Word never have this attribute.
+        if (table.hasAttribute('data-spreadsheet')) return;
         table.removeAttribute('width');
         table.style.removeProperty('width');
         // table-layout: fixed (Word/Excel set it routinely) sizes columns

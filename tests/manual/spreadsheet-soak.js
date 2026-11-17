@@ -896,8 +896,11 @@ async function spreadsheetSoak(options = {}) {
     editor.selection.collapse(false);
     layoutDirty = true;
     const before = new Set(api.snapshot(false).map(snap => snap.uid));
-    await timed('paste-table', async () => { editor.insertContent(html); await sleep(900); });
+    // through the editor's own paste filter (a plain insertContent would skip it): a copy of one of our own spreadsheets must keep its layout
+    await timed('paste-table', async () => { editor.execCommand('mceInsertClipboardContent', false, { html }); await sleep(900); });
     note(spaced ? 'paste-spaced' : 'paste-right-after');
+    const strippedCopies = [...editor.getBody().querySelectorAll('table.elabftw-pasted-table')].length;
+    if (strippedCopies > 0) fail(`a pasted copy of a spreadsheet lost its column widths and table width (${strippedCopies} table(s) went through the other-application paste filter)`);
     const after = api.snapshot(true);
     const added = after.filter(snap => !before.has(snap.uid));
     if (added.length !== 1) {
