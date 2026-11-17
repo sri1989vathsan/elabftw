@@ -2889,6 +2889,105 @@ tr:first-child td {
   }
 }
 
+// a row of buttons drawn as one segmented control (the same look as Exp / Res / All in the folders panel)
+@mixin fx-segmented {
+  background: var(--fx-hover);
+  border-radius: 6px;
+  display: flex;
+  gap: 0.1rem;
+  min-height: var(--fx-ctl);
+  padding: 0.1rem;
+
+  .btn {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    color: var(--fx-muted);
+    display: inline-flex;
+    flex: 1 1 0;
+    height: calc(var(--fx-ctl) - 0.2rem);
+    justify-content: center;
+    min-width: 0;
+    padding: 0 0.4rem;
+
+    .fas,
+    .far {
+      color: inherit;
+    }
+
+    &:hover {
+      color: var(--fx-fg);
+    }
+
+    &.active,
+    &.btn-secondary.active,
+    &[aria-pressed='true'] {
+      background: var(--primary);
+      color: var(--primary-fg, #fff);
+    }
+  }
+}
+
+// ---- To-do panel ----
+#todolistPanel {
+  .todo-view-toggle {
+    @include fx-segmented;
+  }
+
+  .todo-create {
+    margin-bottom: 0.4rem !important;
+
+    .btn {
+      height: var(--fx-ctl);
+      min-width: var(--fx-ctl);
+      padding: 0;
+    }
+  }
+
+  .todo-due-heading {
+    align-items: center;
+    color: var(--fx-muted);
+    display: flex;
+    font-size: 0.68rem;
+    font-weight: 600;
+    justify-content: space-between;
+    letter-spacing: 0.03em;
+    margin: 0.4rem 0 0.2rem;
+    min-height: var(--fx-row);
+    padding: 0 var(--fx-pad);
+    text-transform: uppercase;
+  }
+
+  .list-group {
+    gap: 0.2rem;
+  }
+
+  // tasks and steps: flat tiles instead of bordered boxes
+  .list-group-item {
+    background: rgba(255, 255, 255, 0.05);
+    border: 0;
+    border-radius: 4px;
+    color: var(--fx-fg);
+    margin: 0 0 0.2rem;
+    padding: 0.3rem var(--fx-pad);
+  }
+
+  .todo-entry-overdue {
+    box-shadow: inset 2px 0 0 var(--side-panel-danger);
+  }
+
+  .todo-drag-handle,
+  .todo-secondary-text,
+  .todo-item-deadline {
+    color: var(--fx-muted);
+  }
+
+  .todo-item-deadline {
+    font-size: 0.72rem;
+  }
+}
+
 // the message after a file or folder was moved by dragging (folder-dragdrop.ts): on the page, not in the panel
 .folder-move-toast {
   align-items: center;
