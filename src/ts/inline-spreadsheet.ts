@@ -519,7 +519,7 @@ const DEFAULT_APPEARANCE: SpreadsheetAppearance = {
   borderWidth: 1,
   borderColor: '#ced4da',
   cellColor: '#ffffff',
-  cellPadding: 6,
+  cellPadding: 8,
   alternateRows: true,
   alternateRowColor: '#f6f7f8',
   alternateColumns: false,
