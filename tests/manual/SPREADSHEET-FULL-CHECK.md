@@ -87,3 +87,34 @@ are new in this round and have not been looked at in a browser yet unless it say
 | D3 | Reload and check again: every cell, style and size matches what you left | | |
 | D4 | Run the scripts in `tests/manual/` (`spreadsheet-acceptance.js`, `spreadsheet-faults.js`, `spreadsheet-regression.js`, `spreadsheet-sync-stress.js`, `spreadsheet-perf.js`) and note any failure | | |
 | D5 | Repeat the whole sheet at least three times; note anything that fails only once | | |
+
+## F. Added 2026-11-17
+
+| # | What to check | Where | Soak scenario | Firefox | Chrome |
+|---|---------------|-------|---------------|---------|--------|
+| F1 | Cmd/Ctrl+X on one cell: the cell is empty in the grid and in the saved table at once, and the text is on the clipboard (paste it elsewhere) | inline, popup | `cut-undo` | | |
+| F2 | Cmd/Ctrl+X on a dragged range: every cell of the range is emptied, one Cmd/Ctrl+Z brings all of them back (grid and saved table), Cmd/Ctrl+Shift+Z cuts them again | inline, popup | `cut-undo` | | |
+| F3 | Cut, then reload: the cut cells are still empty; undo, save, reload: they are back | inline, popup | `cut-undo` (+ `spreadsheetSoakAfterReload`) | | |
+| F4 | Cell padding is roomier (5 px above and below, 9 px at the sides), in the page, the popup and the view page; text never touches the grid lines | inline, popup, view | `padding-fit` | | |
+| F5 | A column nobody sized grows to fit its longest value (up to 360 px) when the table is opened; a column you sized is left alone; the table does not shrink | inline, popup, view | `padding-fit` | | |
+
+## G. Soak coverage (`spreadsheet-soak.js`, run `spreadsheetSoak({ seed: 1, sessions: 1 })`)
+
+Rows of A to F that a scenario exercises. The rest need a real mouse, the clipboard or a printer and stay manual.
+
+| Items | Scenarios |
+|-------|-----------|
+| A3, A8, A14, E1, E2 (typing, double-click, Enter, Tab, nothing lost) | `back-to-back`, `spaced-out`, `enter-semantics`, `enter-last-row`, `tab-then-type`, `sink-text`, `type-then-resize`, `popup-direct-typing` |
+| A9, B8 (fill handle, formulas, `$`) | `formulas-and-structure`, `drag-select` |
+| A11, A4, A5, B1, B2 (row and column insert and delete, undo) | `multi-delete`, `formulas-and-structure`, `undo-everything` |
+| A12, E4 (copy, paste, paste transposed, from another application) | `copy-paste`, `paste-external`, `copy-table-format`, `paste-range-format` |
+| A13 (sizes, autofit, survive save) | `type-then-resize`, `undo-everything` |
+| A15 (autosave and save) | `autosave-in-grid` |
+| A17, C4 to C9, C11, E5 to E7 (inserts, well plates, wide plate) | `plate-day`, `wide-plate`, `back-to-back` |
+| A21, A24 (jiggle, speed, memory) | every run (timings, memory, scroll jiggles in the report) |
+| B5, F1 to F3 (Delete, F2, Escape, Cmd+X) | `enter-semantics`, `sink-text`, `cut-undo` |
+| B7, C2, C3 (formatting survives, vertical alignment) | `format-and-popup`, `format-after-typing`, `colour-live`, `default-border-apply` |
+| undo and redo of everything | `undo-redo`, `undo-everything`, `cut-undo` |
+| find and replace in grids | `find-in-grid` |
+| F4, F5 (padding, fit) | `padding-fit` |
+| right-click menus (A3, M-items) | every step (menu checks in the report) |
