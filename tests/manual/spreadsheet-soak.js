@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'drag-select', 'formulas-and-structure', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'drag-select', 'formulas-and-structure', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -71,7 +71,8 @@ async function spreadsheetSoak(options = {}) {
   const timings = {};
   const samples = [];
   const counts = {};
-  const note = name => { counts[name] = (counts[name] || 0) + 1; };
+  const opLog = [];
+  const note = name => { counts[name] = (counts[name] || 0) + 1; opLog.push(name); if (opLog.length > 60) opLog.shift(); };
   const t0 = performance.now();
   window.spreadsheetSoakLive = { dataLoss, failures, sizes, menus };
   const baselineTables = api.snapshot(false).length;
@@ -819,7 +820,9 @@ async function spreadsheetSoak(options = {}) {
     const exact = (x, y) => x.length === y.length && x.every((row, r) => row.length === y[r].length && row.every((v, c) => String(v ?? '').startsWith('=') || v === y[r][c]));
     const without = (a1, b1) => (byRow ? model.grid.filter((_, i) => i < a1 || i > b1) : model.grid.map(row => row.filter((_, i) => i < a1 || i > b1)));
     const normalizedNow = nowGrid.map(row => Array.from(row, v => v ?? ''));
-    let matched = null;
+    // The block that was selected is tried first: formula cells match anything, and on a mostly empty table
+    // an earlier block can look the same, which used to make the record keep a formula that was really deleted.
+    let matched = exact(without(first, lastIdx), normalizedNow) ? [first, lastIdx] : null;
     for (let a1 = 0; a1 < size2 && !matched; a1++) for (let b1 = a1; b1 < size2 && !matched; b1++) {
       if (exact(without(a1, b1), normalizedNow)) matched = [a1, b1];
     }
@@ -1518,6 +1521,80 @@ async function spreadsheetSoak(options = {}) {
       verticalAlignCheck(uid, 'columns added by the grey cells');
       await consistency('filler-click: inline, popup and stored HTML agree', true);
     },
+    // Columns added by pressing a grey cell stay while the table is being worked in and go away once, when the next press
+    // lands outside the table (inline) or when Update is pressed (popup); text typed in them keeps them. Clicking back
+    // and forth between cells must not add or take away columns (it looked jittery when it did).
+    async 'filler-revert'() {
+      const uid = await createTable('filler revert', { rows: 4, cols: 3 });
+      if (!uid) return;
+      const model = () => models.get(uid);
+      const colsOf = root => root.querySelectorAll('.jss_worksheet thead td[data-x]').length;
+      const waitFiller = async root => {
+        let filler = null;
+        for (let i = 0; i < 40 && !(filler = root.querySelector('.elabftw-spreadsheet-filler .fc[data-i][data-r]') ? root.querySelector('.elabftw-spreadsheet-filler') : null); i++) await sleep(100);
+        return filler;
+      };
+      const pressGrey = async (root, which) => {
+        const filler = await waitFiller(root);
+        if (!filler) return null;
+        const cells = [...filler.querySelectorAll('.fc[data-i][data-r]')];
+        const cell = cells[Math.min(which, cells.length - 1)];
+        cell.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window, button: 0, buttons: 1 }));
+        return { i: Number(cell.dataset.i), r: Number(cell.dataset.r) };
+      };
+      // inline
+      let root = await selectCell(uid, 0, 0);
+      const base = colsOf(root);
+      const inline = await pressGrey(root, 1);
+      if (!inline) { note('filler-no-room'); return; }
+      await sleep(1000);
+      root = api.overlayElement(uid) || root;
+      const grown = base + inline.i + 1;
+      if (colsOf(root) !== grown) dataLoss.push({ context, table: model().label, where: 'inline', problem: `a grey cell pressed in the text should leave ${grown} columns, there are ${colsOf(root)}` });
+      for (let i = 0; i < 3; i++) { await selectCell(uid, i % 2, i); await sleep(500); }
+      root = api.overlayElement(uid) || root;
+      if (colsOf(root) !== grown) dataLoss.push({ context, table: model().label, where: 'inline', problem: `clicking between cells should leave the ${grown} columns alone, there are ${colsOf(root)}` });
+      // a press outside the table takes the empty columns off, once
+      (document.querySelector('#experimentsFoldersSidebar') || document.body).dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window, button: 0, buttons: 1 }));
+      await sleep(800);
+      root = api.overlayElement(uid) || root;
+      const afterOutside = root ? colsOf(root) : base;
+      if (afterOutside !== base) dataLoss.push({ context, table: model().label, where: 'inline', problem: `empty grey columns should go away when a press lands outside the table (${base} expected), there are ${afterOutside}` });
+      note('filler-revert-inline');
+      // popup
+      const dialog = await openPopupFor(uid);
+      const popupBase = colsOf(dialog);
+      const first = await pressGrey(dialog, 1);
+      if (!first) { note('filler-no-room'); } else {
+        await sleep(1000);
+        const popupGrown = popupBase + first.i + 1;
+        if (colsOf(dialog) !== popupGrown) dataLoss.push({ context, table: model().label, where: 'popup', problem: `a grey cell pressed in the popup should leave ${popupGrown} columns, there are ${colsOf(dialog)}` });
+        for (let i = 0; i < 3; i++) { press(dialog.querySelector(`.jss_worksheet td[data-x="${i}"][data-y="${i % 2}"]`)); await sleep(500); }
+        if (colsOf(dialog) !== popupGrown) dataLoss.push({ context, table: model().label, where: 'popup', problem: `clicking between cells in the popup should leave the ${popupGrown} columns alone, there are ${colsOf(dialog)}` });
+        note('filler-revert-popup');
+        // text typed in a grey column keeps it, the empty ones after it are left out by Update
+        // the grey cells now start after the columns already added, so the typed column is counted from there
+        const colsBeforeSecond = colsOf(dialog);
+        const second = await pressGrey(dialog, 0);
+        await sleep(500);
+        (document.activeElement || dialog).dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', bubbles: true, cancelable: true }));
+        let box = null;
+        for (let i = 0; i < 40 && !(box = visibleRescue()); i++) await sleep(25);
+        if (!box) { fail('typing over a grey cell in the popup did not open the editor', { table: model().label }); } else {
+          box.value = 'zz'; box.dispatchEvent(new Event('input', { bubbles: true }));
+          box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+          await sleep(1000);
+          const want = colsBeforeSecond + second.i + 1;
+          model().grid.forEach(row => { while (row.length < want) row.push(''); });
+          model().grid[second.r][want - 1] = 'zz';
+          note('filler-keep-popup');
+        }
+      }
+      const update = [...dialog.querySelectorAll('button')].find(b => b.textContent.trim() === 'Update');
+      if (!update) { fail('the popup has no Update button'); } else { update.click(); await waitPopupGone(); }
+      await verify('filler-revert: after Update', true);
+      await consistency('filler-revert: inline, popup and stored HTML agree', true);
+    },
     // Edits made inside a grid are saved without having to leave it.
     async 'autosave-in-grid'() {
       const uid = await createTable('autosave table', { rows: 4, cols: 3 });
@@ -1984,7 +2061,7 @@ async function spreadsheetSoak(options = {}) {
           if (typeof value === 'string' && value.startsWith('=')) {
             const have = String(grid[r]?.[c] ?? '');
             if (have.startsWith('=')) model().grid[r][c] = have; // references were rewritten: accepted
-            else dataLoss.push({ context: label, table: model().label, cell: cellName(r, c), problem: `the formula ${value} in ${cellName(r, c)} is gone (the cell holds ${JSON.stringify(have)})` });
+            else dataLoss.push({ context: label, table: model().label, cell: cellName(r, c), problem: `the formula ${value} in ${cellName(r, c)} is gone (the cell holds ${JSON.stringify(have)})`, expectedGrid: JSON.stringify(model().grid), actualGrid: JSON.stringify(grid), recentOps: opLog.slice(-14).join(' > '), live: (() => { try { const o = api.overlayElement(uid); const w = o && o.querySelector('.jss_container')?.jspreadsheet; return w ? JSON.stringify(w.getData()) : 'no live grid'; } catch (e) { return 'err ' + e.message; } })(), stored: (() => { const t = tableEl(uid); return t ? `${t.rows.length}x${t.rows[0]?.cells.length}` : 'no table'; })() });
           }
         }));
       };
