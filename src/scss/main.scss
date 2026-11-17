@@ -9857,3 +9857,26 @@ button.wp-legend-item {
 .folder-path-bar .folder-path-menu .fa-folder {
   color: #3d9be9;
 }
+
+// The Calendars page's month and year jump (CalendarPage.svelte): the two selects fit their content ("September", a four-digit year
+// and the arrow) instead of shrinking inside the flex popover, which grows to hold them and wraps on a narrow window.
+.cal-jump-panel {
+  flex-wrap: wrap;
+  max-width: calc(100vw - 2rem);
+  width: max-content;
+
+  select.form-control {
+    flex: 0 0 auto;
+    height: 2rem;
+    line-height: 1.2;
+    min-width: 6.5rem;
+    padding-bottom: 0;
+    padding-right: 1.75rem;
+    padding-top: 0;
+    width: auto;
+  }
+
+  select.form-control:first-child {
+    min-width: 9.5rem;
+  }
+}
