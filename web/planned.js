@@ -102,6 +102,14 @@
       box.append(b);
     });
     nav.insertAdjacentElement('beforebegin', box);
+    // a label of any text, on any of the label sizes that exist
+    const generic = element('button', 'btn btn-outline-secondary btn-sm ml-2 mt-2', 'Print a label');
+    generic.type = 'button';
+    generic.title = 'Print a label with the text you type, on one of the label sizes';
+    generic.addEventListener('click', function () {
+      window.dispatchEvent(new CustomEvent('registry:print-label', { detail: { generic: true, title: '' } }));
+    });
+    box.insertAdjacentElement('afterend', generic);
     // in My entries: the toggle In database filters the entries by whether they are in the lab Database
     if (mine) {
       const toggle = element('div', 'btn-group btn-group-sm ml-2 mt-2 id-filter');
@@ -1081,7 +1089,7 @@
     const box = element('div', 'planned-dialog');
     box.setAttribute('role', 'dialog');
     box.setAttribute('aria-modal', 'true');
-    box.append(element('h5', '', 'Print a label for ' + entry.title));
+    box.append(element('h5', '', entry.generic ? 'Print a label' : 'Print a label for ' + entry.title));
     const label = element('label', 'd-block');
     label.append(element('span', 'd-block small text-muted', 'Copies'));
     const copies = element('input', 'form-control form-control-sm');
@@ -1097,10 +1105,10 @@
     // margins (mm) dragged in the preview for this label; null = those of the format
     let edited = null;
     const customLabel = element('label', 'd-block');
-    customLabel.append(element('span', 'd-block small text-muted', 'Extra text on the label (optional, one line each)'));
+    customLabel.append(element('span', 'd-block small text-muted', entry.generic ? 'Text of the label (one line each, up to 8)' : 'Extra text on the label (optional, one line each)'));
     const custom = element('textarea', 'form-control form-control-sm');
-    custom.rows = 3;
-    custom.maxLength = 240;
+    custom.rows = entry.generic ? 5 : 3;
+    custom.maxLength = entry.generic ? 640 : 240;
     customLabel.append(custom);
     box.append(customLabel);
     // the format of the label: the sizes the admins have made
@@ -1109,6 +1117,22 @@
     const format = element('select', 'form-control form-control-sm');
     formatLabel.append(format);
     box.insertBefore(formatLabel, label);
+    // a generic label: the size of the text can be chosen (mm); it is made smaller by itself when the lines do not fit
+    const fontSize = element('input', 'form-control form-control-sm');
+    fontSize.type = 'number';
+    fontSize.min = '1';
+    fontSize.max = '20';
+    fontSize.step = '0.1';
+    fontSize.placeholder = 'of the format';
+    if (entry.generic) {
+      const fontLabel = element('label', 'd-block');
+      fontLabel.append(element('span', 'd-block small text-muted', 'Text size (mm, empty = that of the format)'), fontSize);
+      box.insertBefore(fontLabel, label);
+      fontSize.addEventListener('input', function () {
+        window.clearTimeout(fontSize.timer);
+        fontSize.timer = window.setTimeout(showPreview, 400);
+      });
+    }
     fetch('label-print.php', { credentials: 'same-origin' }).then(function (response) {
       return response.json();
     }).then(function (body) {
@@ -1131,7 +1155,7 @@
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() },
-        body: JSON.stringify(Object.assign({ id: entry.id, copies: Number(copies.value) || 1, custom: custom.value, format: format.value === '' ? -1 : Number(format.value), margins: edited || undefined }, extra || {})),
+        body: JSON.stringify(Object.assign({ id: entry.id, generic: entry.generic ? true : undefined, font_mm: entry.generic && fontSize.value !== '' ? Number(fontSize.value) : undefined, copies: Number(copies.value) || 1, custom: custom.value, format: format.value === '' ? -1 : Number(format.value), margins: edited || undefined }, extra || {})),
       }).then(async function (response) {
         const body = await response.json();
         if (!response.ok) {

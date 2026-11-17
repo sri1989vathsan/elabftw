@@ -200,8 +200,10 @@ try {
     // whoever can read the entry can print its label
     // an admin can print a sample label with the settings of the format being edited (label-formats.js): no entry is needed
     $sample = !empty($payload['sample']) && $isAdmin;
-    $data = $sample
-        ? array('custom_id' => '1374', 'personal_id' => null, 'title' => 'Title of the entry', 'category' => 0, 'metadata' => '', 'date' => '')
+    // a generic label has no entry: it holds the text typed in the dialog only, on the format that is chosen
+    $generic = !empty($payload['generic']);
+    $data = $sample || $generic
+        ? array('custom_id' => $generic ? null : '1374', 'personal_id' => null, 'title' => $generic ? '' : 'Title of the entry', 'category' => 0, 'metadata' => '', 'date' => '')
         : new Inventory($App->Users, $id)->readOne();
     $req = $pdo->prepare('SELECT title FROM inventory_categories WHERE id = :id');
     $req->bindValue(':id', (int) ($data['category'] ?? 0), PDO::PARAM_INT);
@@ -255,6 +257,13 @@ try {
         $sampleLines = array_values(array_filter(array_map('trim', explode("\n", (string) ($given['lines'] ?? ''))), static fn(string $l): bool => $l !== ''));
         $design['lines'] = $sampleLines === array() ? array('{id_line}', '{title}') : array_slice($sampleLines, 0, 8);
     }
+    if ($generic) {
+        $design['lines'] = array();
+        $design['qr'] = false;
+        if (isset($payload['font_mm']) && is_numeric($payload['font_mm'])) {
+            $design['font_mm'] = max(1.0, min(20.0, (float) $payload['font_mm']));
+        }
+    }
     // margins dragged in the print dialog count for this label only (mm); the format keeps its own until an admin saves them
     foreach (array('left', 'top', 'right', 'bottom') as $side) {
         if (isset($payload['margins'][$side]) && is_numeric($payload['margins'][$side])) {
@@ -276,8 +285,8 @@ try {
     }
 
     // the text typed in the print dialog goes below: one line each, a few at most
-    foreach (array_slice(explode("\n", (string) ($payload['custom'] ?? '')), 0, 4) as $custom) {
-        $custom = trim(mb_substr($custom, 0, 60));
+    foreach (array_slice(explode("\n", (string) ($payload['custom'] ?? '')), 0, $generic ? 8 : 4) as $custom) {
+        $custom = trim(mb_substr($custom, 0, $generic ? 80 : 60));
         if ($custom !== '') {
             $lines[] = $custom;
         }
@@ -391,6 +400,9 @@ try {
 
     if (!empty($payload['dry'])) {
         respond(200, array('zpl' => $label, 'elements' => $elements, 'margins' => array('left' => $left, 'top' => $top, 'right' => $right, 'bottom' => $bottom), 'width' => $width, 'height' => $height, 'rotated' => $rotated, 'lines' => $lines, 'width_mm' => $design['width_mm'], 'height_mm' => $design['height_mm']));
+    }
+    if ($generic && $lines === array() && empty($payload['test'])) {
+        respond(400, array('error' => 'Type the text of the label first.'));
     }
     $host = (string) $settings['printer_host'];
     if ($host === '') {
