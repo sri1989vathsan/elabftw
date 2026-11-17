@@ -6603,6 +6603,20 @@ export function openSpreadsheetModal(
     ui.sheetHost.addEventListener('mousedown', onRowResizePointerDown, true);
     document.addEventListener('mouseup', onRowResizePointerUp, true);
     ui.sheetHost.addEventListener('copy', onSpreadsheetCopy, true);
+    ui.sheetHost.addEventListener('cut', event => {
+      const target = event.target;
+      if ((target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)
+        && !target.classList.contains('jss_textarea')) return;
+      if (rescueInputEl && !rescueInputEl.hidden) return;
+      if (selectedRange === null) getSelectedRange();
+      if (selectedRange === null) return;
+      const cutRange = [...selectedRange] as CellRange;
+      cutCopy = { done: false };
+      onSpreadsheetCopy(event);
+      const done = cutCopy.done;
+      cutCopy = null;
+      if (done) clearSelectedCells(cutRange);
+    }, true);
     // Ctrl/Cmd+C right after typing in a cell: the text box has nothing selected, so the browser would copy nothing.
     // Finish the edit and copy the cell, as a spreadsheet does. With some text selected in the box, that text is copied.
     listenWhilePopupOpen(document, 'copy', event => {
@@ -8746,7 +8760,7 @@ export function buildReadOnlySpreadsheetHost(
   // same jspreadsheet default this was originally fixed for -- pasting the
   // jss-cell-clip wrapper markup as literal text instead of the cells'
   // actual values.
-  sheetContainer.addEventListener('copy', event => {
+  const onInlineCopy = (event: ClipboardEvent): void => {
     if (!event.clipboardData) return;
     const range = getMountedWorksheet(sheetContainer)?.getSelection?.();
     if (!Array.isArray(range) || range.length < 4 || !range.slice(0, 4).every(value => Number.isInteger(value))) {
@@ -8787,7 +8801,26 @@ export function buildReadOnlySpreadsheetHost(
     // With the cells' formatting, like a selection copied from the full editor.
     event.clipboardData.setData('text/html', `<table><tbody>${htmlRows.join('')}</tbody></table>`);
     if (cutCopy) cutCopy.done = true;
-  }, true);
+  };
+  sheetContainer.addEventListener('copy', onInlineCopy, true);
+  // A cut that arrives as its own event (the browser's Edit menu, or a cut with the grid focused): same as Ctrl/Cmd+X
+  if (editable) {
+    sheetContainer.addEventListener('cut', event => {
+      const live = getMountedWorksheet(sheetContainer)?.getSelection?.();
+      const range = Array.isArray(live) && live.length >= 4 && live.slice(0, 4).every(Number.isInteger)
+        ? live.slice(0, 4) as CellRange
+        : lastKnownSelection;
+      if (!range || (rescueInputEl && !rescueInputEl.hidden)) return;
+      const target = event.target;
+      if ((target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)
+        && !target.classList.contains('jss_textarea')) return;
+      cutCopy = { done: false };
+      onInlineCopy(event);
+      const done = cutCopy.done;
+      cutCopy = null;
+      if (done) clearSelectedCells(range);
+    }, true);
+  }
   // Mirrors openSpreadsheetModal's own fillDragSource -- see its comment.
   let fillDragSource: { col: number; row: number } | null = null;
   let onCellDoubleClick: ((event: MouseEvent) => void) | null = null;

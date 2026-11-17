@@ -325,7 +325,9 @@ async function spreadsheetSoak(options = {}) {
   async function cutKey(uid) {
     const root = api.overlayElement(uid) || await live(uid);
     const target = document.activeElement && root.contains(document.activeElement) ? document.activeElement : root.querySelector('.jss_textarea');
-    target.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', code: 'KeyX', ctrlKey: true, bubbles: true, cancelable: true }));
+    // The Ctrl+X key itself needs a real key press (the browser only lets a page copy then), so the test sends the
+    // cut event that the key press, the Edit menu and the context menu all lead to.
+    target.dispatchEvent(new ClipboardEvent('cut', { clipboardData: new DataTransfer(), bubbles: true, cancelable: true }));
     await sleep(380);
   }
   async function boldCell(uid, r, c, leaveTypingOpen) {
@@ -2093,7 +2095,7 @@ async function spreadsheetSoak(options = {}) {
       const uid = await createTable('cut table', { rows: 6, cols: 5 });
       if (!uid) return;
       const model = () => models.get(uid);
-      for (let r = 0; r < 6; r++) for (let c = 0; c < 5; c++) await typeInto(uid, r, c, `x${r}${c}`, 'Tab');
+      for (let r = 0; r < 6; r++) for (let c = 0; c < 5; c++) await typeInto(uid, r, c, `x${r}${c}`, c === 4 ? 'Enter' : 'Tab');
       await verify('cut-undo: filled', true);
       const cutAndCheck = async (label, cells) => {
         const before = cells.map(([r, c]) => model().grid[r][c]);
