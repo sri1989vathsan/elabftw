@@ -9,30 +9,47 @@
 <div class='side-panel' id='foldersPanel' hidden>
   <div
     id='experimentsFoldersSidebar'
-    class='p-3'
+    class='py-3 pr-2'
     data-favorite-folder-ids='{{ folderBookmarkIds|join(',') }}'
     data-current-folder-id='{{ currentFolderId }}'
     data-current-user-id='{{ App.Users.userData.userid }}'
   >
-    <div class='d-flex align-items-center justify-content-between mb-3'>
-      <h3 class='mb-0'><i class='fas fa-folder-tree mr-2'></i>{{ 'Folders'|trans }}{{ guide.info('guide-folders', 'Folders') }}</h3>
-      <div class='d-flex align-items-center'>
-        <button type='button' data-action='refresh-folders' class='btn btn-sm' title='{{ 'Refresh'|trans }}' aria-label='{{ 'Refresh'|trans }}'><i class='fas fa-arrows-rotate' aria-hidden='true'></i></button>
-        <button type='button' data-action='toggle-sidepanel' data-target='folders' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn btn-sm'>
-          <i class='fas fa-xmark fa-2x'></i>
-        </button>
+    {# The explorer bar: favourites, the three views (tree, list with preview, cards), options, close. Kept to one slim row. #}
+    <div class='folder-explorer-bar'>
+      <button type='button' class='folder-bar-btn' data-action='toggle-folder-popover' data-popover='folderFavoritesMenu' aria-haspopup='true' aria-expanded='false' title='{{ 'Favourites'|trans }}' aria-label='{{ 'Favourites'|trans }}'><i class='fas fa-star fa-fw' aria-hidden='true'></i></button>
+      {# Tree (nested, as before), list (one level with a preview of the picked file) or cards; the choice is remembered. #}
+      <div class='folder-view-switch' role='group' aria-label='{{ 'Folder view'|trans }}'>
+        <button type='button' class='folder-bar-btn active' data-action='select-folder-view' data-view='tree' title='{{ 'Tree view'|trans }}' aria-label='{{ 'Tree view'|trans }}' aria-pressed='true'><i class='fas fa-sitemap fa-fw' aria-hidden='true'></i></button>
+        <button type='button' class='folder-bar-btn' data-action='select-folder-view' data-view='list' title='{{ 'List view'|trans }}' aria-label='{{ 'List view'|trans }}' aria-pressed='false'><i class='fas fa-list fa-fw' aria-hidden='true'></i></button>
+        <button type='button' class='folder-bar-btn' data-action='select-folder-view' data-view='cards' title='{{ 'Cards view'|trans }}' aria-label='{{ 'Cards view'|trans }}' aria-pressed='false'><i class='fas fa-rectangle-list fa-fw' aria-hidden='true'></i></button>
+      </div>
+      <span class='folder-bar-spacer'></span>
+      <button type='button' class='folder-bar-btn' data-action='toggle-folder-popover' data-popover='folderOptionsMenu' aria-haspopup='true' aria-expanded='false' title='{{ 'Options'|trans }}' aria-label='{{ 'Options'|trans }}'><i class='fas fa-ellipsis fa-fw' aria-hidden='true'></i></button>
+      <button type='button' class='folder-bar-btn' data-action='toggle-sidepanel' data-target='folders' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}'><i class='fas fa-xmark fa-fw' aria-hidden='true'></i></button>
+      {# Filled with the bookmarked folders when opened. #}
+      <div id='folderFavoritesMenu' class='folder-popover' role='menu' aria-label='{{ 'Favourites'|trans }}' hidden></div>
+      <div id='folderOptionsMenu' class='folder-popover' aria-label='{{ 'Options'|trans }}' hidden>
+        <button type='button' class='folder-popover-item' role='switch' aria-checked='true' data-action='folder-pref' data-folder-pref='favorites'><i class='fas fa-star fa-fw' aria-hidden='true'></i><span class='folder-popover-text'>{{ 'Favourites'|trans }}</span><span class='folder-switch' aria-hidden='true'></span></button>
+        <button type='button' class='folder-popover-item' role='switch' aria-checked='true' data-action='folder-pref' data-folder-pref='files'><i class='fas fa-flask fa-fw' aria-hidden='true'></i><span class='folder-popover-text'>{{ 'Files'|trans }}</span><span class='folder-switch' aria-hidden='true'></span></button>
+        <button type='button' class='folder-popover-item' role='switch' aria-checked='true' data-action='folder-pref' data-folder-pref='counts'><i class='fas fa-hashtag fa-fw' aria-hidden='true'></i><span class='folder-popover-text'>{{ 'Counts'|trans }}</span><span class='folder-switch' aria-hidden='true'></span></button>
+        <button type='button' class='folder-popover-item' data-action='refresh-folders'><i class='fas fa-arrows-rotate fa-fw' aria-hidden='true'></i><span class='folder-popover-text'>{{ 'Refresh'|trans }}</span></button>
+        <div class='folder-popover-item'>{{ guide.info('guide-folders', 'Folders') }}{{ guide.info('guide-folder-views', 'Folder views') }}</div>
       </div>
     </div>
 
-    <div class='mb-2' data-active-entity-type='{{ folderEntityType }}'>
-      <select id='folderEntityTypeSelect' class='form-control form-control-sm' aria-label='{{ 'Folder content type'|trans }}'>
+    {# Experiments / Resources / All. The two selects below are kept out of sight: they still carry the choice for the page's own handling. #}
+    <div class='folder-type-switch' role='group' aria-label='{{ 'Folder content type'|trans }}'>
+      <button type='button' data-action='select-folder-type' data-type='experiments' title='{{ 'Experiments'|trans }}' aria-pressed='{{ folderEntityType == 'experiments' ? 'true' : 'false' }}' class='{{ folderEntityType == 'experiments' ? 'active' }}'>{{ 'Experiments'|trans|slice(0, 3) }}</button>
+      <button type='button' data-action='select-folder-type' data-type='items' title='{{ 'Resources'|trans }}' aria-pressed='{{ folderEntityType == 'items' ? 'true' : 'false' }}' class='{{ folderEntityType == 'items' ? 'active' }}'>{{ 'Resources'|trans|slice(0, 3) }}</button>
+      <button type='button' data-action='select-folder-type' data-type='all' title='{{ 'Experiments'|trans }} + {{ 'Resources'|trans }}' aria-pressed='false'>{{ 'All'|trans }}</button>
+    </div>
+
+    <div hidden data-active-entity-type='{{ folderEntityType }}'>
+      <select id='folderEntityTypeSelect' aria-label='{{ 'Folder content type'|trans }}'>
         <option value='experiments' {{ folderEntityType == 'experiments' ? 'selected' }}>{{ 'Experiments'|trans }}</option>
         <option value='items' {{ folderEntityType == 'items' ? 'selected' }}>{{ 'Resources'|trans }}</option>
       </select>
-    </div>
-
-    <div class='mb-3'>
-      <select id='folderQuickLinkSelect' class='form-control form-control-sm' aria-label='{{ 'Quick folder link'|trans }}'>
+      <select id='folderQuickLinkSelect' aria-label='{{ 'Quick folder link'|trans }}'>
         <option
           value='all'
           data-experiments-href='experiments.php'
@@ -50,34 +67,26 @@
       </select>
     </div>
 
-    <ul class='nav nav-tabs nav-fill mb-3 folder-scope-tabs' role='tablist' aria-label='{{ 'Folder visibility'|trans }}'>
+    {# The two quick links of the old dropdown, as rows. Unfiled also takes experiments and resources dropped on it. #}
+    <div class='mb-2'>
+      <a class='folder-quick-row' data-folder-quick='all' data-drop-folder='root' href='{{ folderEntityType == 'items' ? 'database.php' : 'experiments.php' }}'><i class='fas fa-folder-tree fa-fw' aria-hidden='true'></i><span>{{ 'All'|trans }}</span></a>
+      <a class='folder-quick-row' data-folder-quick='unfiled' data-drop-folder='unfiled' href='{{ folderEntityType == 'items' ? 'database.php' : 'experiments.php' }}?folder=0'><i class='fas fa-inbox fa-fw' aria-hidden='true'></i><span>{{ 'Unfiled'|trans }}</span></a>
+    </div>
+
+    <ul class='nav nav-tabs nav-fill mb-2 folder-scope-tabs' role='tablist' aria-label='{{ 'Folder visibility'|trans }}'>
       <li class='nav-item'>
-        <button type='button' class='nav-link active w-100' data-action='select-folder-scope' data-scope='mine' role='tab' aria-selected='true'>
-          <i class='fas fa-user fa-fw mr-1'></i>{{ 'My folders'|trans }}
+        <button type='button' class='nav-link active w-100' data-action='select-folder-scope' data-scope='mine' role='tab' aria-selected='true' title='{{ 'My folders'|trans }}'>
+          <i class='fas fa-user fa-fw' aria-hidden='true'></i><span class='sr-only'>{{ 'My folders'|trans }}</span>
         </button>
       </li>
       <li class='nav-item'>
-        <button type='button' class='nav-link w-100' data-action='select-folder-scope' data-scope='all' role='tab' aria-selected='false'>
-          <i class='fas fa-users fa-fw mr-1'></i>{{ 'All folders'|trans }}
+        <button type='button' class='nav-link w-100' data-action='select-folder-scope' data-scope='all' role='tab' aria-selected='false' title='{{ 'All folders'|trans }}'>
+          <i class='fas fa-users fa-fw' aria-hidden='true'></i><span class='sr-only'>{{ 'All folders'|trans }}</span>
         </button>
       </li>
     </ul>
 
     <div id='experimentsFoldersContent'>
-      <div class='d-flex align-items-center justify-content-between mb-2'>
-        {# The title is rewritten when the view changes, so its "i" (the Folder views card) sits beside it, not inside it. #}
-        <div class='d-flex align-items-center'>
-          <h4 class='h6 mb-0' id='folderViewTitle'>{{ 'Folder tree'|trans }}</h4>
-          {{ guide.info('guide-folder-views', 'Folder views') }}
-        </div>
-        {# Tree (nested, as before), list (every folder with its path) or details (a sortable table); the choice is remembered. #}
-        <div class='btn-group btn-group-sm folder-view-switch' role='group' aria-label='{{ 'Folder view'|trans }}'>
-          <button type='button' class='btn btn-outline-secondary active' data-action='select-folder-view' data-view='tree' title='{{ 'Tree view'|trans }}' aria-label='{{ 'Tree view'|trans }}' aria-pressed='true'><i class='fas fa-sitemap fa-fw' aria-hidden='true'></i></button>
-          <button type='button' class='btn btn-outline-secondary' data-action='select-folder-view' data-view='list' title='{{ 'List view'|trans }}' aria-label='{{ 'List view'|trans }}' aria-pressed='false'><i class='fas fa-list fa-fw' aria-hidden='true'></i></button>
-          <button type='button' class='btn btn-outline-secondary' data-action='select-folder-view' data-view='details' title='{{ 'Details view'|trans }}' aria-label='{{ 'Details view'|trans }}' aria-pressed='false'><i class='fas fa-table-list fa-fw' aria-hidden='true'></i></button>
-        </div>
-      </div>
-
       {# Render exactly one branch for each root folder. Children only exist inside their parent branch. #}
       {% macro renderFolderBranch(folders, folder, depth, currentFolderId, folderBookmarkIds, folderPage, folderEntityType) %}
         <div

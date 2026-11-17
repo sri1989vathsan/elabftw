@@ -1792,7 +1792,7 @@ tr:first-child td {
     padding-left: 0.35rem;
   }
 
-  // flat views of the folders (folder-views.ts): list and details
+  // flat views of the folders (folder-views.ts): list and cards
   .folder-flat-body {
     max-height: min(46vh, 34rem);
     min-height: 3rem;
@@ -1829,37 +1829,6 @@ tr:first-child td {
     min-width: 0;
   }
 
-  // the arrow that shows the experiments and resources filed in a folder
-  .folder-entries-toggle,
-  .folder-entries-toggle-placeholder {
-    flex: 0 0 1.25rem;
-    width: 1.25rem;
-  }
-
-  // the entries under a folder's row, one per line, indented past the arrow
-  .folder-entries {
-    grid-column: 1 / -1;
-    margin: 0.2rem 0 0.2rem 1.25rem;
-    max-height: 14rem;
-    overflow-y: auto;
-  }
-
-  .folder-entry {
-    display: block;
-    overflow: hidden;
-    padding: 0.1rem 0.25rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    &:hover {
-      background: rgba(127, 127, 127, 0.12);
-    }
-  }
-
-  .folder-entry-note {
-    padding: 0.1rem 0.25rem;
-  }
-
   .folder-flat-link {
     display: block;
     overflow: hidden;
@@ -1867,190 +1836,7 @@ tr:first-child td {
     white-space: nowrap;
   }
 
-  // details view: a table of folders, one row each, with sortable column headings. Columns appear as the panel allows:
-  // name, experiments, resources, last modified and the buttons always; the path from 26rem, the description from 40rem
-  // (below that the path and description sit under the name).
-  .folder-flat-body {
-    container-type: inline-size;
-  }
-
-  // four buttons of 1.5rem (star, notes, three dots, step in), always the same slots so the stars line up
-  $folder-actions-column: 6rem;
-
-  .folder-column-heads,
-  .folder-details-card {
-    column-gap: 0.25rem;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 1.6rem 1.6rem $folder-actions-column;
-  }
-
-  .folder-col-wide,
-  .folder-col-wider {
-    display: none;
-  }
-
-  @container (min-width: 26rem) {
-    .folder-column-heads,
-    .folder-details-card {
-      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 2.2rem 2.2rem 3.9rem $folder-actions-column;
-    }
-
-    .folder-col-wide {
-      display: block;
-    }
-
-    .folder-col-narrow-only {
-      display: none;
-    }
-  }
-
-  @container (min-width: 40rem) {
-    .folder-column-heads,
-    .folder-details-card {
-      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) 2.2rem 2.2rem 3.9rem $folder-actions-column;
-    }
-
-    .folder-col-wider {
-      display: block;
-    }
-  }
-
-  // a very narrow panel (under 18rem): the fixed columns would leave the name no room at all, so the name takes a line of its
-  // own and the counts and buttons sit on the line under it
-  @container (max-width: 18rem) {
-    .folder-column-heads,
-    .folder-details-card {
-      grid-template-columns: 1.6rem 1.6rem minmax(0, 1fr);
-    }
-
-    .folder-column-head-name,
-    .folder-details-text {
-      grid-column: 1 / -1;
-    }
-
-    .folder-details-card > .folder-actions,
-    .folder-column-heads > span:last-child {
-      justify-self: end;
-    }
-  }
-
-  .folder-column-heads {
-    align-items: center;
-    border-bottom: 2px solid var(--chrome-muted);
-    margin-bottom: 0.15rem;
-    padding: 0 0.35rem 0.3rem 0.5rem;
-  }
-
-  .folder-column-head-name {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.1rem 0.25rem;
-  }
-
-  .folder-sort-chip {
-    background: transparent;
-    border: 0;
-    border-radius: 4px;
-    color: var(--chrome-muted);
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    line-height: 1.2;
-    padding: 0.15rem 0.3rem;
-    text-transform: uppercase;
-
-    &:hover {
-      background: rgba(127, 127, 127, 0.18);
-      color: var(--chrome-fg);
-    }
-
-    &.active {
-      color: var(--chrome-fg);
-    }
-  }
-
-  .folder-col-description > .folder-sort-label {
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    padding: 0 0.3rem;
-    text-transform: uppercase;
-  }
-
-  .folder-details-card {
-    align-items: center;
-    border-bottom: 1px solid var(--chrome-muted);
-    border-left: 3px solid transparent;
-    padding: 0.4rem 0.35rem 0.4rem 0.15rem;
-
-    &:hover {
-      background: rgba(127, 127, 127, 0.12);
-    }
-
-    &.is-active {
-      border-left-color: var(--mediumstrong);
-    }
-
-    // the buttons sit at the far right, in a column of their own
-    > .folder-actions {
-      justify-content: flex-end;
-    }
-  }
-
-  .folder-details-text {
-    font-weight: 600;
-    min-width: 0;
-  }
-
-  .folder-count-cell,
-  .folder-modified-cell {
-    font-variant-numeric: tabular-nums;
-    text-align: center;
-
-    &.is-zero {
-      color: var(--chrome-muted);
-    }
-  }
-
-  .folder-modified-cell {
-    font-size: 0.72rem;
-    white-space: nowrap;
-  }
-
-  .folder-col-path,
-  .folder-col-description {
-    color: var(--chrome-muted);
-    font-size: 0.78rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .folder-enter-placeholder {
-    display: inline-block;
-    flex: 0 0 1.5rem;
-    width: 1.5rem;
-  }
-
-  .folder-details-path,
-  .folder-details-description,
-  .folder-details-card > .folder-flat-more-actions {
-    grid-column: 1 / -1;
-  }
-
-  .folder-details-path,
-  .folder-details-description {
-    color: var(--chrome-muted);
-    font-size: 0.75rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .folder-details-description {
-    font-style: italic;
-  }
-
-  // where the list and details views are in the folder structure
+  // where the list and cards views are in the folder structure
   .folder-level-bar {
     // the panel is dark: the bar takes the panel's own text colour instead of the page background that makes it pale
     background: rgba(255, 255, 255, 0.08);
@@ -2085,11 +1871,361 @@ tr:first-child td {
     text-decoration: none;
   }
 
-  // bookmarked folders, a block of their own above the folders of the current level
-  .folder-flat-favorites {
-    border-bottom: 1px solid var(--chrome-muted);
-    margin-bottom: 0.75rem;
-    padding-bottom: 0.6rem;
+  // the explorer bar at the top of the Folders panel: favourites, the three views, options, close
+  .folder-explorer-bar {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem;
+    margin-bottom: 0.5rem;
+    position: relative;
+  }
+
+  .folder-bar-btn {
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    color: var(--chrome-muted);
+    cursor: pointer;
+    line-height: 1;
+    padding: 0.3rem 0.4rem;
+
+    &:hover,
+    &:focus-visible {
+      background: rgba(127, 127, 127, 0.22);
+      color: var(--chrome-fg);
+    }
+
+    &.active,
+    &[aria-expanded='true'] {
+      background: var(--primary);
+      color: var(--primary-fg, #fff);
+
+      .fas {
+        color: inherit;
+      }
+    }
+  }
+
+  .folder-view-switch {
+    border: 1px solid var(--chrome-muted);
+    border-radius: 6px;
+    display: inline-flex;
+    overflow: hidden;
+
+    .folder-bar-btn {
+      border-radius: 0;
+    }
+  }
+
+  .folder-bar-spacer {
+    flex: 1 1 0;
+  }
+
+  // lists that open under the bar (favourites, options)
+  .folder-popover {
+    background: var(--chrome-bg);
+    border: 1px solid var(--chrome-muted);
+    border-radius: 6px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+    left: 0;
+    margin-top: 0.2rem;
+    max-height: 18rem;
+    overflow: auto;
+    padding: 0.25rem;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    z-index: 6;
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  .folder-popover-label {
+    color: var(--chrome-muted);
+    font-size: 0.7rem;
+    letter-spacing: 0.02em;
+    padding: 0.1rem 0.3rem;
+    text-transform: uppercase;
+  }
+
+  .folder-popover-note {
+    color: var(--chrome-muted);
+    font-size: 0.8rem;
+    padding: 0.3rem;
+  }
+
+  .folder-popover-item {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    color: var(--chrome-fg);
+    cursor: pointer;
+    display: flex;
+    font-size: 0.85rem;
+    gap: 0.25rem;
+    min-width: 0;
+    padding: 0.25rem 0.3rem;
+    text-align: left;
+    width: 100%;
+
+    &:hover,
+    &:focus-visible {
+      background: rgba(127, 127, 127, 0.22);
+      color: var(--chrome-fg);
+      text-decoration: none;
+    }
+  }
+
+  .folder-popover-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-switch {
+    background: var(--chrome-muted);
+    border-radius: 0.5rem;
+    flex: 0 0 1.5rem;
+    height: 0.8rem;
+    position: relative;
+    width: 1.5rem;
+
+    &::after {
+      background: var(--chrome-bg);
+      border-radius: 50%;
+      content: '';
+      height: 0.6rem;
+      left: 0.1rem;
+      position: absolute;
+      top: 0.1rem;
+      transition: left 0.12s;
+      width: 0.6rem;
+    }
+  }
+
+  .is-on > .folder-switch {
+    background: var(--primary);
+
+    &::after {
+      left: 0.8rem;
+    }
+  }
+
+  // Experiments / Resources / All
+  .folder-type-switch {
+    border: 1px solid var(--chrome-muted);
+    border-radius: 6px;
+    display: flex;
+    margin-bottom: 0.4rem;
+    overflow: hidden;
+
+    button {
+      background: transparent;
+      border: 0;
+      color: var(--chrome-muted);
+      flex: 1 1 0;
+      font-size: 0.75rem;
+      min-width: 0;
+      overflow: hidden;
+      padding: 0.2rem 0;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+
+      &:hover,
+      &:focus-visible {
+        color: var(--chrome-fg);
+      }
+
+      &.active {
+        background: var(--primary);
+        color: var(--primary-fg, #fff);
+      }
+    }
+  }
+
+  // All / Unfiled
+  .folder-quick-row {
+    align-items: center;
+    border-radius: 4px;
+    color: var(--chrome-fg);
+    display: flex;
+    gap: 0.3rem;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0.15rem 0.3rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &:hover,
+    &:focus-visible {
+      background: rgba(127, 127, 127, 0.18);
+      color: var(--chrome-fg);
+      text-decoration: none;
+    }
+  }
+
+  // files (experiments and resources) in the list and cards views
+  .folder-file-row {
+    align-items: center;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    min-width: 0;
+    padding: 0.2rem 0.3rem;
+
+    &:hover {
+      background: rgba(127, 127, 127, 0.18);
+    }
+
+    &.is-selected {
+      background: var(--primary);
+      color: var(--primary-fg, #fff);
+
+      .fas {
+        color: inherit;
+      }
+    }
+  }
+
+  .folder-file-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-file-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin-top: 0.2rem;
+  }
+
+  .folder-file-card {
+    border: 1px solid var(--chrome-muted);
+    border-radius: 6px;
+    color: var(--chrome-fg);
+    display: block;
+    min-width: 0;
+    padding: 0.3rem 0.45rem;
+
+    &:hover,
+    &:focus-visible {
+      background: rgba(127, 127, 127, 0.18);
+      color: var(--chrome-fg);
+      text-decoration: none;
+    }
+  }
+
+  .folder-file-card-title {
+    display: block;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-file-card-meta {
+    align-items: center;
+    color: var(--chrome-muted);
+    display: flex;
+    font-size: 0.72rem;
+    gap: 0.3rem;
+    margin-top: 0.1rem;
+    min-width: 0;
+  }
+
+  .folder-file-card-when {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-file-tag {
+    background: rgba(127, 127, 127, 0.25);
+    border-radius: 999px;
+    flex: 0 1 auto;
+    max-width: 45%;
+    overflow: hidden;
+    padding: 0 0.45rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-status-dot {
+    background: var(--chrome-muted);
+    border-radius: 50%;
+    display: inline-block;
+    flex: 0 0 0.55rem;
+    height: 0.55rem;
+    width: 0.55rem;
+  }
+
+  // the picked file, under the list
+  .folder-preview {
+    border-top: 1px solid var(--chrome-muted);
+    font-size: 0.78rem;
+    margin-top: 0.5rem;
+    padding-top: 0.45rem;
+  }
+
+  .folder-preview-title {
+    color: var(--chrome-fg);
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-preview-row {
+    display: flex;
+    gap: 0.4rem;
+    justify-content: space-between;
+    padding: 0.05rem 0;
+  }
+
+  .folder-preview-label,
+  .folder-preview-empty {
+    color: var(--chrome-muted);
+  }
+
+  .folder-preview-value {
+    min-width: 0;
+    overflow: hidden;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  // dragging a file or folder onto a folder (folder-dragdrop.ts)
+  .is-dragging {
+    opacity: 0.45;
+  }
+
+  .is-drop-target {
+    background: rgba(127, 127, 127, 0.28);
+    outline: 1.5px dashed var(--primary);
+  }
+
+  // the switches that hide parts of the explorer
+  &.folders-no-favorites .favorite-folder-star,
+  &.folders-no-favorites [data-popover='folderFavoritesMenu'] {
+    display: none;
+  }
+
+  &.folders-no-counts .folder-entity-count {
+    display: none;
   }
 }
 
