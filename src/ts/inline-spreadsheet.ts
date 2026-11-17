@@ -282,6 +282,25 @@ function pasteTextAt(worksheet: JssInstance, col: number, row: number, text: str
 }
 
 /**
+ * Ctrl/Cmd+X on a grid: the grid's own copy handler puts the selection on the clipboard (it marks `done` here), and the
+ * caller then clears the cells through the same path as Delete, so the cut is one undo step and the saved table agrees.
+ */
+let cutCopy: { done: boolean } | null = null;
+function copyForCut(container: HTMLElement): boolean {
+  const sink = container.querySelector<HTMLElement>('.jss_textarea, #jss_textarea');
+  try { sink?.focus({ preventScroll: true }); } catch { /* nothing to focus */ }
+  cutCopy = { done: false };
+  try { container.ownerDocument.execCommand('copy'); } catch { /* the flag says whether it worked */ }
+  const done = cutCopy.done;
+  cutCopy = null;
+  return done;
+}
+function isCutKey(event: KeyboardEvent): boolean {
+  return (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && !event.isComposing
+    && event.key.toLowerCase() === 'x';
+}
+
+/**
  * Paste transposed from the keyboard: Ctrl/Cmd+Shift+V inside the grid. The browser then fires the usual paste event
  * (with the clipboard in it), which is taken over here instead of pasting as it is. Returns the function that removes it.
  */
@@ -6376,6 +6395,7 @@ export function openSpreadsheetModal(
       event.stopImmediatePropagation();
       event.clipboardData.setData('text/plain', textRows.join('\n'));
       event.clipboardData.setData('text/html', `<table><tbody>${htmlRows.join('')}</tbody></table>`);
+      if (cutCopy) cutCopy.done = true;
     };
 
     const onSpreadsheetPaste = (event: ClipboardEvent): void => {
@@ -7148,6 +7168,17 @@ export function openSpreadsheetModal(
       const targetIsTextControl = eventTarget instanceof HTMLInputElement
         || eventTarget instanceof HTMLTextAreaElement
         || (eventTarget instanceof HTMLElement && eventTarget.isContentEditable);
+      if (isCutKey(event) && sheetContainer && (!rescueInputEl || rescueInputEl.hidden)
+        && (!targetIsTextControl || (eventTarget instanceof Element && eventTarget.classList.contains('jss_textarea')))) {
+        if (selectedRange === null) getSelectedRange();
+        if (selectedRange !== null) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          const cutRange = [...selectedRange] as CellRange;
+          if (copyForCut(ui.sheetHost)) clearSelectedCells(cutRange);
+          return;
+        }
+      }
       // The recorded range can still be empty right after the first click in the
       // popup (the click may not report a selection change); ask the grid itself.
       if (selectedRange === null) getSelectedRange();
@@ -8728,6 +8759,7 @@ export function buildReadOnlySpreadsheetHost(
     event.clipboardData.setData('text/plain', textRows.join('\n'));
     // With the cells' formatting, like a selection copied from the full editor.
     event.clipboardData.setData('text/html', `<table><tbody>${htmlRows.join('')}</tbody></table>`);
+    if (cutCopy) cutCopy.done = true;
   }, true);
   // Mirrors openSpreadsheetModal's own fillDragSource -- see its comment.
   let fillDragSource: { col: number; row: number } | null = null;
@@ -9701,6 +9733,24 @@ export function buildReadOnlySpreadsheetHost(
     // the next key appends, rather than selecting/replacing that first key.
     openCellEditor(col, row, value, false);
   };
+  // Ctrl/Cmd+X: copy the selection, then clear it as Delete does (undoable, and the saved table loses it too)
+  const onCutKey = (event: KeyboardEvent): void => {
+    const target = event.target;
+    if (!isCutKey(event) || !(target instanceof Element) || !sheetContainer.contains(target)
+      || (rescueInputEl && !rescueInputEl.hidden)) return;
+    if ((target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
+      || (target instanceof HTMLElement && target.isContentEditable))
+      && !target.classList.contains('jss_textarea')) return;
+    const liveSelection = getMountedWorksheet(sheetContainer)?.getSelection?.();
+    const range = Array.isArray(liveSelection) && liveSelection.length >= 4 && liveSelection.slice(0, 4).every(Number.isInteger)
+      ? liveSelection.slice(0, 4) as CellRange
+      : lastKnownSelection;
+    if (!range) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (copyForCut(sheetContainer)) clearSelectedCells(range);
+  };
+  if (editable) window.addEventListener('keydown', onCutKey, true);
   if (editable) window.addEventListener('keydown', onDirectCellKey, true);
   // Ctrl/Cmd+Shift+V pastes the clipboard transposed, with its top-left cell at the selected cell
   if (editable) {
@@ -10718,6 +10768,7 @@ export function buildReadOnlySpreadsheetHost(
       releaseRescueKeys?.();
       if (onCellDoubleClick) window.removeEventListener('dblclick', onCellDoubleClick, true);
       window.removeEventListener('keydown', onDirectCellKey, true);
+      window.removeEventListener('keydown', onCutKey, true);
       pageListenerRemovers.splice(0).forEach(remove => remove());
       releaseJssPageListeners();
       (jspreadsheet as unknown as { destroy?: (element: HTMLElement) => void }).destroy?.(sheetContainer);
