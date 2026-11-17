@@ -16,6 +16,7 @@
 import { ApiC } from './api';
 import { core } from './core';
 import { Model } from './interfaces';
+import { saveUserPref, syncUserPrefs } from './userPrefs';
 import { stripMentionHtml } from './mentions';
 import { readProjectCalendars, readTaskCalendars } from './googleTaskCalendars';
 import {
@@ -111,6 +112,7 @@ function write(key: string, value: string | null, storage: Storage = localStorag
     } else {
       storage.setItem(key, value);
     }
+    if (storage === localStorage) saveUserPref(key, value);
   } catch {
     // storage unavailable (private mode): the feature just won't remember
   }
@@ -1010,6 +1012,13 @@ export function initGoogleSync(): void {
     return;
   }
   render();
+  // what this person chose in another browser is picked up first
+  void syncUserPrefs().then(changed => {
+    if (!changed) return;
+    render();
+    scheduleShown();
+    scheduleSync();
+  });
   window.addEventListener('todolist-changed', scheduleSync);
   // the calendar page of eLabFTW asks for the events of the calendars that are shown, for the days it shows
   window.addEventListener('elabftw:calendar-range', event => {
