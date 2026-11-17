@@ -2131,6 +2131,41 @@ tr:first-child td {
     }
   }
 
+  // a folder in the cards view
+  .folder-card {
+    border: 1px solid var(--chrome-muted);
+    border-left-width: 4px;
+    border-radius: 6px;
+    min-width: 0;
+    padding: 0.3rem 0.45rem;
+
+    &:hover {
+      background: rgba(127, 127, 127, 0.18);
+    }
+
+    &.is-active {
+      border-color: var(--primary);
+    }
+  }
+
+  .folder-card-title {
+    flex: 1 1 auto;
+    font-weight: 600;
+    min-width: 0;
+  }
+
+  .folder-card-counts {
+    white-space: nowrap;
+  }
+
+  .folder-card-description {
+    color: var(--chrome-muted);
+    font-size: 0.72rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .folder-file-card-title {
     display: block;
     font-weight: 600;

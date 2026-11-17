@@ -347,6 +347,38 @@ function folderItem(row: FolderRow): HTMLElement {
   return item;
 }
 
+/** A folder in the cards view: a card with its name and buttons, then how many experiments and resources it holds and when it last changed. */
+function folderCard(row: FolderRow): HTMLElement {
+  const card = element('div', `folder-flat-item folder-card${row.active ? ' is-active' : ''}`);
+  card.draggable = true;
+  card.dataset.dragKind = 'folder';
+  card.dataset.dragId = row.id;
+  card.dataset.dropFolder = row.id;
+  const head = element('div', 'd-flex align-items-center');
+  const link = element('a', 'text-decoration-none folder-flat-link folder-card-title');
+  link.href = row.href;
+  link.title = row.path;
+  link.dataset.action = 'open-folder-level';
+  link.dataset.folderId = row.id;
+  link.append(element('i', 'fas fa-folder fa-fw mr-1'), element('span', 'folder-name', row.name));
+  head.append(link, copyOfActions(row));
+  card.append(head);
+  const meta = element('div', 'folder-file-card-meta');
+  const counts = element('span', 'folder-entity-count folder-card-counts');
+  counts.append(
+    element('i', 'fas fa-flask fa-fw'), document.createTextNode(String(row.experiments)),
+    element('i', 'fas fa-boxes-stacked fa-fw ml-2'), document.createTextNode(String(row.resources)),
+  );
+  meta.append(counts);
+  const age = shortAge(row.modified);
+  if (age) meta.append(element('span', 'folder-file-card-when text-right', age));
+  card.append(meta);
+  if (row.description) card.append(element('div', 'folder-card-description', row.description));
+  const more = morePanel(row);
+  if (more) card.append(more);
+  return card;
+}
+
 function entryIcon(entry: FolderEntry): HTMLElement {
   const icon = element('i', `fas ${entry.type === 'items' ? 'fa-boxes-stacked' : 'fa-flask'} fa-fw mr-1 folder-file-icon`);
   icon.title = i18next.t(entry.type === 'items' ? 'Resource' : 'Experiment');
@@ -577,7 +609,14 @@ export function syncFolderView(): void {
   flat.querySelector<HTMLElement>('.folder-level-bar-holder')?.replaceChildren(levelPathBar(all));
   const parts: HTMLElement[] = [];
   if (level !== '' && !searching) parts.push(upRow(all));
-  rows.forEach(row => parts.push(folderItem(row)));
+  // the cards view draws folders as cards too, in the same stack as the file cards
+  const cardsBox = view === 'cards' ? element('div', 'folder-file-cards') : null;
+  if (cardsBox) {
+    rows.forEach(row => cardsBox.append(folderCard(row)));
+    parts.push(cardsBox);
+  } else {
+    rows.forEach(row => parts.push(folderItem(row)));
+  }
   // the files of the folder we are in (the top level has none: its files are in the folders, or unfiled)
   let entries: FolderEntry[] | null = [];
   if (panelPrefs().files && level !== '' && !searching) {
@@ -585,11 +624,7 @@ export function syncFolderView(): void {
     const shown = (entries ?? []).filter(entry => shownEntryTypes().includes(entry.type));
     if (entries === null) parts.push(element('div', 'folder-entry-note small color-medium', i18next.t('Loading...')));
     else if (view === 'list') shown.forEach(entry => parts.push(fileRow(entry)));
-    else if (shown.length > 0) {
-      const cards = element('div', 'folder-file-cards');
-      shown.forEach(entry => cards.append(fileCard(entry)));
-      parts.push(cards);
-    }
+    else if (cardsBox) shown.forEach(entry => cardsBox.append(fileCard(entry)));
     entries = shown;
   }
   if (parts.length === 0) {
