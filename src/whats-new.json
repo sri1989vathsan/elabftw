@@ -416,32 +416,34 @@
     "id": "guide-folder-views",
     "date": "2026-11-11",
     "area": "Organise",
-    "title": "Folder views: tree, list and details",
-    "summary": "See your folders as a tree, as one level at a time, or as a table with counts and sorting, and open a folder in place to see the experiments and resources inside it.",
+    "title": "Folder views: tree, list and cards",
+    "summary": "Browse your folders and the experiments and resources in them like a file explorer: as a tree, as a list with a preview, or as cards. Drag a file or folder onto a folder to move it.",
     "details": [
-      "fa-table-list::The three buttons under the tabs of the Folders panel switch the view: Tree (every folder, nested), List (one level at a time) and Details (a table). Your choice is remembered.",
-      "fa-layer-group::List and Details show the folders of one level. The bar at the bottom of the panel shows where you are, for example All folders > Cell culture; press any part of it to go there. Press the arrow on a folder that has subfolders to step into it, and “..” to go back up. Stepping around only moves the panel: click a folder’s name to open that folder in the main list.",
+      "fa-table-list::The buttons at the top of the Folders panel switch the view: Tree (every folder, nested), List (one level at a time, with a preview of the file you pick) and Cards (the same level, each folder and file as a small card). Your choice is remembered.",
+      "fa-layer-group::List and Cards step into one folder at a time: click a folder to go inside it, and use the “..” row or the bar at the bottom to go back up. The arrow on the “..” row lists that folder in the page. In List, click a file to see its type, status, owner, edit date and tags below the list, and double-click it to open it; in Cards, click a card to open it.",
       "fa-folder-open::When you open a folder from the page (for example with the folder path bar under a list), the panel moves to that folder and highlights it.",
-      "fa-sort::Details: each row shows the folder’s name, its path, when it last changed (the clock) and how many experiments and resources it holds. Press a heading to sort by it, and press it again to reverse. The Filter folders box searches every folder at once, by name, path or description.",
-      "fa-eye::Show experiments/resources: this switch above the list turns on a mode where a click on a folder’s name opens it in place and lists the experiments and resources inside it; click again to close it, and click an entry to open it. With the switch off there are no arrows, and a click on a folder opens it in the main list. The switch is remembered.",
-      "fa-star::Folders you starred are listed in a block of their own at the top, so they stay in reach while you step through the levels.",
-      "fa-folder-plus::New folder: in the List and Details views, the button at the bottom creates the folder inside the folder you are looking at. The Tree view keeps its New folder form, with a Parent folder list.",
-      "fa-arrows-left-right::A narrow panel: each folder’s name gets a line of its own, with its counts and buttons under it, and the sort buttons in the header fit on one line. Drag the right edge of the panel to make it wider or narrower (see The left sidebar)."
+      "fa-flask::Exp, Res and All: the switch under the buttons chooses which files List and Cards show, and whether folder links open the experiments or the resources page. The All and Unfiled rows below it list everything or the entries that are in no folder.",
+      "fa-star::Favourites: the star button at the top opens a list of the folders you starred; choose one to go there. Point at a folder to star or unstar it.",
+      "fa-ellipsis::Options (the three dots): switch Favourites, Files and Counts on or off, and refresh the panel. A folder’s own buttons (star, README, more) show when you point at its row, so names keep their room.",
+      "fa-up-down-left-right::Move by dragging: drag a file or a folder onto a folder, the “..” row, All (folders only) or Unfiled (files only). A message appears with Undo. A folder cannot go inside itself or one of its subfolders, and you can only move what you are allowed to edit.",
+      "fa-folder-plus::New folder: in the List and Cards views, the button at the bottom creates the folder inside the folder you are looking at. The Tree view keeps its New folder form, with a Parent folder list.",
+      "fa-arrows-left-right::A slim panel: drag the right edge of the panel to make it as narrow as about 210 px; the bar, the switch and the names still fit one column (see The left sidebar)."
     ],
-    "imageAlt": "The Folders panel in the Details view: the Show experiments/resources switch is on and the folder Cell culture is open, listing its two experiments",
+    "imageAlt": "The Folders panel in the List view inside the folder Cell culture, with a file picked and its details shown below the list",
     "featured": false,
     "guide": true,
     "order": 11,
     "icon": "fa-table-list",
-    "purpose": "Find a folder quickly in a big lab, see how much is in each one, and look inside a folder without leaving the page you are on.",
+    "purpose": "Find a folder quickly in a big lab, see what is in it, and file work by dragging, without leaving the page you are on.",
     "uses": [
-      "Switch to Details and sort by the clock to find the folder you worked in last.",
-      "Turn on Show experiments/resources and click a project folder to see what is in it without leaving your page.",
+      "Switch to Cards to see how many experiments and resources each folder holds and when it last changed.",
+      "Pick a file in List to check its status and owner without opening it.",
+      "Drag an experiment onto a folder to file it, and use Undo if it landed in the wrong one.",
       "Type part of a name in Filter folders to find a subfolder anywhere in the tree.",
-      "Widen the panel when folder names are long."
+      "Drag the panel narrow when you want the page wide."
     ],
-    "news": "New: List and Details views, a Show experiments/resources mode that opens a folder in place, a layout that fits a narrow panel, and a panel you can resize.",
-    "shot": "The Folders panel in the Details view with the Show experiments/resources switch on and one folder open",
+    "news": "New: List with a file preview and Cards views, an Exp / Res / All switch, a favourites list, drag to move with Undo, and a panel that can be slim.",
+    "shot": "The Folders panel in the List view inside a folder, with a file picked and its details below",
     "screenshots": [],
     "image": "guide-folder-views.jpg",
     "highlight": {
@@ -449,7 +451,7 @@
       "y": 42.9,
       "w": 84.5,
       "h": 25.4,
-      "label": "Switch on, then click a folder"
+      "label": "Pick a file to see its details"
     }
   },
   {
