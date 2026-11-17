@@ -3023,6 +3023,72 @@ tr:first-child td {
   }
 }
 
+// ---- Search panel (favourite filters and the results) ----
+#favoritesPanel {
+  .input-group-text {
+    background: transparent;
+    border: 0;
+    color: var(--fx-muted);
+    padding: 0 0.3rem;
+  }
+
+  .favorite-filter-text-group {
+    background: var(--fx-hover);
+    border-radius: 4px;
+    margin-bottom: 0.3rem !important;
+
+    .form-control {
+      background: transparent;
+    }
+  }
+
+  .favorite-filter-toolbar {
+    gap: 0.2rem;
+    margin-bottom: 0.3rem;
+  }
+
+  .favorite-filter-section-summary {
+    align-items: center;
+    display: flex;
+    min-height: var(--fx-row);
+    padding: 0 var(--fx-pad);
+  }
+
+  .unified-search-group-title {
+    align-items: center;
+    color: var(--fx-muted);
+    display: flex;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    min-height: var(--fx-row);
+    padding: 0 var(--fx-pad);
+    text-transform: uppercase;
+  }
+
+  .favorite-filter-result {
+    border-radius: 4px;
+    min-height: var(--fx-row);
+    padding: 0.15rem var(--fx-pad);
+
+    &:hover {
+      background: var(--fx-hover);
+    }
+  }
+
+  .favorite-filter-result-link {
+    color: var(--fx-fg) !important;
+    font-size: inherit;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .favorite-filter-result-meta {
+    color: var(--fx-muted);
+    font-size: 0.7rem;
+  }
+}
+
 // the message after a file or folder was moved by dragging (folder-dragdrop.ts): on the page, not in the panel
 .folder-move-toast {
   align-items: center;
