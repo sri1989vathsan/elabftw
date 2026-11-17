@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'drag-select', 'formulas-and-structure', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -319,6 +319,13 @@ async function spreadsheetSoak(options = {}) {
     const root = api.overlayElement(uid);
     const target = document.activeElement && root.contains(document.activeElement) ? document.activeElement : root.querySelector('.jss_textarea');
     target.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', ctrlKey: true, shiftKey: !!shift, bubbles: true, cancelable: true }));
+    await sleep(380);
+  }
+  // Ctrl+X in the grid: copies the selection and clears it (one undo step), as Delete does.
+  async function cutKey(uid) {
+    const root = api.overlayElement(uid) || await live(uid);
+    const target = document.activeElement && root.contains(document.activeElement) ? document.activeElement : root.querySelector('.jss_textarea');
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', code: 'KeyX', ctrlKey: true, bubbles: true, cancelable: true }));
     await sleep(380);
   }
   async function boldCell(uid, r, c, leaveTypingOpen) {
@@ -2079,6 +2086,74 @@ async function spreadsheetSoak(options = {}) {
         await typeDirect(uid, r2, c2, `D${round}`, 'Enter');
       }
       await verify('drag-select: final', true);
+    },
+    // Ctrl+X (Cmd+X on a Mac): the cut cells must be gone from the grid AND the saved table at once, one Ctrl+Z must bring
+    // them all back (grid and saved table), Ctrl+Shift+Z must cut them again. A single cell, then a dragged range.
+    async 'cut-undo'() {
+      const uid = await createTable('cut table', { rows: 6, cols: 5 });
+      if (!uid) return;
+      const model = () => models.get(uid);
+      for (let r = 0; r < 6; r++) for (let c = 0; c < 5; c++) await typeInto(uid, r, c, `x${r}${c}`, 'Tab');
+      await verify('cut-undo: filled', true);
+      const cutAndCheck = async (label, cells) => {
+        const before = cells.map(([r, c]) => model().grid[r][c]);
+        await cutKey(uid);
+        for (const [r, c] of cells) model().grid[r][c] = '';
+        await verify(`cut-undo ${label}: after the cut (cells gone from grid and saved table)`, true);
+        note('cut-undo-cut');
+        await undoKey(uid, false);
+        cells.forEach(([r, c], i) => { model().grid[r][c] = before[i]; });
+        await verify(`cut-undo ${label}: after Ctrl+Z (cells back)`, true);
+        note('cut-undo-undo');
+        await undoKey(uid, true);
+        for (const [r, c] of cells) model().grid[r][c] = '';
+        await verify(`cut-undo ${label}: after redo (cells cut again)`, true);
+        note('cut-undo-redo');
+        await undoKey(uid, false);
+        cells.forEach(([r, c], i) => { model().grid[r][c] = before[i]; });
+        await verify(`cut-undo ${label}: undone again`, true);
+      };
+      await selectCell(uid, 2, 3);
+      await cutAndCheck('single cell', [[2, 3]]);
+      // a dragged range of 3 x 2 cells
+      const root = await live(uid);
+      const [r1, c1, r2, c2] = [1, 1, 3, 2];
+      const start = root.querySelector(`td[data-x="${c1}"][data-y="${r1}"]`);
+      const rect = start.getBoundingClientRect();
+      const init = { bubbles: true, cancelable: true, view: window, clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2, button: 0, buttons: 1 };
+      start.dispatchEvent(new PointerEvent('pointerdown', init)); start.dispatchEvent(new MouseEvent('mousedown', init));
+      await sleep(120);
+      for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) {
+        const td = root.querySelector(`td[data-x="${c}"][data-y="${r}"]`); const tr = td.getBoundingClientRect();
+        td.dispatchEvent(new MouseEvent('mouseover', { ...init, clientX: tr.x + tr.width / 2, clientY: tr.y + tr.height / 2 }));
+        td.dispatchEvent(new MouseEvent('mousemove', { ...init, clientX: tr.x + tr.width / 2, clientY: tr.y + tr.height / 2 }));
+      }
+      const endCell = root.querySelector(`td[data-x="${c2}"][data-y="${r2}"]`);
+      window.dispatchEvent(new MouseEvent('mouseup', { ...init, buttons: 0 })); endCell.dispatchEvent(new MouseEvent('mouseup', { ...init, buttons: 0 }));
+      await sleep(250);
+      const cells = []; for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) cells.push([r, c]);
+      await cutAndCheck('range', cells);
+      // typing after a cut and undo still works, and nothing else was disturbed
+      await typeDirect(uid, 5, 4, 'after-cut', 'Enter');
+      await verify('cut-undo: typing afterwards', true);
+      await consistency('cut-undo: inline, popup and stored HTML agree', true);
+    },
+    // Cell padding and column fit: text must not touch the cell edges (at least 8 px at each side) and a column holding a
+    // long value (up to the 360 px cap) must show it without being clipped.
+    async 'padding-fit'() {
+      const long = 'Gibson assembly of the insert';
+      const pasted = await pasteExternal([['name', 'note', 'n'], [long, 'short', '1'], ['b', 'another fairly long note here', '2']], 'padding fit');
+      if (!pasted) return;
+      const root = await live(pasted);
+      await sleep(600);
+      for (const td of root.querySelectorAll('.jss_worksheet tbody td[data-x][data-y]')) {
+        const cs = getComputedStyle(td);
+        if (parseFloat(cs.paddingLeft) < 8 || parseFloat(cs.paddingRight) < 8) fail(`cell ${td.dataset.x},${td.dataset.y} padding is ${cs.padding}, less than 8 px at the sides`);
+        const text = td.textContent.trim();
+        if (text.length > 0 && text.length < 40 && td.scrollWidth > td.clientWidth + 1) fail(`cell ${td.dataset.x},${td.dataset.y} ("${text}") is clipped: ${td.scrollWidth} px of text in ${td.clientWidth} px`);
+      }
+      note('padding-fit');
+      await verify('padding-fit: final', true);
     },
     // Formulas and row/column changes: a spreadsheet rewrites the references of a formula when cells move (=A1+1
     // becomes =B1+1 after a column is inserted before A), so the text may change, but a formula cell must never lose
