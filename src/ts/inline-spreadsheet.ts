@@ -1698,8 +1698,7 @@ function parseClipboardHtmlTable(html: string): ClipboardTable | null {
   }
 
   // A table copied from another eLabFTW spreadsheet carries its column widths as <col style="width:Xpx">. Those are the
-  // sheet's own layout (unlike the widths Excel, Sheets or Word put on their tables, which are dropped on purpose), so
-  // they come along. The leading <col> is the row-number gutter when the table has one. The widths are used only when
+  // sheet's own layout, so they come along. The leading <col> is the row-number gutter when the table has one. The widths are used only when
   // they line up with the copied columns: a partial copy keeps the default width.
   let colWidths: ColWidths | undefined;
   if (isFormulaSpreadsheet) {
@@ -1714,6 +1713,42 @@ function parseClipboardHtmlTable(html: string): ClipboardTable | null {
       });
       if (Object.keys(widths).length > 0) colWidths = widths;
     }
+  } else {
+    // Excel, Sheets, LibreOffice and Word describe a column's width on the <col> (or on the first row's cells), as
+    // pixels or points, inline or through a class in the clipboard's <style> block. Those widths come along too, so a
+    // pasted table looks like its source. A column the source gives no width keeps the default width.
+    const lengthToPx = (value: string): number | null => {
+      const match = /^\s*(\d+(?:\.\d+)?)\s*(px|pt|cm|mm|in)?\s*$/i.exec(value);
+      if (!match) return null;
+      const factor = { px: 1, pt: 96 / 72, cm: 96 / 2.54, mm: 96 / 25.4, in: 96 }[(match[2] ?? 'px').toLowerCase()] ?? 1;
+      const px = Number.parseFloat(match[1]) * factor;
+      return px > 0 ? Math.max(MIN_DATA_COL_WIDTH, Math.min(MAX_DATA_COL_WIDTH, Math.round(px))) : null;
+    };
+    const elementWidth = (element: Element): number | null => {
+      const declared = getClipboardElementCandidateStyle(element, styleRules).getPropertyValue('width');
+      return lengthToPx(declared || element.getAttribute('width') || '');
+    };
+    const widths: ColWidths = {};
+    let colIndex = 0;
+    table.querySelectorAll<HTMLTableColElement>('colgroup > col').forEach(col => {
+      const span = Math.max(1, col.span || 1);
+      const width = elementWidth(col);
+      for (let offset = 0; offset < span; offset++) {
+        if (width !== null) widths[String(colIndex + offset)] = width;
+      }
+      colIndex += span;
+    });
+    if (Object.keys(widths).length === 0) {
+      const firstRow = Array.from(table.rows).find(row => row.cells.length > 0);
+      let cellCol = 0;
+      Array.from(firstRow?.cells ?? []).forEach(cell => {
+        const span = Math.max(1, cell.colSpan || 1);
+        const width = span === 1 ? elementWidth(cell) : null;
+        if (width !== null) widths[String(cellCol)] = width;
+        cellCol += span;
+      });
+    }
+    if (Object.keys(widths).length > 0) colWidths = widths;
   }
 
   return {
