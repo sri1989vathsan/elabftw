@@ -2960,112 +2960,21 @@ tr:first-child td {
   }
 
   .list-group {
-    gap: 0;
+    gap: 0.2rem;
   }
 
-  // tasks and steps: thin tiles with the check button first, the title next to it and the date on one muted line below;
-  // the drag handle and the edit button only show while the pointer or the keyboard is on the tile
-  .todo-group-entry {
+  // tasks and steps: flat tiles instead of bordered boxes
+  .list-group-item {
     background: rgba(255, 255, 255, 0.05);
     border: 0;
-    border-left: 3px solid var(--primary);
     border-radius: 4px;
     color: var(--fx-fg);
-    margin: 0 0 0.15rem;
-    padding: 0.2rem var(--fx-pad) 0.2rem 0.3rem;
-    position: relative;
-
-    > .d-flex {
-      align-items: center !important;
-      gap: 0.3rem;
-    }
-
-    // the small "task" icon in front of the title
-    > .d-flex > .fa-list-check {
-      flex: 0 0 auto;
-      font-size: 0.65rem;
-      margin: 0 !important;
-      width: auto;
-    }
-
-    // title, then date and age on one line
-    > .d-flex > .flex-column {
-      align-items: baseline;
-      column-gap: 0.4rem;
-      flex-direction: row !important;
-      flex-wrap: wrap;
-      row-gap: 0;
-
-      > * {
-        flex: 0 0 100%;
-      }
-
-      > .todo-item-deadline,
-      > .relative-moment {
-        flex: 0 1 auto;
-        font-size: 0.68rem;
-        min-width: 0;
-      }
-
-      > .relative-moment::before {
-        content: '·';
-        margin-right: 0.4rem;
-      }
-
-      .fa-clock {
-        font-size: 0.6rem;
-        margin-right: 0.2rem !important;
-        width: auto;
-      }
-    }
-
-    .todo-title-btn {
-      -webkit-box-orient: vertical;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      font-size: inherit;
-      font-weight: 600;
-      line-height: 1.25;
-      overflow: hidden;
-      text-align: left;
-    }
-
-    .todo-task-notes {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    // the buttons are laid out by the row: the check first, then (on hover) the drag handle and edit button at the end
-    .btn-group {
-      display: contents;
-    }
-
-    .btn-group .btn:has(.fa-check) {
-      order: -1;
-    }
-
-    .btn-group .btn:not(:has(.fa-check)),
-    .todo-drag-handle {
-      display: none;
-      order: 5;
-    }
-
-    &:hover .btn-group .btn:not(:has(.fa-check)),
-    &:focus-within .btn-group .btn:not(:has(.fa-check)),
-    &:hover .todo-drag-handle:not([disabled]),
-    &:focus-within .todo-drag-handle:not([disabled]) {
-      display: inline-flex;
-    }
-
-    .btn-ghost {
-      padding: 0 0.3rem;
-    }
+    margin: 0 0 0.2rem;
+    padding: 0.3rem var(--fx-pad);
   }
 
-  .todo-group-entry.todo-entry-overdue {
-    background: color-mix(in srgb, var(--side-panel-danger) 10%, transparent);
-    border-left-color: var(--side-panel-danger);
+  .todo-entry-overdue {
+    box-shadow: inset 2px 0 0 var(--side-panel-danger);
   }
 
   // ---- the "Add task" form ----
