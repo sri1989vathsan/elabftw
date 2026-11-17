@@ -1,7 +1,7 @@
 /**
  * End-to-end check of the Google Calendar sync against the Google stand-in (google-stub.js).
  *
- * On http://localhost:8973/dashboard.php, logged in (see TEST-ACCOUNTS.md), with the administrator switch ON and the client ID
+ * On http://localhost:8973/dashboard.php (the check opens the Calendar settings window by itself), logged in (see TEST-ACCOUNTS.md), with the administrator switch ON and the client ID
  * set in Sysconfig, run:
  *   for (const f of ['google-stub.js', 'google-calendar-check.js']) {
  *     await new Promise(r => { const s = document.createElement('script'); s.src = '/__tests/' + f; s.onload = r; document.head.appendChild(s); });
@@ -21,10 +21,10 @@ window.googleCalendarCheck = async function () {
     return { status: r.status, loc: r.headers.get('Location'), json: method === 'GET' ? await r.json() : null };
   }
   function button(label) {
-    return Array.prototype.find.call(document.querySelectorAll('#googleSyncRow button'), function (b) { return b.textContent.trim().indexOf(label) === 0; });
+    return Array.prototype.find.call(document.querySelectorAll('#googleSettings button'), function (b) { return b.textContent.trim().indexOf(label) === 0; });
   }
   function box(text) {
-    var l = Array.prototype.find.call(document.querySelectorAll('#googleSyncRow label'), function (x) { return x.textContent.indexOf(text) !== -1; });
+    var l = Array.prototype.find.call(document.querySelectorAll('#googleSettings label'), function (x) { return x.textContent.indexOf(text) !== -1; });
     return l ? l.querySelector('input') : null;
   }
   async function sync() { button('Sync now').click(); await wait(4500); }
@@ -34,13 +34,20 @@ window.googleCalendarCheck = async function () {
   var minutes = function (e) { return (new Date(e.end.dateTime) - new Date(e.start.dateTime)) / 60000; };
 
   try {
+    // the settings are in the Calendar settings window (opened from the gear of the to-do panel)
+    if (!document.getElementById('googleSettings')) {
+      document.querySelector('[data-calendar-settings]').click();
+      await wait(1200);
+    }
     __gstub.reset();
-    Object.keys(localStorage).filter(function (k) { return /^googleSync(Calendar|Target|ImportEvents|CalendarsShown|Token)/.test(k); }).forEach(function (k) { localStorage.removeItem(k); });
+    Object.keys(localStorage).filter(function (k) { return /^googleSync(Calendar|Target|ImportEvents|CalendarsShown|TaskCalendars|Token)/.test(k); }).forEach(function (k) { localStorage.removeItem(k); });
     for (var spec of [{ content: 'GCAL alpha', deadline: at(1, 14, 30).toISOString(), duration_minutes: 90 }, { content: 'GCAL beta', deadline: at(2, 9, 0).toISOString() }]) {
       created.push(Number((await api('POST', 'todolist', spec)).loc.split('/').pop()));
     }
     localStorage.setItem('googleSyncTwoWay', '1');
-    box('Google Calendar (').click();
+    var where = document.querySelector('#googleSettings select');
+    where.value = 'calendar';
+    where.dispatchEvent(new Event('change', { bubbles: true }));
     await wait(300);
     box('Two-way:').click();
     button('Connect').click();
@@ -48,7 +55,14 @@ window.googleCalendarCheck = async function () {
     var events = mine();
     check('C1 the to-dos become events with the right length', events.length === 2 && events.some(function (e) { return /alpha/.test(e.summary) && minutes(e) === 90; }) && events.some(function (e) { return /beta/.test(e.summary) && minutes(e) === 30; }), events);
     check('C1b the events carry the task marker and a link back', events.every(function (e) { return e.extendedProperties && e.extendedProperties.private.elabftwTask && /projectmanagement\.php\?task=/.test(e.description); }), events);
-    check('C1c the panel has a dropdown of the calendars the to-dos can go to (the ones that can be written to)', document.querySelectorAll('#googleSyncRow select option').length === 2, document.getElementById('googleSyncRow').textContent);
+    check('C1c the panel has a dropdown of the calendars the to-dos can go to (the ones that can be written to)', (document.querySelectorAll('#googleSettings select')[1] || { options: [] }).options.length === 2, document.getElementById('googleSettings') && document.getElementById('googleSettings').textContent);
+
+    // calendars are shown by themselves once the to-dos go to a Google Calendar (nothing was chosen in the Calendars menu)
+    var firstList = null;
+    window.addEventListener('elabftw:calendar-list', function (e) { firstList = e.detail; }, { once: true });
+    window.dispatchEvent(new CustomEvent('elabftw:calendar-ready'));
+    await wait(1500);
+    check('C1d the main calendar is shown by itself, and the popups are told the to-dos go to a Google Calendar', firstList && firstList.syncs === true && firstList.calendars.some(function (c) { return c.primary && c.shown; }), firstList);
 
     await api('PATCH', 'todolist/' + created[1], { duration_minutes: 120 });
     await sync();
@@ -102,11 +116,32 @@ window.googleCalendarCheck = async function () {
     window.dispatchEvent(new CustomEvent('elabftw:calendar-toggle', { detail: { id: 'lab@group.calendar', on: true } }));
     await wait(2500);
     check('C9c showing it again brings them back', got && got.some(function (e) { return e.title === 'GCAL seminar'; }), got);
+
+    // a task on a calendar of its own: its event is in that calendar, not in the one of the settings; back again when the choice is removed
+    var userid = Object.keys(localStorage).find(function (k) { return /^googleSyncCalendarSnapshot:/.test(k); }).split(':')[1];
+    var inWork = function () { return __gstub.events('work@x').filter(function (e) { return /GCAL beta/.test(e.summary || '') && e.status !== 'cancelled'; }); };
+    var chosenKey = 'googleSyncTaskCalendars:' + userid;
+    var betaId = created[1];
+    localStorage.setItem(chosenKey, JSON.stringify({ [betaId]: 'work@x' }));
+    await sync();
+    check('C10 a task with its own calendar gets its event there', inWork().length === 1 && minutes(inWork()[0]) === 60, inWork());
+    check('C10b and its event is taken from the calendar of the settings', !mine().some(function (e) { return /GCAL beta/.test(e.summary); }), mine());
+    await api('PATCH', 'todolist/' + betaId, { duration_minutes: 45 });
+    await sync();
+    check('C10d a change of the task changes the event in its own calendar', inWork().length === 1 && minutes(inWork()[0]) === 45, inWork());
+    localStorage.removeItem(chosenKey);
+    await sync();
+    check('C10e without the choice the event goes back to the calendar of the settings', inWork().length === 0 && mine().some(function (e) { return /GCAL beta/.test(e.summary) && minutes(e) === 45; }), { work: inWork(), mine: mine() });
+    // a calendar that cannot be written to is not used: the task stays on the calendar of the settings
+    localStorage.setItem(chosenKey, JSON.stringify({ [betaId]: 'lab@group.calendar' }));
+    await sync();
+    check('C10f a calendar that cannot be written to is ignored', mine().some(function (e) { return /GCAL beta/.test(e.summary); }), mine());
+    localStorage.removeItem(chosenKey);
   } catch (error) {
     check('no error', false, String(error && error.stack || error));
   }
   for (var id of created) { await api('DELETE', 'todolist/' + id); }
-  Object.keys(localStorage).filter(function (k) { return /^googleSync(Calendar|Target|ImportEvents|CalendarsShown|Token)/.test(k); }).forEach(function (k) { localStorage.removeItem(k); });
+  Object.keys(localStorage).filter(function (k) { return /^googleSync(Calendar|Target|ImportEvents|CalendarsShown|TaskCalendars|Token)/.test(k); }).forEach(function (k) { localStorage.removeItem(k); });
   __gstub.reset();
   return { pass: results.every(function (r) { return r.ok; }), results: results };
 };

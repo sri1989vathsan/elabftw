@@ -14,6 +14,7 @@
     viewPrefs as prefsStore,
   } from '../calendarSettings';
   import { parseFeed } from '../icalFeed';
+  import { setTaskCalendar, watchCalendarChoices, type CalendarChoices } from '../googleTaskCalendars';
   import { Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
 
@@ -115,6 +116,10 @@
   // a region selected with the mouse on the empty grid (minutes of the day, in the column `index`), and the new task made from it
   let selection: { index: number; lo: number; hi: number } | null = null;
   let newTask: { start: Date; end: Date } | null = null;
+  // the Google calendar of the new task, when the to-dos go to a Google Calendar (empty: the calendar of the sync settings)
+  let calendarChoices: CalendarChoices = { usable: false, calendars: [], target: 'primary' };
+  let newCalendar = '';
+  let stopCalendars: (() => void) | null = null;
   let newTitle = '';
   let newProject: number | null = null;
   let newBusy = false;
@@ -514,6 +519,7 @@
   async function openNewTask(start: Date, end: Date): Promise<void> {
     newTask = { start, end };
     newTitle = '';
+    newCalendar = '';
     await tick();
     newTitleInput?.focus();
   }
@@ -527,13 +533,16 @@
     if (!newTask || newTitle.trim() === '') return;
     newBusy = true;
     try {
-      await ApiC.post(Model.Todolist, {
+      const createdId = await ApiC.post2location(Model.Todolist, {
         notifOnSaved: 0,
         content: newTitle.trim(),
         deadline: newTask.start.toISOString(),
         duration_minutes: Math.max(5, Math.min(1440, Math.round((newTask.end.getTime() - newTask.start.getTime()) / 60000))),
         project_id: newProject,
       });
+      if (newCalendar !== '') {
+        setTaskCalendar(createdId, newCalendar);
+      }
       window.dispatchEvent(new CustomEvent('todolist-changed'));
       newTask = null;
       await load();
@@ -572,6 +581,7 @@
     window.addEventListener('todolist-changed', load);
     window.addEventListener('elabftw:calendar-events', onExternal);
     window.addEventListener('elabftw:calendar-list', onGoogleList);
+    stopCalendars = watchCalendarChoices(choices => { calendarChoices = choices; });
     void loadProjects();
     refreshFeeds(true);
     // a request for the events of other calendars, for the days that are shown (answered by the sync, when it is on)
@@ -590,6 +600,7 @@
     window.removeEventListener('todolist-changed', load);
     window.removeEventListener('elabftw:calendar-events', onExternal);
     window.removeEventListener('elabftw:calendar-list', onGoogleList);
+    stopCalendars?.();
     window.clearInterval(refreshTimer);
     window.clearInterval(clockTimer);
   });
@@ -804,6 +815,17 @@
           {/each}
         </select>
       </label>
+      {#if calendarChoices.usable}
+        <label class='cal-modal-field'>
+          <span class='small'>{t('Google calendar')}</span>
+          <select class='form-control' bind:value={newCalendar}>
+            <option value=''>{t('The calendar of the sync settings')}</option>
+            {#each calendarChoices.calendars as calendar (calendar.id)}
+              <option value={calendar.id}>{calendar.summary}</option>
+            {/each}
+          </select>
+        </label>
+      {/if}
       <div class='cal-modal-buttons'>
         <button type='button' class='btn btn-ghost' on:click={closeNewTask}>{t('Cancel')}</button>
         <button type='submit' class='btn btn-primary' disabled={newBusy || newTitle.trim() === ''}>{t('Add task')}</button>
