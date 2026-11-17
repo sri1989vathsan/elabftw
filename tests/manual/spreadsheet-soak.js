@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-copy-widths', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -1152,6 +1152,45 @@ async function spreadsheetSoak(options = {}) {
   };
 
   // ---- scenarios ------------------------------------------------------------------------
+  const pasteCopyWidths = async rich => {
+      const original = await createTable('width source', { rows: 4, cols: 3 });
+      if (!original) return;
+      await typeInto(original, 0, 0, 'keep-me');
+      // the typed value reaches the table's own cells when the sheet is saved, and the table is what a copy reads
+      await save();
+      // what the browser puts on the clipboard when the whole table is selected: the table as it stands in the editor
+      const sourceTable = editor.getBody().querySelector(`table[data-elabftw-spreadsheet-uid="${original}"]`);
+      if (!sourceTable) { fail('could not find the spreadsheet to copy'); return; }
+      const copyTable = sourceTable.cloneNode(true);
+      const wanted = [210, 64, 150];
+      const gutter = copyTable.querySelector('.spreadsheet-coordinate') ? 1 : 0;
+      const sourceCols = [...copyTable.querySelectorAll('colgroup > col')].slice(gutter);
+      if (sourceCols.length !== wanted.length) { fail(`the copy has ${sourceCols.length} data columns, expected ${wanted.length}`); return; }
+      sourceCols.forEach((col, i) => { col.style.width = `${wanted[i]}px`; });
+      // plain: without the editor's own rich-selection marker (a copy of the table from the toolbar menu);
+      // rich: wrapped in it, as the editor's Ctrl+C writes a selection, which TinyMCE (not the sheet handler) pastes
+      const bare = copyTable.outerHTML.replace(/\sdata-elabftw-rich-selection(="[^"]*")?/g, '');
+      const html = rich ? `<div data-elabftw-rich-selection="true">${bare}</div>` : `<html><body>${bare}</body></html>`;
+      layoutDirty = true;
+      const before = new Set(api.snapshot(false).map(snap => snap.uid));
+      editor.selection.select(editor.getBody(), true); editor.selection.collapse(false);
+      const dt = new DataTransfer(); dt.setData('text/html', html); dt.setData('text/plain', 'keep-me\t\t\n\t\t');
+      editor.getDoc().dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+      await sleep(1200);
+      const added = api.snapshot(true).filter(snap => !before.has(snap.uid));
+      if (added.length !== 1) { fail(`pasting a copy made ${added.length} spreadsheets, expected 1`); return; }
+      const uid = added[0].uid;
+      const pasted = editor.getBody().querySelector(`table[data-elabftw-spreadsheet-uid="${uid}"]`);
+      let pastedGrid = models.get(original).grid.map(r => r.slice());
+      try { pastedGrid = JSON.parse(atob(pasted.getAttribute('data-spreadsheet'))).data; } catch { /* the model of the original is the fallback */ }
+      if (String(pastedGrid[0]?.[0]) !== 'keep-me') fail(`a pasted copy lost its cell contents (first cell is "${pastedGrid[0]?.[0]}")`);
+      models.set(uid, { label: 'width copy', grid: pastedGrid, plate: false });
+      const got = pasted ? [...pasted.querySelectorAll('colgroup > col')].slice(gutter).map(col => Math.round(Number.parseFloat(col.style.width))) : [];
+      if (got.join(',') !== wanted.join(',')) fail(`a pasted copy has column widths ${got.join(', ')}, the source had ${wanted.join(', ')}`);
+      await live(uid);
+      await consistency('paste-copy-widths: inline, popup and stored HTML agree', true);
+      await save();
+  };
   const scenarios = {
     async 'plate-day'() {
       const uid = await createTable('96-well plate', { plate: 96 });
@@ -1684,45 +1723,39 @@ async function spreadsheetSoak(options = {}) {
       await verify('paste-external: edited', true);
       await consistency('paste-external: inline, popup and stored HTML agree', true);
     },
+    // A table from Excel, Sheets or Word keeps its column widths: on a <col> in points, in a class of the <style> block,
+    // and on the first row's cells as a width attribute. A column without one keeps the default width.
+    async 'paste-outside-widths'() {
+      layoutDirty = true;
+      const cases = [
+        { name: 'col in points', css: '', colgroup: '<colgroup><col style="width:150pt"><col style="width:48pt"><col></colgroup>', cellAttr: ['', '', ''], want: [200, 64, 100] },
+        { name: 'class in style block', css: '<style>.xl1{width:180px}.xl2{width:60px}</style>', colgroup: '', cellAttr: [' class="xl1"', ' class="xl2"', ''], want: [180, 60, 100] },
+        { name: 'width attribute', css: '', colgroup: '', cellAttr: [' width="220"', ' width="90"', ' width="130"'], want: [220, 90, 130] },
+      ];
+      for (const item of cases) {
+        const before = new Set(api.snapshot(false).map(snap => snap.uid));
+        const rows = [['a', 'b', 'c'], ['d', 'e', 'f']];
+        const html = `${item.css}<table>${item.colgroup}<tbody>${rows.map((row, r) => `<tr>${row.map((v, c) => `<td${r === 0 ? item.cellAttr[c] : ''}>${v}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+        editor.selection.select(editor.getBody(), true); editor.selection.collapse(false);
+        const dt = new DataTransfer(); dt.setData('text/html', html); dt.setData('text/plain', rows.map(r => r.join('\t')).join('\n'));
+        editor.getDoc().dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+        await sleep(1200);
+        const added = api.snapshot(true).filter(snap => !before.has(snap.uid));
+        if (added.length !== 1) { fail(`${item.name}: an outside paste made ${added.length} spreadsheets, expected 1`); continue; }
+        const uid = added[0].uid;
+        const pasted = editor.getBody().querySelector(`table[data-elabftw-spreadsheet-uid="${uid}"]`);
+        const gutter = pasted?.querySelector('.spreadsheet-coordinate') ? 1 : 0;
+        const got = pasted ? [...pasted.querySelectorAll('colgroup > col')].slice(gutter).map(col => Math.round(Number.parseFloat(col.style.width))) : [];
+        if (got.join(',') !== item.want.join(',')) fail(`${item.name}: the pasted table has column widths ${got.join(', ')}, expected ${item.want.join(', ')}`);
+        models.set(uid, { label: `outside widths (${item.name})`, grid: rows.map(r => r.slice()), plate: false });
+        await live(uid);
+      }
+      await consistency('paste-outside-widths: inline, popup and stored HTML agree', true);
+    },
     // A copy of one of our own spreadsheets, pasted through the editor's paste handler (not insertContent), must keep the
     // source's column widths: the conversion to a new sheet used to read row heights but not the <colgroup>.
-    async 'paste-copy-widths'() {
-      const original = await createTable('width source', { rows: 4, cols: 3 });
-      if (!original) return;
-      await typeInto(original, 0, 0, 'keep-me');
-      // the typed value reaches the table's own cells when the sheet is saved, and the table is what a copy reads
-      await save();
-      // what the browser puts on the clipboard when the whole table is selected: the table as it stands in the editor
-      const sourceTable = editor.getBody().querySelector(`table[data-elabftw-spreadsheet-uid="${original}"]`);
-      if (!sourceTable) { fail('could not find the spreadsheet to copy'); return; }
-      const copyTable = sourceTable.cloneNode(true);
-      const wanted = [210, 64, 150];
-      const gutter = copyTable.querySelector('.spreadsheet-coordinate') ? 1 : 0;
-      const sourceCols = [...copyTable.querySelectorAll('colgroup > col')].slice(gutter);
-      if (sourceCols.length !== wanted.length) { fail(`the copy has ${sourceCols.length} data columns, expected ${wanted.length}`); return; }
-      sourceCols.forEach((col, i) => { col.style.width = `${wanted[i]}px`; });
-      // without the editor's own rich-selection marker, so the paste takes the same road as a copy from a table that was just selected
-      const html = `<html><body>${copyTable.outerHTML}</body></html>`.replace(/\sdata-elabftw-rich-selection(="[^"]*")?/g, '');
-      layoutDirty = true;
-      const before = new Set(api.snapshot(false).map(snap => snap.uid));
-      editor.selection.select(editor.getBody(), true); editor.selection.collapse(false);
-      const dt = new DataTransfer(); dt.setData('text/html', html); dt.setData('text/plain', 'keep-me\t\t\n\t\t');
-      editor.getDoc().dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
-      await sleep(1200);
-      const added = api.snapshot(true).filter(snap => !before.has(snap.uid));
-      if (added.length !== 1) { fail(`pasting a copy made ${added.length} spreadsheets, expected 1`); return; }
-      const uid = added[0].uid;
-      const pasted = editor.getBody().querySelector(`table[data-elabftw-spreadsheet-uid="${uid}"]`);
-      let pastedGrid = models.get(original).grid.map(r => r.slice());
-      try { pastedGrid = JSON.parse(atob(pasted.getAttribute('data-spreadsheet'))).data; } catch { /* the model of the original is the fallback */ }
-      if (String(pastedGrid[0]?.[0]) !== 'keep-me') fail(`a pasted copy lost its cell contents (first cell is "${pastedGrid[0]?.[0]}")`);
-      models.set(uid, { label: 'width copy', grid: pastedGrid, plate: false });
-      const got = pasted ? [...pasted.querySelectorAll('colgroup > col')].slice(gutter).map(col => Math.round(Number.parseFloat(col.style.width))) : [];
-      if (got.join(',') !== wanted.join(',')) fail(`a pasted copy has column widths ${got.join(', ')}, the source had ${wanted.join(', ')}`);
-      await live(uid);
-      await consistency('paste-copy-widths: inline, popup and stored HTML agree', true);
-      await save();
-    },
+    async 'paste-copy-widths'() { await pasteCopyWidths(false); },
+    async 'paste-copy-widths-rich'() { await pasteCopyWidths(true); },
     // After Tab (or Shift+Enter) the cursor is on another cell, and typing or Enter must act on that one.
     async 'tab-then-type'() {
       const uid = await createTable('tab then type', { rows: 5, cols: 5 });
