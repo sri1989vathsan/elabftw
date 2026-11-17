@@ -650,7 +650,8 @@ final class ExperimentsFolders extends AbstractRest
         $this->Db->execute($req);
     }
 
-    private const FOLDER_VIEWS = array('tree', 'list', 'details');
+    // 'details' is the older name of the table view; it stays accepted so a saved choice keeps loading (the page maps it to 'cards')
+    private const FOLDER_VIEWS = array('tree', 'list', 'cards', 'details');
 
     /** The folder view the current user chose, or null when they never chose one. */
     public function getFolderView(): ?string
