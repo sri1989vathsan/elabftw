@@ -1116,12 +1116,13 @@
     // margins (mm) dragged in the preview for this label; null = those of the format
     let edited = null;
     const customLabel = element('label', 'd-block');
-    customLabel.append(element('span', 'd-block small text-muted', entry.generic ? 'Text of the label (one line each, up to 8)' : 'Extra text on the label (optional, one line each)'));
+    customLabel.append(element('span', 'd-block small text-muted', entry.generic ? 'Text of the label (one line each, up to 8). Write {name} where a value changes: it becomes an input' : 'Extra text on the label (optional, one line each)'));
     const custom = element('textarea', 'form-control form-control-sm');
     custom.rows = entry.generic ? 5 : 3;
     custom.maxLength = entry.generic ? 640 : 240;
     customLabel.append(custom);
-    box.append(customLabel);
+    const variablesBox = element('div', 'mb-2');
+    box.append(customLabel, variablesBox);
     // the format of the label: the sizes the admins have made
     const formatLabel = element('label', 'd-block');
     formatLabel.append(element('span', 'd-block small text-muted', 'Label format'));
@@ -1161,12 +1162,102 @@
       edited = null;
       showPreview();
     });
+    // variables: {name} in the text of a generic label become inputs; each row of values is one label
+    const rows = [{}];
+    const names = function () {
+      const found = [];
+      (custom.value.match(/\{[^{}]+\}/g) || []).forEach(function (m) {
+        const n = m.slice(1, -1).trim();
+        if (n !== '' && found.indexOf(n) < 0) {
+          found.push(n);
+        }
+      });
+      return found;
+    };
+    const filled = function (row) {
+      return custom.value.replace(/\{([^{}]+)\}/g, function (m, n) {
+        return row[n.trim()] !== undefined ? row[n.trim()] : '';
+      });
+    };
+    const renderVariables = function () {
+      variablesBox.textContent = '';
+      const list = names();
+      if (!entry.generic || list.length === 0) {
+        return;
+      }
+      const table = element('table', 'table table-sm mb-1');
+      const head = element('tr');
+      list.forEach(function (n) {
+        head.append(element('th', 'small', n));
+      });
+      head.append(element('th'));
+      table.append(head);
+      rows.forEach(function (row, index) {
+        const tr = element('tr');
+        list.forEach(function (n) {
+          const td = element('td');
+          const input = element('input', 'form-control form-control-sm');
+          input.type = 'text';
+          input.value = row[n] || '';
+          input.addEventListener('input', function () {
+            row[n] = input.value;
+            window.clearTimeout(input.timer);
+            input.timer = window.setTimeout(showPreview, 400);
+          });
+          // a table pasted from a spreadsheet fills the cells from here: a row of the table is a label
+          input.addEventListener('paste', function (event) {
+            const text = (event.clipboardData || window.clipboardData).getData('text');
+            if (text.indexOf('\t') < 0 && text.indexOf('\n') < 0) {
+              return;
+            }
+            event.preventDefault();
+            const pasted = text.replace(/\r/g, '').replace(/\n$/, '').split('\n').map(function (line) {
+              return line.split('\t');
+            });
+            pasted.forEach(function (cells, r) {
+              while (rows.length <= index + r) {
+                rows.push({});
+              }
+              cells.forEach(function (cell, c) {
+                if (list[list.indexOf(n) + c] !== undefined) {
+                  rows[index + r][list[list.indexOf(n) + c]] = cell.trim();
+                }
+              });
+            });
+            renderVariables();
+            showPreview();
+          });
+          td.append(input);
+          tr.append(td);
+        });
+        const del = element('button', 'btn btn-outline-secondary btn-sm', '\u00d7');
+        del.type = 'button';
+        del.title = 'Remove this label';
+        del.disabled = rows.length === 1;
+        del.addEventListener('click', function () {
+          rows.splice(index, 1);
+          renderVariables();
+          showPreview();
+        });
+        const last = element('td');
+        last.append(del);
+        tr.append(last);
+        table.append(tr);
+      });
+      const add = element('button', 'btn btn-outline-secondary btn-sm', 'Add a label with other values');
+      add.type = 'button';
+      add.addEventListener('click', function () {
+        rows.push(Object.assign({}, rows[rows.length - 1]));
+        renderVariables();
+      });
+      variablesBox.append(table, add, element('div', 'small text-muted', rows.length + (rows.length === 1 ? ' label' : ' labels') + ' of ' + copies.value + ' copies each; the preview shows the first.'));
+    };
     const request = function (extra) {
       return fetch('label-print.php', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-Token': token() },
-        body: JSON.stringify(Object.assign({ id: entry.id, generic: entry.generic ? true : undefined, font_mm: entry.generic && fontSize.value !== '' ? Number(fontSize.value) : undefined, copies: Number(copies.value) || 1, custom: custom.value, format: format.value === '' ? -1 : Number(format.value), margins: edited || undefined }, extra || {})),
+        body: JSON.stringify(Object.assign({ id: entry.id, generic: entry.generic ? true : undefined, font_mm: entry.generic && fontSize.value !== '' ? Number(fontSize.value) : undefined, copies: Number(copies.value) || 1, custom: entry.generic ? filled(rows[0]) : custom.value, format: format.value === '' ? -1 : Number(format.value), margins: edited || undefined }, extra || {})),
       }).then(async function (response) {
         const body = await response.json();
         if (!response.ok) {
@@ -1280,6 +1371,7 @@
       });
     };
     custom.addEventListener('input', function () {
+      renderVariables();
       window.clearTimeout(custom.timer);
       custom.timer = window.setTimeout(showPreview, 400);
     });
@@ -1302,9 +1394,14 @@
       message.className = 'small mb-0';
       message.textContent = 'Sending to the printer...';
       try {
-        const body = await request();
+        let body = null;
+        let total = 0;
+        for (const row of entry.generic ? rows : [null]) {
+          body = await request(row ? { custom: filled(row) } : undefined);
+          total += body.printed;
+        }
         message.className = 'small mb-0 text-success';
-        message.textContent = 'Sent: ' + body.printed + (body.printed === 1 ? ' label' : ' labels') + ' (' + body.lines.join(' / ') + ').';
+        message.textContent = 'Sent: ' + total + (total === 1 ? ' label' : ' labels') + ' (' + body.lines.join(' / ') + (rows.length > 1 && entry.generic ? ', ...' : '') + ').';
       } catch (error) {
         message.className = 'small mb-0 text-danger';
         message.textContent = error.message;
