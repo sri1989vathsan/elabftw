@@ -7,7 +7,10 @@
  *   await foldersExplorerCheck();      // returns {pass, results}
  *
  * It creates two folders ("XPL one", "XPL two") and one experiment ("XPL file") in the first, moves the experiment to the second
- * by a synthetic drag and back with Undo, and deletes what it made. The panel's open/closed state and views are put back.
+ * by a synthetic drag and back with Undo, moves a folder into another (and back to the top level), drags a resource, checks that
+ * a parent cannot be dropped on its own child and that someone else's experiment is refused, and deletes what it made.
+ * The panel's open/closed state and views are put back. The "someone else's experiment" step needs one such experiment in a folder
+ * (any experiment of another user that this user can see); it is skipped, and reported as such, when there is none.
  */
 window.foldersExplorerCheck = async function () {
   var results = [];
@@ -72,6 +75,9 @@ window.foldersExplorerCheck = async function () {
     click('[data-action="select-folder-view"][data-view="list"]');
     await wait(500);
     check('E8 list view: the flat list shows, the tree hides', visible($('#experimentsFoldersFlat')) && !visible($('#experimentsFoldersTree')), 'flat/tree visibility wrong');
+    // the panel may be inside another folder from an earlier look: start at the top level
+    var rootCrumb = $('.folder-level-bar button.folder-path-crumb');
+    if (rootCrumb) { rootCrumb.click(); await wait(500); }
     var oneLink = Array.prototype.find.call(document.querySelectorAll('#experimentsFoldersFlat [data-action="open-folder-level"]'), function (a) { return /XPL one/.test(a.textContent); });
     check('E9 the folder XPL one is listed', !!oneLink, 'not listed');
     if (oneLink) oneLink.click();
@@ -138,9 +144,120 @@ window.foldersExplorerCheck = async function () {
       var oneData = (await api('GET', 'experiments_folders/' + one)).json;
       check('E22 a folder dropped onto itself is not moved', !oneData.parent_id, 'parent_id ' + oneData.parent_id);
     }
+
+    // ---- more moves: folder into folder, the top level, a resource, a parent onto its child, someone else's experiment ----
+    await reloadPanel();
+    click('[data-action="select-folder-scope"][data-scope="all"]');
+    await wait(400);
+    click('[data-action="select-folder-view"][data-view="tree"]');
+    await wait(400);
+    var treeRow = function (id, attr) { return $('#experimentsFoldersTree .folder-row[' + attr + '="' + id + '"]'); };
+    var oneDrag = treeRow(one, 'data-drag-id'), twoDrop = treeRow(two, 'data-drop-folder');
+    if (oneDrag && twoDrop) {
+      var lit = drag(oneDrag, twoDrop);
+      check('M1 a folder dropped on another lights the target', lit, 'no highlight');
+      await wait(2500);
+      var inside = (await api('GET', 'experiments_folders/' + one)).json;
+      check('M2 the folder is now inside the other', Number(inside.parent_id) === two, inside.parent_id);
+      var undoF = $('#folderMoveToast .folder-move-toast-undo');
+      if (undoF) { undoF.click(); await wait(2500); }
+      var top = (await api('GET', 'experiments_folders/' + one)).json;
+      check('M3 Undo puts the folder back at the top level', !top.parent_id, top.parent_id);
+    } else check('M1 tree rows found', false, [!!oneDrag, !!twoDrop]);
+
+    // a parent cannot be dropped on its own child (put one inside two by the API, then drag two onto one)
+    await api('PATCH', 'experiments_folders/' + one, { parent_id: two });
+    await reloadPanel();
+    click('[data-action="select-folder-scope"][data-scope="all"]');
+    await wait(400);
+    var twoDrag = treeRow(two, 'data-drag-id'), oneDrop = treeRow(one, 'data-drop-folder');
+    if (twoDrag && oneDrop) {
+      check('M4 a parent dropped on its own child does not light the target', !drag(twoDrag, oneDrop), 'highlighted');
+      await wait(800);
+      var parentData = (await api('GET', 'experiments_folders/' + two)).json;
+      check('M5 the parent stays where it is', !parentData.parent_id, parentData.parent_id);
+    }
+    await api('PATCH', 'experiments_folders/' + one, { parent_id: 0 });
+
+    // a resource, dragged from the list view
+    var cats = (await api('GET', 'resources_categories')).json;
+    var resBody = { title: 'XPL res', folder_id: one };
+    if (Array.isArray(cats) && cats.length) resBody.category_id = cats[0].id;
+    var resPost = await api('POST', 'items', resBody);
+    if (resPost.loc) {
+      var item = Number(resPost.loc.split('/').pop());
+      made.items = (made.items || []).concat(item);
+      await reloadPanel();
+      click('[data-action="select-folder-scope"][data-scope="all"]');
+      await wait(400);
+      click('[data-action="select-folder-type"][data-type="items"]');
+      await wait(500);
+      click('[data-action="select-folder-view"][data-view="list"]');
+      await wait(600);
+      // start from the top level, then step into the folder
+      var crumb = $('.folder-level-bar button.folder-path-crumb');
+      if (crumb) { crumb.click(); await wait(500); }
+      var oneStep = Array.prototype.find.call(document.querySelectorAll('#experimentsFoldersFlat [data-action="open-folder-level"]'), function (a) { return /XPL one/.test(a.textContent); });
+      if (oneStep) { oneStep.click(); await wait(1800); }
+      var resRow = Array.prototype.find.call(document.querySelectorAll('#experimentsFoldersFlat .folder-file-row'), function (r) { return /XPL res/.test(r.textContent); });
+      check('M6 the resource shows as a file on the Res switch', !!resRow, 'not listed');
+      var twoTree = treeRow(two, 'data-drop-folder');
+      if (resRow && twoTree) {
+        check('M7 the file row knows it is a resource', resRow.dataset.dragType === 'items', resRow.dataset.dragType);
+        drag(resRow, twoTree);
+        await wait(2500);
+        var movedRes = (await api('GET', 'items/' + item)).json;
+        check('M8 the resource is now in XPL two', Number(movedRes.folder_id) === two, movedRes.folder_id);
+        var undoR = $('#folderMoveToast .folder-move-toast-undo');
+        if (undoR) { undoR.click(); await wait(2500); }
+        var backRes = (await api('GET', 'items/' + item)).json;
+        check('M9 Undo puts the resource back in XPL one', Number(backRes.folder_id) === one, backRes.folder_id);
+      }
+      click('[data-action="select-folder-type"][data-type="experiments"]');
+      await wait(400);
+    } else check('M6 a resource could be created for the check', false, resPost.status);
+
+    // someone else's experiment is refused
+    var me = (await api('GET', 'users/me')).json;
+    var theirs = null;
+    var where = 0;
+    var folderIds = Array.prototype.map.call(document.querySelectorAll('#experimentsFoldersTree .folder-node'), function (n) { return n.dataset.folderId; });
+    for (var fid of folderIds) {
+      var inFolder = (await api('GET', 'experiments?folder=' + fid + '&scope=2&limit=50')).json || [];
+      var hit = inFolder.find(function (e) { return e.fullname && e.fullname !== me.fullname && !/XPL/.test(e.title); });
+      if (hit) { theirs = hit; where = Number(fid); break; }
+    }
+    if (theirs) {
+      var targetTree = treeRow(two, 'data-drop-folder');
+      var rowOf = null;
+      click('[data-action="select-folder-view"][data-view="list"]');
+      await wait(500);
+      // walk down to the folder that holds it, by its path
+      var path = (document.querySelector('#experimentsFoldersTree .folder-node[data-folder-id="' + where + '"]') || {dataset: {}}).dataset.folderFullPath;
+      var crumb2 = $('.folder-level-bar button.folder-path-crumb');
+      if (crumb2) { crumb2.click(); await wait(500); }
+      if (path) {
+        for (var part of path.split(' > ')) {
+          var step = Array.prototype.find.call(document.querySelectorAll('#experimentsFoldersFlat [data-action="open-folder-level"]'), function (a) { return a.querySelector('.folder-name') && a.querySelector('.folder-name').textContent.trim() === part; });
+          if (!step) break;
+          step.click();
+          await wait(1500);
+        }
+      }
+      rowOf = Array.prototype.find.call(document.querySelectorAll('#experimentsFoldersFlat .folder-file-row'), function (r) { return r.textContent.indexOf(theirs.title) !== -1; });
+      check('X0 reached an experiment owned by someone else', !!rowOf, path);
+      if (rowOf && targetTree) {
+        drag(rowOf, targetTree);
+        await wait(2500);
+        var still = (await api('GET', 'experiments/' + theirs.id)).json;
+        check('X1 it was not moved', Number(still.folder_id) === where, still.folder_id);
+        check('X2 no "Moved" message for the refused move', !$('#folderMoveToast'), 'toast shown');
+      }
+    } else results.push({ name: 'X0 skipped: no experiment of another user in a folder', ok: true });
   } catch (e) {
     if (e.message !== 'stop') check('E99 the check ran to the end', false, String(e));
   } finally {
+    for (var itemId of (made.items || [])) { try { await api('DELETE', 'items/' + itemId); } catch (e) { /* best effort */ } }
     for (var id of made.experiments) { try { await api('PATCH', 'experiments/' + id, { action: 'destroy' }); } catch (e) { /* best effort */ } }
     for (var f of made.folders) { try { await api('DELETE', 'experiments_folders/' + f); } catch (e) { /* best effort */ } }
     var key = Object.keys(localStorage).filter(function (k) { return /^elabftw-folders-view-\d+$/.test(k); })[0];
