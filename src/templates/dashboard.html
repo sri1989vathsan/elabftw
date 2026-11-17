@@ -7,12 +7,13 @@
 {% set showScheduledBookings = false %}
 
 {% include 'show-view-edit.html' %}
-<h2>{{ 'Welcome %s'|trans|format(App.Users.userData.firstname) }}</h2>
+<h2 class='dashboard-welcome'>{{ 'Welcome %s'|trans|format(App.Users.userData.firstname) }}</h2>
 
 {% include 'request-actions-show.html' %}
 <hr>
 <div class='row dashboard-grid'>
   <div class='col-md-4'>
+    <div class='dashboard-card'>
     <div class='d-flex justify-content-between dashboard-heading'>
       <h3><a href='experiments.php'><i class='fas fa-flask mr-2'></i>{% trans %}Experiment{% plural 2 %}Experiments{% endtrans %}</a>{{ guide.area('Experiments', 'Experiments') }}</h3>
       <div>
@@ -61,8 +62,10 @@
         </a>
       {% endfor %}
     </div>
+    </div>
   </div>
   <div class='col-md-4 mt-2 mt-md-0'>
+    <div class='dashboard-card'>
     <div class='d-flex justify-content-between dashboard-heading'>
       <h3><a href='database.php'><i class='fas fa-cubes-stacked mr-2'></i>{% trans %}Resource{% plural 2 %}Resources{% endtrans %}</a>{{ guide.area('Resources', 'Resources') }}</h3>
       <div>
@@ -109,9 +112,11 @@
         </a>
       {% endfor %}
     </div>
+    </div>
   </div>
   {% if showScheduledBookings %}
   <div class='col-md-4 mt-2 mt-md-0'>
+    <div class='dashboard-card'>
     <div class='d-flex justify-content-between dashboard-heading'>
       <h3><a href='scheduler.php'><i class='far fa-calendar-alt mr-2'></i>{{ 'Scheduled bookings'|trans }}</a></h3>
       <div>
@@ -130,9 +135,11 @@
         </a>
       {% endfor %}
     </div>
+    </div>
   </div>
   {% endif %}
-  <div class='col-md-4 mt-2 mt-md-0'>
+  <div class='col-md-4 mt-2 mt-md-0 dashboard-announcements-col'>
+    <div class='dashboard-card'>
     <div class='d-flex justify-content-between align-items-center dashboard-heading'>
       <h3><i class='fas fa-bullhorn mr-2'></i>{{ 'Announcements'|trans }}{{ guide.info('guide-announcements', 'Announcements') }}</h3>
       {% if App.Users.isAdmin %}
@@ -193,6 +200,7 @@
       {% endfor %}
     </div>
     <a href='announcements.php' class='smallgray d-block mt-1'>{{ 'See previous announcements'|trans }}</a>
+    </div>
   </div>
 </div>
 
