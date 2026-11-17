@@ -31,8 +31,11 @@ export default class FoldersPanel extends SidePanel {
 
   /** The refresh button: forget the short-lived cached copy and load the folder tree again. */
   refresh(): Promise<void> {
-    sessionStorage.removeItem('folders-panel-html-v3');
-    sessionStorage.removeItem('folders-panel-html-v3-at');
+    // the keys loadPanel() reads (it used to clear an older version's, so Refresh could keep showing the cached panel for 30 s)
+    ['v3', 'v4'].forEach(version => {
+      sessionStorage.removeItem(`folders-panel-html-${version}`);
+      sessionStorage.removeItem(`folders-panel-html-${version}-at`);
+    });
     this.loading = this.loadPanel();
     return this.loading;
   }
