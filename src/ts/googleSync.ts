@@ -17,6 +17,7 @@ import { ApiC } from './api';
 import { core } from './core';
 import { Model } from './interfaces';
 import { stripMentionHtml } from './mentions';
+import { readTaskCalendars } from './googleTaskCalendars';
 import {
   buildDesired,
   syncTasks,
@@ -234,8 +235,14 @@ function target(): Target {
 }
 
 function shownIds(): string[] {
+  const raw = read(acct(KEY_CAL_SHOWN));
+  // nothing chosen yet and the to-dos go to a Google Calendar: that calendar (and the main one) is shown by itself, without a visit to the
+  // Calendars menu; ticking or unticking a calendar there then keeps the list as it is
+  if (raw === null) {
+    return target() === 'tasks' ? [] : [...new Set(['primary', calendarTargetId()])];
+  }
   try {
-    const list = JSON.parse(read(acct(KEY_CAL_SHOWN)) ?? '[]') as unknown;
+    const list = JSON.parse(raw) as unknown;
     return Array.isArray(list) ? list.filter((id): id is string => typeof id === 'string') : [];
   } catch {
     return [];
@@ -318,13 +325,27 @@ const calendarLocalApi: CalLocalApi = {
   },
 };
 
-// what was written last time belongs to one calendar: another calendar starts from nothing
-function readCalendarSnapshot(calendarId: string): CalSnapshot {
+// what was written last time, by calendar (each calendar starts from nothing the first time); the older form held one calendar only
+function readCalendarSnapshots(): Record<string, CalSnapshot> {
   try {
-    const parsed = JSON.parse(read(acct(KEY_CAL_SNAPSHOT)) ?? '{}') as { calendar?: string; items?: CalSnapshot };
-    return parsed.calendar === calendarId && parsed.items && typeof parsed.items === 'object' ? parsed.items : {};
+    const parsed = JSON.parse(read(acct(KEY_CAL_SNAPSHOT)) ?? '{}') as { calendar?: string; items?: CalSnapshot; calendars?: Record<string, CalSnapshot> };
+    if (parsed.calendars && typeof parsed.calendars === 'object') {
+      return parsed.calendars;
+    }
+    return parsed.calendar && parsed.items && typeof parsed.items === 'object' ? { [parsed.calendar]: parsed.items } : {};
   } catch {
     return {};
+  }
+}
+
+async function deleteCalendarEvent(token: string, calendarId: string, eventId: string): Promise<void> {
+  try {
+    await google('DELETE', `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, token, undefined, CALENDAR_API);
+  } catch (error) {
+    // gone already (404, 410): fine; anything else (sign-in) goes up
+    if (error instanceof AuthError || !/said (404|410)\b/.test(error instanceof Error ? error.message : '')) {
+      throw error;
+    }
   }
 }
 
@@ -393,10 +414,15 @@ async function publishCalendarList(): Promise<void> {
     window.dispatchEvent(new CustomEvent('elabftw:calendar-list', {
       detail: {
         state,
+        // the to-dos go to a Google Calendar (the popups of a task then offer a calendar for it), and to which one by default
+        syncs: target() !== 'tasks',
+        target: calendarTargetId(),
         calendars: state === 'ready' ? calendars.map(calendar => ({
           id: calendar.id,
           summary: calendar.summary,
           color: calendar.color,
+          writable: calendar.writable,
+          primary: calendar.primary,
           shown: ids.includes(calendar.id) || (calendar.primary && ids.includes('primary')),
         })) : [],
       },
@@ -558,29 +584,99 @@ function setStatus(text: string, isError = false): void {
   render();
 }
 
-// the to-dos with a date become events of the chosen calendar (and what changed there comes back, when asked)
+// the to-dos with a date become events of a calendar: the one chosen for the task (in its popup), else the one of the settings
+// (and what changed there comes back, when asked). A task moved to another calendar has its event taken from the old one.
 async function syncToCalendar(token: string, todos: Todo[], twoWay: boolean, includeDetails: boolean): Promise<string> {
-  const calendarId = calendarTargetId();
-  const result = await syncCalendar(calendarApi(token, calendarId), todos as unknown as CalTodo[], {
-    local: calendarLocalApi,
-    snapshot: readCalendarSnapshot(calendarId),
-    twoWay,
-    importEvents: twoWay && read(acct(KEY_CAL_IMPORT)) === '1',
-    includeDetails,
-    origin: window.location.origin,
-    range: { from: new Date(Date.now() - 30 * DAY_MS), to: new Date(Date.now() + 365 * DAY_MS) },
-  });
-  write(acct(KEY_CAL_SNAPSHOT), JSON.stringify({ calendar: calendarId, items: result.snapshot }));
-  const pulled = result.pulled + result.imported;
+  if (calendars.length === 0) {
+    await loadCalendars(token);
+  }
+  const normal = (id: string): string => (calendars.find(calendar => calendar.id === id)?.primary ? 'primary' : id);
+  const writable = new Set(calendars.filter(calendar => calendar.writable).map(calendar => normal(calendar.id)));
+  const defaultId = normal(calendarTargetId());
+  const chosen = readTaskCalendars();
+  // a calendar that is gone or cannot be written to any more: the task goes to the calendar of the settings
+  const calendarOf = (todo: Todo): string => {
+    const wanted = chosen[String(todo.id)];
+    return wanted && writable.has(normal(wanted)) ? normal(wanted) : defaultId;
+  };
+  const groups = new Map<string, Todo[]>([[defaultId, []]]);
+  const where = new Map<string, string>();
+  for (const todo of todos) {
+    if (!(todo as unknown as CalTodo).deadline) {
+      continue;
+    }
+    const id = calendarOf(todo);
+    where.set(String(todo.id), id);
+    groups.set(id, [...(groups.get(id) ?? []), todo]);
+  }
+  const before = readCalendarSnapshots();
+  for (const id of Object.keys(before)) {
+    if (!groups.has(id)) {
+      groups.set(id, []);
+    }
+  }
+  const after: Record<string, CalSnapshot> = {};
+  const total = { created: 0, updated: 0, pulled: 0, imported: 0, completed: 0, unmarked: 0, moved: 0 };
+  let unmarkedReason: string | undefined;
+  const failures: string[] = [];
+  const range = { from: new Date(Date.now() - 30 * DAY_MS), to: new Date(Date.now() + 365 * DAY_MS) };
+  for (const [calendarId, group] of groups) {
+    let snapshot = { ...(before[calendarId] ?? {}) };
+    try {
+      // an open task that is now on another calendar: its event is taken from this one (the new calendar makes its own)
+      for (const [key, item] of Object.entries(snapshot)) {
+        const now = where.get(key);
+        if (now !== undefined && now !== calendarId) {
+          await deleteCalendarEvent(token, calendarId, item.event);
+          delete snapshot[key];
+          total.moved += 1;
+        }
+      }
+      const result = await syncCalendar(calendarApi(token, calendarId), group as unknown as CalTodo[], {
+        local: calendarLocalApi,
+        snapshot,
+        twoWay,
+        // new events of the calendar of the settings become to-dos (the others only get the tasks that were put there)
+        importEvents: twoWay && calendarId === defaultId && read(acct(KEY_CAL_IMPORT)) === '1',
+        includeDetails,
+        origin: window.location.origin,
+        range,
+      });
+      snapshot = result.snapshot;
+      total.created += result.created;
+      total.updated += result.updated;
+      total.pulled += result.pulled;
+      total.imported += result.imported;
+      total.completed += result.completed;
+      total.unmarked += result.unmarked;
+      unmarkedReason = result.unmarkedReason ?? unmarkedReason;
+    } catch (error) {
+      if (error instanceof AuthError) {
+        throw error;
+      }
+      // this calendar failed (deleted, not allowed...): what is known of it stays, the other calendars go on
+      const name = calendars.find(calendar => normal(calendar.id) === calendarId)?.summary ?? calendarId;
+      failures.push(`${name}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (Object.keys(snapshot).length > 0) {
+      after[calendarId] = snapshot;
+    }
+  }
+  write(acct(KEY_CAL_SNAPSHOT), JSON.stringify({ calendars: after }));
+  const pulled = total.pulled + total.imported;
   if (pulled) {
     window.dispatchEvent(new CustomEvent('todolist-changed'));
   }
   scheduleShown();
+  if (failures.length > 0) {
+    throw new Error(failures.join(' | '));
+  }
   return [
-    result.created + result.updated ? `${result.created} new, ${result.updated} updated` : '',
-    pulled ? `${result.imported} added and ${result.pulled} changed from Google` : '',
-    result.completed ? `${result.completed} done` : '',
-    result.unmarked ? `${result.unmarked} added without a link to their event (${result.unmarkedReason ?? 'Google refused to mark it'})` : '',
+    total.created + total.updated ? `${total.created} new, ${total.updated} updated` : '',
+    total.moved ? `${total.moved} moved to another calendar` : '',
+    pulled ? `${total.imported} added and ${total.pulled} changed from Google` : '',
+    total.completed ? `${total.completed} done` : '',
+    total.unmarked ? `${total.unmarked} added without a link to their event (${unmarkedReason ?? 'Google refused to mark it'})` : '',
   ].filter(Boolean).join('; ');
 }
 

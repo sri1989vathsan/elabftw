@@ -18,6 +18,7 @@
   import { fetchLinkPreviewLabel, handleLinkPreviewPaste } from '../linkPreview';
   import RepeatControl, { type RepeatRule } from './RepeatControl.svelte';
   import { endChoices, endTimeOf, endsNextDay, lengthOf } from '../taskTimes';
+  import { readTaskCalendars, setTaskCalendar, watchCalendarChoices, type CalendarChoices } from '../googleTaskCalendars';
 
   // Closes the @mention dropdown on any click outside its own container --
   // it otherwise stayed open until a mention was picked, even after
@@ -248,6 +249,10 @@
   let draft = '';
   let draftNotes = '';
   let draftProjectId: number | null = null;
+  // the Google calendar of a task, when the to-dos go to a Google Calendar (empty: the calendar of the sync settings)
+  let calendarChoices: CalendarChoices = { usable: false, calendars: [], target: 'primary' };
+  let draftCalendar = '';
+  let editCalendar = '';
   // last-picked date/time are remembered for the rest of the browser
   // session (sessionStorage), so creating several tasks in a row doesn't
   // mean re-picking the same date each time
@@ -892,6 +897,7 @@
     editNotes = task.notes ?? '';
     editDescription = task.description ?? '';
     editProjectId = task.project_id ?? null;
+    editCalendar = readTaskCalendars()[String(task.id)] ?? '';
     if (task.deadline) {
       const deadline = toLocalInput(new Date(task.deadline));
       editDeadlineDate = deadline.slice(0, 10);
@@ -1047,6 +1053,8 @@
       notify.error(error instanceof Error ? error.message : 'Enter a valid reminder.');
       return;
     }
+    // before the change is announced, so that the sync finds it
+    setTaskCalendar(id, editCalendar || null);
     await ApiC.patch(`${Model.Todolist}/${id}`, {
       content,
       notes: editNotes.trim() || null,
@@ -1507,7 +1515,7 @@
       notify.error(error instanceof Error ? error.message : 'Enter a valid reminder.');
       return;
     }
-    await ApiC.post(Model.Todolist, {
+    const createdId = await ApiC.post2location(Model.Todolist, {
       notifOnSaved: 0,
       content,
       notes: draftNotes.trim() || null,
@@ -1517,6 +1525,10 @@
       project_id: draftProjectId,
       repeat_rule: deadline === null ? null : repeatRule,
     });
+    if (draftCalendar !== '') {
+      setTaskCalendar(createdId, draftCalendar);
+    }
+    draftCalendar = '';
     repeatRule = null;
     repeatKey += 1;
     draft = '';
@@ -1791,6 +1803,7 @@
     };
     window.addEventListener('todolist-changed', reload);
     window.addEventListener('todolist-scope-changed', reload);
+    const stopCalendars = watchCalendarChoices(choices => { calendarChoices = choices; });
     // A task linked to an experiment (in its Steps and tasks section) opens its popup right there, on the
     // experiment page, instead of leaving for the Boards page. Ctrl/Cmd/Shift-click and middle-click still follow
     // the link, and so does a task that cannot be loaded.
@@ -1875,6 +1888,7 @@
       window.clearInterval(refreshTimer);
       window.removeEventListener('todolist-changed', reload);
       window.removeEventListener('todolist-scope-changed', reload);
+      stopCalendars();
       document.removeEventListener('click', openLinkedTaskHere);
       window.removeEventListener('elabftw:pm-entity-link-added', onEntityLinkAdded);
       window.dispatchEvent(new CustomEvent('elabftw:pm-task-link-target', { detail: null }));
@@ -1945,6 +1959,17 @@
           {/each}
         </select>
       </label>
+      {#if calendarChoices.usable && deadlineDate}
+        <label class='mb-0'>
+          <span class='small'>{t('Google calendar')}</span>
+          <select class='form-control form-control-sm' bind:value={draftCalendar}>
+            <option value=''>{t('The calendar of the sync settings')}</option>
+            {#each calendarChoices.calendars as calendar (calendar.id)}
+              <option value={calendar.id}>{calendar.summary}</option>
+            {/each}
+          </select>
+        </label>
+      {/if}
       <div class='todo-date-time-row'>
         {#if panelView !== 'calendar'}
           <label class='mb-0'>
@@ -2420,6 +2445,17 @@
               {/each}
             </select>
           </div>
+          {#if calendarChoices.usable}
+            <div class='pm-dialog-field'>
+              <label class='pm-label' for='todo-detail-calendar'>{t('Google calendar')}</label>
+              <select id='todo-detail-calendar' class='form-control' bind:value={editCalendar}>
+                <option value=''>{t('The calendar of the sync settings')}</option>
+                {#each calendarChoices.calendars as calendar (calendar.id)}
+                  <option value={calendar.id}>{calendar.summary}</option>
+                {/each}
+              </select>
+            </div>
+          {/if}
           <div class='d-flex pm-dialog-row'>
             <div class='pm-dialog-field flex-grow-1'>
               <label class='pm-label' for='todo-detail-deadline-date'>{t('Deadline date')}</label>

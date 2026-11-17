@@ -104,6 +104,14 @@
       save(db);
       return json(200, e);
     }
+    if (method === 'DELETE' && m[2]) {
+      // Google marks a deleted event as cancelled (it is no longer listed unless asked for)
+      var gone = list.find(function (x) { return x.id === decodeURIComponent(m[2]); });
+      if (!gone) { return json(404, {}); }
+      gone.status = 'cancelled';
+      save(db);
+      return json(204, null);
+    }
     return json(404, {});
   }
 
