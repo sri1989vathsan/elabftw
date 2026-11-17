@@ -35,7 +35,7 @@ final class CheckCustomDatabase extends Command
         $pending = (new CustomMigrationRunner($this->officialSchema, $this->filesystem))->getPending();
         $output->writeln(sprintf(
             'Custom migrations: %d applied, %d pending.',
-            count(CustomMigrationRunner::MIGRATIONS) - count($pending),
+            count(CustomMigrationRunner::all()) - count($pending),
             count($pending),
         ));
         foreach ($pending as $migration) {

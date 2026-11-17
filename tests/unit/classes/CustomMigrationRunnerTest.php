@@ -14,6 +14,7 @@ use League\Flysystem\Filesystem as Fs;
 use League\Flysystem\InMemory\InMemoryFilesystemAdapter;
 
 use function array_diff;
+use function array_unique;
 use function array_values;
 use function basename;
 use function dirname;
@@ -78,8 +79,9 @@ class CustomMigrationRunnerTest extends \PHPUnit\Framework\TestCase
 
     /** 1. Apply a migration under filename A. */
     /**
-     * custom:db:update only runs what is in CustomMigrationRunner::MIGRATIONS: a file added to src/sql/custom/ and not added to the list is
-     * never applied (the code then fails with "Unknown column"). Every file has to be in the list, in the order of its number.
+     * custom:db:update only runs what is in the migration lists (CustomMigrationRunner::MIGRATIONS and InventoryMigrations::MIGRATIONS): a
+     * file added to src/sql/custom/ and not added to a list is never applied (the code then fails with "Unknown column"). Every file has to
+     * be in exactly one list, and each list is in the order of its file names.
      */
     public function testEveryCustomSqlFileIsInTheMigrationList(): void
     {
@@ -88,9 +90,15 @@ class CustomMigrationRunnerTest extends \PHPUnit\Framework\TestCase
             $onDisk[] = basename($file);
         }
         sort($onDisk);
-        $this->assertSame(array(), array_values(array_diff($onDisk, CustomMigrationRunner::MIGRATIONS)), 'A file of src/sql/custom/ is not in CustomMigrationRunner::MIGRATIONS: custom:db:update would never run it.');
-        $this->assertSame(array(), array_values(array_diff(CustomMigrationRunner::MIGRATIONS, $onDisk)), 'CustomMigrationRunner::MIGRATIONS lists a file that is not in src/sql/custom/.');
-        $this->assertSame($onDisk, CustomMigrationRunner::MIGRATIONS, 'CustomMigrationRunner::MIGRATIONS has to be in the order of the file numbers.');
+        $listed = CustomMigrationRunner::all();
+        $this->assertSame(array(), array_values(array_diff($onDisk, $listed)), 'A file of src/sql/custom/ is in no migration list: custom:db:update would never run it.');
+        $this->assertSame(array(), array_values(array_diff($listed, $onDisk)), 'A migration list names a file that is not in src/sql/custom/.');
+        $this->assertSame($listed, array_values(array_unique($listed)), 'A migration is in the lists twice.');
+        foreach (array('CustomMigrationRunner::MIGRATIONS' => CustomMigrationRunner::MIGRATIONS, 'InventoryMigrations::MIGRATIONS' => InventoryMigrations::MIGRATIONS) as $name => $list) {
+            $sorted = $list;
+            sort($sorted);
+            $this->assertSame($sorted, $list, $name . ' has to be in the order of the file names.');
+        }
     }
 
     public function testAppliesNewMigration(): void

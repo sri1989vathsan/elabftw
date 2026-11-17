@@ -55,7 +55,7 @@ final class CustomDiagnostics extends Command
         $report = array(
             'official_schema_current' => $this->officialSchema,
             'official_schema_required' => SchemaVersionChecker::REQUIRED_SCHEMA,
-            'custom_migrations_total' => count(CustomMigrationRunner::MIGRATIONS),
+            'custom_migrations_total' => count(CustomMigrationRunner::all()),
             'custom_migrations_pending' => $pending,
             'custom_migration_error' => $migrationError,
             'calendar_entities_pending' => $this->calendarBacklog($Db),
