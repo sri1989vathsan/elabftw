@@ -160,10 +160,14 @@
     void tick().then(() => document.querySelector(`.entity-rows [data-entity-id="${next.id}"]`)?.scrollIntoView({ block: 'nearest' }));
   }
 
-  // rows are grouped by the month of their date (created for templates); order is kept
+  // Pinned entries come first, in a group of their own, then the rest by the month of their date (created for templates); the order of the
+  // server is kept inside each group (it puts pinned entries first whatever the sort, so they are on the first page too).
   const groups = $derived.by(() => {
     const result: Array<{ key: string; label: string; items: EntityListItem[] }> = [];
+    const pinned = entities.filter(item => item.is_pinned);
+    if (pinned.length > 0) result.push({ key: 'pinned', label: t('Pinned'), items: pinned });
     for (const item of entities) {
+      if (item.is_pinned) continue;
       const raw = isTemplateType(entityType) ? item.created_at : item.date;
       const key = raw && /^\d{4}-\d{2}/.test(String(raw)) ? String(raw).slice(0, 7) : '';
       let group = result.find(candidate => candidate.key === key);
