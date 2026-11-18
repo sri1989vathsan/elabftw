@@ -124,7 +124,7 @@ final class DashboardController extends AbstractHtmlController
             array(
                 'announcementsArr' => $Announcements->readActive(),
                 'notifIdByAnnouncementId' => $notifIdByAnnouncementId,
-                'showScheduledBookings' => self::SHOW_SCHEDULED_BOOKINGS,
+                'showScheduledBookings' => self::SHOW_SCHEDULED_BOOKINGS && (int) ($this->App->Teams->teamArr['feature_bookable_resources'] ?? 0) === 1,
                 'bookingsArr' => $bookingsArr,
                 'statsModifiedThisWeek' => $DashboardStats->modifiedThisWeek(),
                 'statsOpenSteps' => $DashboardStats->openSteps(),

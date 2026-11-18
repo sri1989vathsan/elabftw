@@ -244,6 +244,10 @@
               </div>
             </div>
 
+            {# the switches of the team (Admin panel > Team > Features): the Tools menu is left out when nothing is in it #}
+            {% set teamTools = {'compounds': App.Teams.teamArr.tools_compounds|default(1), 'chem': App.Teams.teamArr.tools_chem_editor|default(1), 'opencloning': App.Teams.teamArr.tools_opencloning|default(0), 'inventory': App.Teams.teamArr.tools_inventory|default(0)} %}
+            {% set animalStudiesInMenu = constant('Elabftw\\Elabftw\\FeatureFlags::ANIMAL_STUDIES') and App.Config.configArr.pyrat_enabled|default('0') == '1' %}
+            {% if teamTools.compounds or teamTools.chem or (teamTools.opencloning and envAsBool('USE_OPENCLONING')) or teamTools.inventory or animalStudiesInMenu or true %}{# the Sequence viewer entry is always there #}
             <div class='nav-item dropdown'>
               {% if App.devMode -%}
                 <!-- [html-validate-disable-next prefer-native-element: using a button here will mess up the navbar] -->
@@ -252,18 +256,22 @@
               {{ 'Tools'|trans }}
               </a>
               <div class='dropdown-menu'>
+                {% if teamTools.compounds %}
                 {% set isActive = scriptName == 'compounds.php' %}
                 <a class='dropdown-item {{ isActive ? 'active' }}' href='compounds.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-flask fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Compounds'|trans }}</a>
+                {% endif %}
+                {% if teamTools.chem %}
                 {% set isActive = scriptName == 'chem-editor.php' %}
                 <a class='dropdown-item {{ isActive ? 'active' }}' href='chem-editor.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-pen-to-square fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Chemical Structure Editor'|trans }}</a>
-                {# "OpenCloning" hidden from the Tools menu (the Sequence editor is used instead). Left in place, not deleted, so it is easy to bring back:
+                {% endif %}
+                {% if teamTools.opencloning and envAsBool('USE_OPENCLONING') %}
                 {% set isActive = scriptName == 'syc.php' %}
                 <a class='dropdown-item {{ not envAsBool('USE_OPENCLONING') ? 'disabled' }} {{ isActive ? 'active' }}' href='syc.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-dna fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'OpenCloning'|trans }}</a>
-                #}
-                {# "Inventory" hidden from the Tools menu (the Database is used instead). Left in place, not deleted, so it is easy to bring back:
+                {% endif %}
+                {% if teamTools.inventory %}
                 {% set isActive = scriptName == 'inventory.php' %}
                 <a class='dropdown-item {{ isActive ? 'active' }}' href='inventory.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-warehouse fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Inventory'|trans }}</a>
-                #}
+                {% endif %}
                 {% set isActive = scriptName == 'tool.php' %}
                 <a class='dropdown-item {{ isActive ? 'active' }}' href='sequence-viewer/tool.php' {{ isActive ? 'aria-current="page"' }}><i class='fas fa-dna fa-fw mr-1 {{ isActive ? 'color-white' }}'></i>{{ 'Sequence editor'|trans }}</a>
                 {# "LabCollector" disabled placeholder hidden from the Tools
@@ -285,6 +293,7 @@
                 #}
               </div>
             </div>
+            {% endif %}
 
             {# Scheduler hidden from the top nav for now -- not needed at the
                moment. Left in place, not deleted, so it's easy to bring

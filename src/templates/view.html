@@ -92,7 +92,7 @@
   <hr>
 
   {# SHOW EVENTS #}
-  {% if Entity.entityData.type == 'items' and Entity.entityData.is_bookable == 1 %}
+  {% if Entity.entityData.type == 'items' and Entity.entityData.is_bookable == 1 and App.Teams.teamArr.feature_bookable_resources %}
     {% if Entity.entityData.events_start %}
       <div class='d-flex align-content-center'>
         <div>

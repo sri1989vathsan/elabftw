@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { ApiC } from '../api';
   import { core } from '../core';
+  import { saveUserPref, syncUserPrefs, userPrefKey } from '../userPrefs';
   import i18next from '../i18n';
   import { Model } from '../interfaces';
   import { Notification as AppNotification } from '../Notifications.class';
@@ -839,6 +840,12 @@
   }
 
   onMount(() => {
+    // the choices made in another browser: copied here once, then the page shows them
+    void syncUserPrefs().then(changed => {
+      if (!changed) return;
+      canvasView = readCanvasView();
+      cardDensity = loadCardDensity(activeProjectId);
+    });
     const searchParams = new URLSearchParams(window.location.search);
     const projectParam = searchParams.get('project');
     let explicitProjectSelection = false;
@@ -872,6 +879,14 @@
       // activeProjectId before they run, hence waiting on this first
       if (!explicitProjectSelection && projects.length > 0) {
         activeProjectId = projects[0].id;
+        // the tab the person had open last time, when it is still there
+        try {
+          const last = window.localStorage.getItem(userPrefKey('pm-last-project'));
+          if (last === 'all') activeProjectId = 'all';
+          else if (last !== null && projects.some(project => String(project.id) === last)) activeProjectId = Number(last);
+        } catch {
+          // the first tab it is
+        }
       }
       cardDensity = loadCardDensity(activeProjectId);
       void loadColumns();
@@ -944,6 +959,13 @@
 
   function selectProject(id: number | null | 'all'): void {
     activeProjectId = id;
+    // the tab opened next time (when the address does not name a project)
+    try {
+      window.localStorage.setItem(userPrefKey('pm-last-project'), id === null ? 'unfiled' : String(id));
+    } catch {
+      // not remembered in this browser
+    }
+    saveUserPref(userPrefKey('pm-last-project'), id === null ? 'unfiled' : String(id));
     cardDensity = loadCardDensity(id);
     // project is now sent to load() itself (see taskFilterParams()) --
     // switching tabs has to re-fetch the list, not just columns/counts,
@@ -977,31 +999,37 @@
   let subprojectMenuOpen = false;
   let cardDensity: 'compact' | 'expanded' = 'compact';
 
-  // Board (columns) or canvas (free-form cards and arrows) -- remembered per browser.
-  let canvasView = false;
-  try {
-    canvasView = window.localStorage.getItem('pm-canvas-view') === '1';
-  } catch {
-    canvasView = false;
+  // Board (columns) or canvas (free-form cards and arrows), the card density of each project and the last project tab are remembered per user on the
+  // server (userPrefs.ts): this browser's copy is the fast first paint, the server's value wins once it has answered (see onMount).
+  function readCanvasView(): boolean {
+    try {
+      // a choice made before it was kept on the server is in this browser under the plain name
+      return (window.localStorage.getItem(userPrefKey('pm-canvas-view')) ?? window.localStorage.getItem('pm-canvas-view')) === '1';
+    } catch {
+      return false;
+    }
   }
+  let canvasView = readCanvasView();
 
   function toggleCanvasView(): void {
     canvasView = !canvasView;
+    const key = userPrefKey('pm-canvas-view');
     try {
-      window.localStorage.setItem('pm-canvas-view', canvasView ? '1' : '0');
+      window.localStorage.setItem(key, canvasView ? '1' : '0');
     } catch {
-      // the choice just is not remembered
+      // the choice just is not remembered in this browser
     }
+    saveUserPref(key, canvasView ? '1' : '0');
   }
 
   function cardDensityStorageKey(id: number | null | 'all'): string {
-    return `elabftw-pm-density-${id ?? 'unfiled'}`;
+    return userPrefKey(`elabftw-pm-density-${id ?? 'unfiled'}`);
   }
 
   function loadCardDensity(id: number | null | 'all'): 'compact' | 'expanded' {
     try {
       // compact unless the person chose the expanded cards for this board
-      return localStorage.getItem(cardDensityStorageKey(id)) === 'expanded' ? 'expanded' : 'compact';
+      return (localStorage.getItem(cardDensityStorageKey(id)) ?? localStorage.getItem(`elabftw-pm-density-${id ?? 'unfiled'}`)) === 'expanded' ? 'expanded' : 'compact';
     } catch {
       return 'compact';
     }
@@ -1014,6 +1042,7 @@
     } catch {
       // best-effort -- a private/blocked-storage browser just won't remember it across reloads
     }
+    saveUserPref(cardDensityStorageKey(activeProjectId), cardDensity);
     // taskFilterParams() (and therefore what notes/description/entity_links
     // actually got fetched) depends on cardDensity -- switching to expanded
     // without this would show blank notes/description until an unrelated

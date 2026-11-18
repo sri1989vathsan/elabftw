@@ -154,6 +154,34 @@
   </div>
   {% endif %}
 
+  <h2 class='p-2 pl-3 section-title' id='featuresSettings'>{{ 'Features'|trans }}</h2>
+  <div class='pl-3 mt-2 mb-5'>
+    <div class='small text-uppercase text-muted font-weight-bold mb-2' style='letter-spacing:0.04em'>{{ 'Tools menu'|trans }}</div>
+    {% include 'binary-setting.html' with {'model': model, 'src': src,
+      'slug': 'tools_compounds',
+      'label': 'Show Compounds in the Tools menu'|trans} %}
+
+    {% include 'binary-setting.html' with {'model': model, 'src': src,
+      'slug': 'tools_chem_editor',
+      'label': 'Show the Chemical Structure Editor in the Tools menu'|trans} %}
+
+    {% include 'binary-setting.html' with {'model': model, 'src': src,
+      'slug': 'tools_opencloning',
+      'label': 'Show OpenCloning in the Tools menu'|trans,
+      'help': 'Off by default. It also needs the server setting USE_OPENCLONING, set by a sysadmin.'|trans} %}
+
+    {% include 'binary-setting.html' with {'model': model, 'src': src,
+      'slug': 'tools_inventory',
+      'label': 'Show Inventory in the Tools menu'|trans,
+      'help': 'Off by default. Only the menu entry: the storage browser pages that resources link to keep working.'|trans} %}
+
+    <div class='small text-uppercase text-muted font-weight-bold mt-4 mb-2' style='letter-spacing:0.04em'>{{ 'Resources'|trans }}</div>
+    {% include 'binary-setting.html' with {'model': model, 'src': src,
+      'slug': 'feature_bookable_resources',
+      'label': 'Bookable resources'|trans,
+      'help': 'Off by default. When off, resources cannot be set as bookable or booked and the booking buttons are hidden. Bookings that exist are kept: turn it on again to get them back.'|trans} %}
+  </div>
+
   <h2 class='p-2 pl-3 section-title' id='ordersSettings'>{{ 'Orders'|trans }}</h2>
   <div class='pl-3 mt-2 mb-5'>
     {% include 'binary-setting.html' with {'model': model, 'src': src,
