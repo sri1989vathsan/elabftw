@@ -1583,23 +1583,91 @@ tr:first-child td {
   }
 }
 
-// the number of my entries next to a category or status on the dashboard
-.catstat-btn .catstat-count {
+// Dashboard category and status chips on the --fx look: one height, medium weight, a thin left accent (the category colour or the
+// status dot) on a light tint of the colour, hover a little stronger; the count is a quiet pill at the right end, zero muted.
+.dashboard-grid a.catstat-btn {
+  --chip-tint: color-mix(in srgb, var(--bg) 12%, var(--mainbackground, #fff));
+
   align-items: center;
-  background: color-mix(in srgb, currentColor 14%, transparent);
-  border: 1.5px solid currentColor;
-  border-radius: 999px;
+  background: var(--chip-tint);
+  border: 0;
+  border-left: 3px solid var(--bg);
+  border-radius: 0.4rem;
+  color: inherit;
   display: inline-flex;
-  font-size: 0.68rem;
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  height: 1.3rem;
-  justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 500;
+  height: 1.6rem;
+  letter-spacing: 0.02em;
   line-height: 1;
-  margin-left: 0.3rem;
-  min-width: 1.3rem;
-  padding: 0 0.25rem;
-  vertical-align: middle;
+  margin: 0 0.35rem 0.35rem 0 !important;
+  max-width: 100%;
+  padding: 0 0.45rem 0 0.5rem;
+  text-transform: none;
+
+  &:hover {
+    background: color-mix(in srgb, var(--bg) 20%, var(--mainbackground, #fff));
+    color: inherit;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 1px;
+  }
+
+  // a status shows its colour as the dot, not as a bar
+  &.status-btn {
+    border-left: 0;
+    padding-left: 0.55rem;
+
+    .fa-circle {
+      color: var(--bg);
+      font-size: 0.55rem;
+      margin-right: 0.15rem;
+    }
+  }
+
+  .catstat-count {
+    align-items: center;
+    background: color-mix(in srgb, var(--bg) 20%, transparent);
+    border: 0;
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: 0.68rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    height: 1.1rem;
+    justify-content: center;
+    line-height: 1;
+    margin-left: 0.45rem;
+    min-width: 1.2rem;
+    padding: 0 0.3rem;
+    vertical-align: baseline;
+
+    &.is-zero {
+      opacity: 0.5;
+    }
+  }
+}
+
+.dashboard-grid h4 {
+  color: color-mix(in srgb, currentColor 62%, transparent);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  margin: 0.6rem 0 0.3rem;
+  text-transform: uppercase;
+}
+
+// the View button of the edit toolbar: icon and label, the label goes on narrow widths
+.toolbar-view-btn .toolbar-view-label {
+  margin-left: 0.35rem;
+}
+
+@media (max-width: 52rem) {
+  .toolbar-view-btn .toolbar-view-label {
+    display: none;
+  }
 }
 
 // Pin button of the row and board layouts: muted, small, shown a little stronger when pinned
