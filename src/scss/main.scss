@@ -4999,6 +4999,131 @@ h1:has(> #documentTitle) {
   }
 }
 
+// The Manage favourites popover (and the controls of the Filters one): the card is a light, self-contained card, but its inputs and
+// selects were taking the dark side panel's styling (white text on a 9% white wash = invisible on the white card, pale placeholders,
+// no border, 'Add an owner or status' looked like it had no control at all). One grid for the four rows: label above, then
+// [control 1fr][1.4rem+ buttons]; controls 1.5rem high with a visible 1px border, readable text (#23272b on white), placeholders
+// #5c636a (6.3:1 on white), a focus ring in the accent, real carets on the selects; the colour swatch is a 1.5rem square; the
+// + buttons are ghost-bordered icon buttons in the accent colour, filled on hover.
+#favoritesPanel .favorite-filter-overlay {
+  .input-group {
+    align-items: center;
+    display: grid;
+    gap: 0.3rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    margin-bottom: 0.6rem !important;
+
+    > .input-group-append {
+      align-items: center;
+      display: flex;
+      gap: 0.3rem;
+      margin: 0;
+    }
+  }
+
+  input[type='text'],
+  input[type='search'],
+  select,
+  .form-control:not([type='color']) {
+    appearance: auto;
+    background: #fff;
+    border: 1px solid rgba(35, 39, 43, 0.35);
+    border-radius: 4px;
+    box-shadow: none;
+    color: #23272b !important;
+    font-size: 0.8rem;
+    height: 1.5rem;
+    min-height: 1.5rem;
+    min-width: 0;
+    padding: 0 0.45rem;
+    width: 100%;
+
+    &:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 35%, transparent);
+      outline: 0;
+    }
+
+    &::placeholder {
+      color: #5c636a;
+      opacity: 1;
+    }
+
+    option,
+    optgroup {
+      background: #fff;
+      color: #23272b;
+    }
+  }
+
+  input[type='color'],
+  #favoriteNewCategoryColor.form-control {
+    appearance: none;
+    background: #fff;
+    border: 1px solid rgba(35, 39, 43, 0.35);
+    border-radius: 4px;
+    cursor: pointer;
+    flex: 0 0 1.5rem;
+    height: 1.5rem !important;
+    max-width: 1.5rem !important;
+    min-height: 0;
+    min-width: 1.5rem !important;
+    padding: 1px !important;
+    width: 1.5rem !important;
+
+    &::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+
+    &::-webkit-color-swatch {
+      border: 0;
+      border-radius: 3px;
+    }
+
+    &::-moz-color-swatch {
+      border: 0;
+      border-radius: 3px;
+    }
+  }
+
+  .input-group-append .btn {
+    align-items: center;
+    background: transparent;
+    border: 1px solid var(--primary);
+    border-radius: 4px;
+    color: var(--primary) !important;
+    display: inline-flex;
+    height: 1.5rem;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    width: 1.5rem;
+
+    .fas {
+      color: inherit !important;
+      font-size: 0.7rem;
+    }
+
+    &:hover,
+    &:focus-visible {
+      background: var(--primary);
+      color: var(--primary-fg, #fff) !important;
+    }
+  }
+}
+
+// Placeholder contrast (scripted over the new pages and dialogs, WCAG AA 4.5:1): the Search box on the dark panel (4.05 -> 70% of the
+// text colour) and the Goals / Conclusion / Notes editors (3.84 -> 75% of the text colour).
+#favoritesPanel #favoriteFilterText::placeholder {
+  color: color-mix(in srgb, var(--fx-fg) 75%, transparent) !important;
+  opacity: 1 !important;
+}
+
+.entity-summary-edit textarea::placeholder {
+  color: color-mix(in srgb, currentColor 75%, transparent);
+  opacity: 1;
+}
+
 // Search results: each group is its own rounded box (header inside on top, rows inside on the same grid, hairlines only between rows
 // inside the box). The box sits on the panel's own left/right edges (the same as the search box and the RESULTS line above), takes at
 // most 8px of padding per side, and a collapsed group is just its header.
