@@ -1540,6 +1540,13 @@ tr:first-child td {
     }
   }
 
+  .dashboard-stat-button {
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+  }
+
   .dashboard-stat-wide {
     flex: 1 1 18rem;
   }

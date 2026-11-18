@@ -25,7 +25,7 @@
           </a>
         {% endfor %}
         {% if statsByStatus[0] is defined and statsByStatus[0] > 0 %}
-          <a class='dashboard-stat-chip' href='experiments.php?mode=show&amp;owner={{ meId }}'><i class='fas fa-circle fa-fw' style='color:#bdbdbd' aria-hidden='true'></i>{{ 'Not set'|trans }} <strong>{{ statsByStatus[0] }}</strong></a>
+          <a class='dashboard-stat-chip' href='experiments.php?mode=show&amp;status=null&amp;owner={{ meId }}'><i class='fas fa-circle fa-fw' style='color:#bdbdbd' aria-hidden='true'></i>{{ 'Not set'|trans }} <strong>{{ statsByStatus[0] }}</strong></a>
         {% endif %}
       </div>
     </div>
@@ -37,7 +37,7 @@
     </a>
   {% endif %}
   {% if statsModifiedThisWeek > 0 %}
-    <a class='dashboard-stat' href='experiments.php?mode=show&amp;owner={{ meId }}&amp;order=lastchange&amp;sort=desc'>
+    <a class='dashboard-stat' href='experiments.php?mode=show&amp;owner={{ meId }}&amp;modified_days=7&amp;order=lastchange&amp;sort=desc'>
       <span class='dashboard-stat-number'>{{ statsModifiedThisWeek }}</span>
       <span class='dashboard-stat-label'>{{ 'Modified this week'|trans }}</span>
     </a>
@@ -53,21 +53,22 @@
           </a>
         {% endfor %}
         {% if statsResourcesByStatus[0] is defined and statsResourcesByStatus[0] > 0 %}
-          <a class='dashboard-stat-chip' href='database.php?mode=show&amp;owner={{ meId }}'><i class='fas fa-circle fa-fw' style='color:#bdbdbd' aria-hidden='true'></i>{{ 'Not set'|trans }} <strong>{{ statsResourcesByStatus[0] }}</strong></a>
+          <a class='dashboard-stat-chip' href='database.php?mode=show&amp;status=null&amp;owner={{ meId }}'><i class='fas fa-circle fa-fw' style='color:#bdbdbd' aria-hidden='true'></i>{{ 'Not set'|trans }} <strong>{{ statsResourcesByStatus[0] }}</strong></a>
         {% endif %}
       </div>
     </div>
   {% endif %}
   {% if statsResourcesModifiedThisWeek > 0 %}
-    <a class='dashboard-stat' href='database.php?mode=show&amp;owner={{ meId }}&amp;order=lastchange&amp;sort=desc'>
+    <a class='dashboard-stat' href='database.php?mode=show&amp;owner={{ meId }}&amp;modified_days=7&amp;order=lastchange&amp;sort=desc'>
       <span class='dashboard-stat-number'>{{ statsResourcesModifiedThisWeek }}</span>
       <span class='dashboard-stat-label'>{{ 'Resources modified this week'|trans }}</span>
     </a>
   {% endif %}
-  <a class='dashboard-stat' href='experiments.php?mode=show&amp;owner={{ meId }}' title='{{ 'Unfinished steps on your own experiments'|trans }}'>
+  {# Open steps open the To-do side panel (where the steps are listed and can be ticked); the list of experiments with an unfinished step is one click away from the title #}
+  <button type='button' class='dashboard-stat dashboard-stat-button' data-action='toggle-sidepanel' data-target='todolist' aria-controls='todolistPanel' title='{{ 'Open the To-do panel with your steps'|trans }}'>
     <span class='dashboard-stat-number'>{{ statsOpenSteps }}</span>
     <span class='dashboard-stat-label'>{{ 'Open steps'|trans }}</span>
-  </a>
+  </button>
 </div>
 <hr>
 <div class='row dashboard-grid'>

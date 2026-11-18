@@ -221,6 +221,8 @@
     currentScope: string;
     currentBookable: string;
     currentFolder: string;
+    currentModifiedDays: string;
+    currentOpenSteps: string;
     currentOrder: string;
     currentSort: string;
     currentRelated: number | null;
@@ -386,6 +388,8 @@
       currentScope: getCurrentUrlParam('scope'),
       currentBookable: getCurrentUrlParam('bookable'),
       currentFolder: getCurrentUrlParam('folder'),
+      currentModifiedDays: getCurrentUrlParam('modified_days'),
+      currentOpenSteps: getCurrentUrlParam('open_steps'),
       currentOrder: getCurrentUrlParamOrFallback('order', order),
       currentSort: getCurrentUrlParamOrFallback('sort', sort),
       currentRelated: getCurrentUrlNumberParam('related'),
@@ -409,6 +413,8 @@
       context.currentScope,
       context.currentBookable,
       context.currentFolder,
+      context.currentModifiedDays,
+      context.currentOpenSteps,
       context.currentOrder,
       context.currentSort,
       context.currentRelated,
@@ -496,6 +502,8 @@
       currentScope,
       currentBookable,
       currentFolder,
+      currentModifiedDays,
+      currentOpenSteps,
       currentOrder,
       currentSort,
       currentRelated,
@@ -548,6 +556,14 @@
 
       if (currentBookable.length > 0) {
         params['bookable'] = currentBookable;
+      }
+
+      // dashboard tiles: modified in the last N days, and having an unfinished step
+      if (currentModifiedDays.length > 0) {
+        params['modified_days'] = currentModifiedDays;
+      }
+      if (currentOpenSteps.length > 0) {
+        params['open_steps'] = currentOpenSteps;
       }
 
       // Folder links reload the list page with ?folder=<id>. Keep that
