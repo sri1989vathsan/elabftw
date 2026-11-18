@@ -1817,9 +1817,38 @@ tr:first-child td {
     }
   }
 
-  .suggested-tags summary {
-    color: color-mix(in srgb, currentColor 62%, transparent);
-    font-size: 0.75rem;
+  // "Suggested tags": a small muted link-style toggle (no fill, accent only on hover or keyboard focus); opened, the suggestions are
+  // small chips in a flat panel that flows under it (it was an absolutely positioned card anchored to the right edge, which put it
+  // outside the window once the toggle moved under the tags input)
+  .suggested-tags {
+    display: block;
+
+    summary {
+      background: transparent;
+      border-radius: 4px;
+      color: color-mix(in srgb, currentColor 62%, transparent);
+      cursor: pointer;
+      font-size: 0.78rem;
+      padding: 0.1rem 0.2rem;
+      width: fit-content;
+
+      &:hover,
+      &:focus-visible {
+        color: var(--primary);
+      }
+    }
+
+    .suggested-tags-popover {
+      background: transparent;
+      box-shadow: none;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+      margin: 0.25rem 0 0.4rem;
+      max-width: none;
+      padding: 0;
+      position: static;
+    }
   }
 }
 
