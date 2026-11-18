@@ -38,6 +38,9 @@ interface FavoriteFilterResult {
   category_title?: string | null;
   status_title?: string | null;
   fullname?: string | null;
+  category_color?: string | null;
+  date?: string | null;
+  modified_at?: string | null;
 }
 
 interface ResultGroup {
@@ -432,6 +435,11 @@ export default class FavoriteFilters extends SidePanel {
 
     const heading = document.createElement('div');
     heading.className = 'd-flex align-items-start';
+    item.style.setProperty('--left-color', `#${result.category_color || '1677b8'}`);
+    const typeIcon = document.createElement('i');
+    typeIcon.className = `fas ${this.groupIcon(target)} fa-fw favorite-filter-result-icon`;
+    typeIcon.setAttribute('aria-hidden', 'true');
+    heading.append(typeIcon);
     const link = document.createElement('a');
     link.className = 'favorite-filter-result-link flex-grow-1';
     link.href = this.getResultUrl(target, result.id).toString();
@@ -448,6 +456,14 @@ export default class FavoriteFilters extends SidePanel {
       });
     }
     heading.append(link);
+    const when = (result.date || result.modified_at || '').slice(0, 10);
+    if (when) {
+      const time = document.createElement('time');
+      time.className = 'favorite-filter-result-date';
+      time.dateTime = when;
+      time.textContent = when;
+      heading.append(time);
+    }
 
     const isTemplateTarget = target === 'experiments_templates' || target === 'items_types';
     const showLink = isTemplateTarget ? this.canLinkTemplate(target) : this.canInsertResultLink(target, result.id);
@@ -804,6 +820,18 @@ export default class FavoriteFilters extends SidePanel {
     }
   }
 
+  /** The small type icon of a result group or row (the same icons as the Activity calendar's agenda). */
+  private groupIcon(key: string): string {
+    switch (key) {
+      case 'experiments': case 'Experiments': return 'fa-flask';
+      case 'resources': case 'Resources': return 'fa-box-archive';
+      case 'experiments_templates': case 'Experiment templates': return 'fa-clone';
+      case 'items_types': case 'Resource templates': return 'fa-boxes-stacked';
+      case 'Folders': return 'fa-folder';
+      default: return 'fa-list-check';
+    }
+  }
+
   private renderGrouped(groups: SearchResultGroup[], message?: string): void {
     const results = document.getElementById('favoriteFilterResults');
     if (!results) return;
@@ -837,10 +865,16 @@ export default class FavoriteFilters extends SidePanel {
       const chevron = document.createElement('i');
       chevron.className = 'fas fa-chevron-right fa-fw favorite-filter-section-chevron';
       chevron.setAttribute('aria-hidden', 'true');
+      const groupIcon = document.createElement('i');
+      groupIcon.className = `fas ${this.groupIcon('results' in group ? group.target : group.heading)} fa-fw favorite-group-icon`;
+      groupIcon.setAttribute('aria-hidden', 'true');
       const label = document.createElement('span');
       label.className = 'unified-search-group-title mb-0';
       label.textContent = group.heading;
-      summary.append(chevron, label);
+      const groupCount = document.createElement('span');
+      groupCount.className = 'favorite-group-count';
+      groupCount.textContent = String(groupSize(group));
+      summary.append(chevron, groupIcon, label, groupCount);
       section.append(summary);
 
       const body = document.createElement('div');
@@ -860,7 +894,7 @@ export default class FavoriteFilters extends SidePanel {
         group.items.forEach(item => {
           const entry = document.createElement('article');
           entry.className = 'favorite-filter-result unified-search-result';
-          entry.innerHTML = `<strong class="favorite-filter-result-link"></strong>`
+          entry.innerHTML = `<i class="fas fa-folder fa-fw favorite-filter-result-icon" aria-hidden="true"></i><strong class="favorite-filter-result-link"></strong>`
             + `${item.description ? '<p class="favorite-filter-result-meta mb-0"></p>' : ''}`;
           entry.querySelector('strong').textContent = item.label;
           const meta = entry.querySelector('p');
