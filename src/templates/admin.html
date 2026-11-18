@@ -155,6 +155,11 @@
       'help': 'Fires for any attachment, not just one with a procurement ID -- only applies to a Requested order.'|trans} %}
 
     {% include 'binary-setting.html' with {'model': model, 'src': src,
+      'slug': 'orders_autocollect_on_sheet',
+      'label': 'When a shop sheet PDF is matched to an order, move that order from Ordered to Collected automatically'|trans,
+      'help': 'On by default. Only an order that is in Ordered moves, only the orders the PDF is matched to, never backwards. Turn off to move orders by hand.'|trans} %}
+
+    {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'orders_attachments_default_open',
       'label': "Show an order's attachments expanded by default"|trans,
       'help': 'On by default. Turn off to have the Attachments list start collapsed on every order card.'|trans} %}
