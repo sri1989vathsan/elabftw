@@ -79,6 +79,7 @@ export default class CommandPalette {
     return [
       { label: 'Save', description: 'Save the current entry', icon: 'fa-save', keywords: 'write autosave', action: () => click('[data-action="update-entity-body"]') },
       { label: 'Save and go back', description: 'Save and return to the folder (or view mode)', icon: 'fa-arrow-left', keywords: 'return view', action: () => click('[data-action="update-entity-body"][data-redirect]') },
+      ...(document.querySelector('[data-action="save-and-view"]') ? [{ label: 'Back to view mode', description: 'Save and open the view page of this entry', icon: 'fa-eye', keywords: 'view read show', action: () => click('[data-action="save-and-view"]') }] : []),
       { label: 'Insert date', description: 'Insert today using your saved date style', icon: 'fa-calendar-days', keywords: 'day today calendar', action: () => editorCommand('elabftwInsertDateToday') },
       { label: 'Insert title', description: 'Open the title window to insert a styled title', icon: 'fa-heading', keywords: 'header heading', action: () => editorCommand('elabftwInsertExperimentTitle') },
       { label: 'Insert note', description: 'Insert a note using your saved defaults', icon: 'fa-note-sticky', keywords: 'callout box', action: () => editorCommand('elabftwInsertNote') },

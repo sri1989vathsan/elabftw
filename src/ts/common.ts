@@ -1940,6 +1940,16 @@ on('update-entity-body', async (el: HTMLElement) => {
   }
 });
 
+// "View" in the edit toolbar: the same save as Save and go back (the editor is flushed, the saved indicator shows, a failed save
+// stays on the page), then the view page of this entry
+on('save-and-view', async () => {
+  const wasSaved = await updateEntityBody(true);
+  if (wasSaved) {
+    sessionStorage.setItem('flash_saved', i18next.t('saved'));
+    window.location.replace('?mode=view&id=' + entity.id);
+  }
+});
+
 on('search-pubchem', (el: HTMLElement) => {
   const inputEl = el.parentElement.parentElement.querySelector('input') as HTMLInputElement;
   if (!inputEl.checkValidity()) {
