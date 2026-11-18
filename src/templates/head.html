@@ -392,6 +392,7 @@
               <a class='dropdown-item' href='/ucp.php?tab=5'><i class='fa-solid fa-palette fa-fw mr-1'></i>{{ 'Appearance'|trans }}</a>
               {% if App.Users.isAdmin %}
                 <a class='dropdown-item' href='admin.php'><i class='fas fa-tools fa-fw'></i> {{ 'Admin panel'|trans }}</a>
+                <a class='dropdown-item' href='label-formats.php'><i class='fas fa-tag fa-fw'></i> {{ 'Label formats'|trans }}</a>
               {% endif %}
               {% if App.Users.userData.is_sysadmin %}
                 <a class='dropdown-item' href='sysconfig.php'><i class='fas fa-tools fa-fw' style='color:#e6614c'></i> {{ 'Sysadmin panel'|trans }}</a>

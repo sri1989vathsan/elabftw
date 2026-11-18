@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block body %}
+<h1 class='mb-3'><i class='fas fa-tag fa-fw mr-2'></i>{{ 'Label formats'|trans }}</h1>
+<p class='text-muted'>{{ 'The labels of the database are printed on the label printer of the lab. Add a format for each size of label; people choose one when they print. The lines are text with the fields of the entry: {id_line} (the ID and My ID), {id}, {my_id}, {title}, {module}, {date} and {field:Name of a field}. A line whose field is empty is left out.'|trans }}</p>
+<div id='labelFormatsApp'></div>
+<script src='label-formats.js?v={{ 'now'|date('YmdHi') }}'></script>
+{% endblock body %}
