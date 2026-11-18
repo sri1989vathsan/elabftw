@@ -12,9 +12,17 @@ window.pinCheck = async function pinCheck() {
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
   const hdr = { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
-  const mine = (await (await fetch('/api/v2/experiments?limit=30&scope=1', { credentials: 'same-origin' })).json()).find(e => !e.is_pinned);
-  if (!mine) return { pass: false, results: [{ name: 'an experiment to pin was found', ok: false, detail: 'none' }] };
-  await fetch('/api/v2/experiments/' + mine.id, { method: 'PATCH', credentials: 'same-origin', headers: hdr, body: JSON.stringify({ action: 'pin' }) });
+  // The list is drawn when the page loads, so an entry pinned now shows after a reload: the first run pins one and says so, the second run checks
+  // and unpins it (its id is kept in sessionStorage).
+  const stored = sessionStorage.getItem('pinCheckPinned');
+  if (!stored) {
+    const first = (await (await fetch('/api/v2/experiments?limit=30&scope=1', { credentials: 'same-origin' })).json()).find(e => !e.is_pinned);
+    if (!first) return { pass: false, results: [{ name: 'an experiment to pin was found', ok: false, detail: 'none' }] };
+    await fetch('/api/v2/experiments/' + first.id, { method: 'PATCH', credentials: 'same-origin', headers: hdr, body: JSON.stringify({ action: 'pin' }) });
+    sessionStorage.setItem('pinCheckPinned', String(first.id));
+    return { pass: false, results: [{ name: 'an entry was pinned: reload the page and run pinCheck() again', ok: false, detail: String(first.id) }] };
+  }
+  const mine = { id: Number(stored) };
   try {
     for (const layout of ['cr', 'it', 'pv', 'bd']) {
       document.querySelector(`[data-action="set-items-layout"][data-layout="${layout}"]`)?.click();
@@ -33,8 +41,8 @@ window.pinCheck = async function pinCheck() {
       const rowPin = pins.find(b => b.classList.contains('entity-row-pin') && !b.classList.contains('is-pinned'));
       if (rowPin && (layout === 'cr' || layout === 'pv')) check(`${layout}: an unpinned pin in a row is hidden until the row is pointed at`, getComputedStyle(rowPin).opacity === '0', getComputedStyle(rowPin).opacity);
       if (layout === 'cr') {
-        const first = [...document.querySelectorAll('.entity-rows *')].find(el => el.children.length === 0 && /^\s*(Pinned|[A-Z][a-z]+ \d{4}|No date)\s*$/.test(el.textContent));
-        check('cr: the first group of the list is Pinned', first && /Pinned/.test(first.textContent), first ? first.textContent : 'no group heading');
+        const first = document.querySelector('.entity-rows .entity-group-title, .entity-group-title');
+        check('cr: the first group of the list is Pinned', first && /^\s*Pinned/.test(first.textContent), first ? first.textContent : 'no group heading');
       }
     }
     for (const order of ['lastchange', 'title', 'date', 'comment']) {
@@ -44,6 +52,7 @@ window.pinCheck = async function pinCheck() {
       check(`sorted by ${order}: every pinned entry comes before the unpinned ones`, firstUnpinned === -1 || !flags.slice(firstUnpinned).includes(true), flags.join(','));
     }
   } finally {
+    sessionStorage.removeItem('pinCheckPinned');
     await fetch('/api/v2/experiments/' + mine.id, { method: 'PATCH', credentials: 'same-origin', headers: hdr, body: JSON.stringify({ action: 'pin' }) });
   }
   return { pass: results.every(r => r.ok), results };
