@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'text-column-fits', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'text-column-fits', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -72,6 +72,8 @@ async function spreadsheetSoak(options = {}) {
   const samples = [];
   const counts = {};
   const opLog = [];
+  // columns after each step of the mixed session: model, live grid, stored table (to see which step loses columns)
+  const colTrail = [];
   const note = name => { counts[name] = (counts[name] || 0) + 1; opLog.push(name); if (opLog.length > 60) opLog.shift(); };
   const t0 = performance.now();
   // Width desync diagnostic: the first time the live worksheet's first data row is wider (or narrower) than its header
@@ -303,6 +305,9 @@ async function spreadsheetSoak(options = {}) {
     root = api.overlayElement(uid) || root;
     if (!filler) { note('filler-no-room'); return false; }
     const cols = model.grid[0].length;
+    // the app takes the empty grey columns off again when a press lands outside the table (Save, the page, a menu of the page): the record remembers
+    // the width before the first press and applies that rule when it compares sizes
+    if (model.fillerBase === undefined) model.fillerBase = cols;
     const cell = pick([...filler.querySelectorAll('.fc[data-i][data-r]')]);
     if (!cell) return false;
     const i = Number(cell.dataset.i); const rr = Number(cell.dataset.r);
@@ -441,13 +446,25 @@ async function spreadsheetSoak(options = {}) {
         for (let r = 0; r < rowsN; r++) {
           for (let c = 0; c < colsN; c++) {
             const expected = want[r]?.[c] ?? ''; const have = got[r]?.[c] ?? '';
+            // a formula whose references moved with an inserted or deleted column (=A1+1 became =B1+1) is the app doing its job: the record follows;
+            // formulas-and-structure checks the references strictly
+            if (have !== expected && String(expected).startsWith('=') && String(have).startsWith('=') && model.grid[r]) { model.grid[r][c] = have; continue; }
             if (have !== expected) dataLoss.push({ context, table: model.label, where, cell: cellName(r, c), expected, have });
           }
         }
       };
       const dom = tableEl(uid);
+      // the empty grey columns of a filler press are gone after a press outside the table: when the saved table is back at the width from before the
+      // press and everything the record holds beyond it is empty, the record follows
+      if (dom && settle && model.fillerBase !== undefined) {
+        const base = model.fillerBase;
+        const storedCols = dom.rows[0].cells.length - 1;
+        const extraEmpty = model.grid.every(row => row.slice(base).every(value => String(value ?? '') === ''));
+        if (!extraEmpty) model.fillerBase = undefined;
+        else if (storedCols === base && model.grid[0].length > base) { model.grid.forEach(row => { row.length = base; }); model.fillerBase = undefined; note('filler-columns-taken-off'); }
+      }
       if (dom && settle && (dom.rows.length - 1 !== model.grid.length || dom.rows[0].cells.length - 1 !== model.grid[0].length)) {
-        dataLoss.push({ context, table: model.label, where: 'saved table', problem: `size ${dom.rows.length - 1}x${dom.rows[0].cells.length - 1} instead of ${model.grid.length}x${model.grid[0].length}`, lastOps: opLog.slice(-16).join(' > ') });
+        dataLoss.push({ context, table: model.label, where: 'saved table', problem: `size ${dom.rows.length - 1}x${dom.rows[0].cells.length - 1} instead of ${model.grid.length}x${model.grid[0].length}`, lastOps: opLog.slice(-16).join(' > '), colTrail: colTrail.slice(-14).join(' > ') });
       }
       if (snap.live && !snap.editing) compare('grid', snap.overlayData);
       if (settle) compare('saved table', snap.tableData);
@@ -633,6 +650,7 @@ async function spreadsheetSoak(options = {}) {
     else if (dRows === -1) model.grid.splice(r, 1);
     else if (dRows > 1) for (let i = 0; i < dRows; i++) model.grid.splice(r + 1, 0, blank(cols));
     else if (dRows < -1) model.grid.splice(r, -dRows);
+    if (dCols !== 0) model.fillerBase = undefined; // a column the person inserts or deletes makes the added columns real (as in the app)
     if (dCols === 1) model.grid.forEach(row => row.splice(kind === 'col-before' ? c : c + 1, 0, ''));
     else if (dCols === -1) model.grid.forEach(row => row.splice(c, 1));
     else if (dCols > 1) model.grid.forEach(row => row.splice(c + 1, 0, ...blank(dCols)));
@@ -857,6 +875,7 @@ async function spreadsheetSoak(options = {}) {
     if (matched) {
       if (matched[0] !== first || matched[1] !== lastIdx) note('multi-delete-different-range');
       model.grid = without(matched[0], matched[1]);
+      if (!byRow) model.fillerBase = undefined;
     } else if (exact(model.grid, normalizedNow)) {
       note('multi-delete-nothing-happened'); // the menu action did not take effect; the record stays as it was
     } else {
@@ -1781,6 +1800,51 @@ async function spreadsheetSoak(options = {}) {
       models.get(uid2).grid.forEach(row => { row.length = Math.min(row.length, left); });
       await verify('filler-then-menu: after a press outside the table', true);
     },
+    // The popup after a grey filler press: the columns the person added (and typed in, or inserted) must still be there after the popup's Update or Cancel
+    // (the columns that stayed empty from the grey press only may go, as they do when a press lands outside the table).
+    async 'filler-then-popup'() {
+      for (const finish of ['update', 'cancel']) {
+        const uid = await createTable(`filler then popup (${finish})`, { rows: 4, cols: 3 });
+        if (!uid) return;
+        const colsOf = root => root.querySelectorAll('.jss_worksheet thead td[data-x]').length;
+        let root = await selectCell(uid, 0, 0);
+        let filler = null;
+        for (let i = 0; i < 40 && !(filler = root.querySelector('.elabftw-spreadsheet-filler .fc[data-i][data-r]') ? root.querySelector('.elabftw-spreadsheet-filler') : null); i++) await sleep(100);
+        if (!filler) { note('filler-no-room'); continue; }
+        const cells = [...filler.querySelectorAll('.fc[data-i][data-r]')];
+        cells[Math.min(2, cells.length - 1)].dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window, button: 0, buttons: 1 }));
+        await sleep(1000);
+        root = api.overlayElement(uid) || root;
+        const holder = [...root.querySelectorAll('.jss_container')].find(el => el.jssWorksheet);
+        const grown = colsOf(root);
+        // a real column inserted after the press, and text typed into the last one
+        holder.jssWorksheet.insertColumn(1, grown - 1, false);
+        await sleep(800);
+        root = api.overlayElement(uid) || root;
+        const withInserted = colsOf(root);
+        await typeInto(uid, 0, withInserted - 1, 'real column', 'Enter');
+        models.get(uid).grid.forEach(row => { while (row.length < withInserted) row.push(''); });
+        models.get(uid).grid[0][withInserted - 1] = 'real column';
+        const before = colsOf(api.overlayElement(uid) || root);
+        const dialog = await openPopupFor(uid);
+        const inPopup = colsOf(dialog);
+        if (inPopup < before) dataLoss.push({ context, table: `filler then popup (${finish})`, problem: `the popup shows ${inPopup} columns, the sheet had ${before}` });
+        if (finish === 'update') {
+          const update = [...dialog.querySelectorAll('button')].find(b => b.textContent.trim() === 'Update');
+          if (!update) { fail('the popup has no Update button'); continue; }
+          update.click(); await waitPopupGone();
+        } else {
+          [...dialog.querySelectorAll('button')].find(b => /^Cancel/.test(b.textContent.trim()))?.click(); await waitPopupGone();
+        }
+        await sleep(800);
+        const after = colsOf(api.overlayElement(uid) || root);
+        const stored = tableEl(uid).rows[0].cells.length - 1;
+        if (after < before) dataLoss.push({ context, table: `filler then popup (${finish})`, problem: `columns after the popup's ${finish}: ${after}, before it: ${before}` });
+        if (stored !== after) dataLoss.push({ context, table: `filler then popup (${finish})`, problem: `the stored table has ${stored} columns, the grid ${after}` });
+        models.get(uid).grid.forEach(row => { row.length = Math.min(row.length, after); });
+        note('filler-then-popup');
+      }
+    },
     // Edits made inside a grid are saved without having to leave it.
     async 'autosave-in-grid'() {
       const uid = await createTable('autosave table', { rows: 4, cols: 3 });
@@ -2641,6 +2705,11 @@ async function spreadsheetSoak(options = {}) {
           fail(`${name}: ${error && error.message || error}`, { stack: String(error && error.stack || '').split('\n').slice(0, 4).join(' | ') });
         }
         await sleep(pick([0, 30, 120, 450, 520, 700]));
+        try {
+          const stored = tableEl(uid); const overlay = api.overlayElement(uid);
+          colTrail.push(`${name}[m${models.get(uid)?.grid[0]?.length} l${overlay ? overlay.querySelectorAll('.jss_worksheet thead td[data-x]').length : '-'} s${stored ? stored.rows[0].cells.length - 1 : '-'}]`);
+          if (colTrail.length > 40) colTrail.shift();
+        } catch { /* the trail is only a diagnostic */ }
         await measure(`mixed round ${round} ${name}`);
         await verify(`mixed round ${round} ${name}`, round % 6 === 0);
       }

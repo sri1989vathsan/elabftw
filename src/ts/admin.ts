@@ -449,3 +449,22 @@ if (window.location.pathname === '/admin.php') {
     malleableGroupname.listen();
   }).observe(document.getElementById('team_groups_div'), {childList: true});
 }
+
+// Team tab: find a setting by name or description. Rows and cards that do not match are hidden.
+const teamSettingsFilter = document.getElementById('teamSettingsFilter') as HTMLInputElement | null;
+if (teamSettingsFilter) {
+  teamSettingsFilter.addEventListener('input', () => {
+    const query = teamSettingsFilter.value.trim().toLowerCase();
+    let shown = 0;
+    document.querySelectorAll<HTMLElement>('#teamSettings .setting-row').forEach(row => {
+      const matches = query === '' || (row.dataset.settingName ?? '').includes(query);
+      row.hidden = !matches;
+      if (matches) shown += 1;
+    });
+    document.querySelectorAll<HTMLElement>('#teamSettings .settings-card').forEach(card => {
+      card.hidden = card.querySelector('.setting-row:not([hidden])') === null;
+    });
+    const none = document.getElementById('teamSettingsNone');
+    if (none) none.hidden = shown > 0;
+  });
+}

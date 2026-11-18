@@ -50,82 +50,75 @@
 {# TAB 1 TEAM CONFIG #}
 <div data-tabcontent='1' hidden>
   <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Usage Statistics'|trans }}</h2>
-  <div class='pl-3 mb-5'>
-    <div class='d-flex justify-content-between'>
-      <div>
-      {{ 'Members'|trans }}: {{ teamStats.active_users_count }} &ndash;
-              {% trans %}
-              Experiment
-              {% plural teamStats.totxp %}
-              Experiments
-              {% endtrans %}
-              : {{ teamStats.totxp }} ({{ teamStats.totxpts }} timestamped) &ndash;
-              {% trans %}
-              Resource
-              {% plural teamStats.totdb %}
-              Resources
-              {% endtrans %}
-              : {{ teamStats.totdb }}</div>
-      <div><a href='/api/v2/reports?format=csv&scope=team' class='btn btn-primary'>{{ 'Generate report'|trans }}</a></div>
+  <div class='pl-3 mb-4'>
+    <div class='d-flex flex-wrap align-items-center usage-tiles'>
+      <div class='usage-tile'><span class='usage-number'>{{ teamStats.active_users_count }}</span><span class='usage-label'>{{ 'Members'|trans }}</span></div>
+      <div class='usage-tile'><span class='usage-number'>{{ teamStats.totxp }}</span><span class='usage-label'>{% trans %}Experiment{% plural teamStats.totxp %}Experiments{% endtrans %}</span><span class='usage-sub'>{{ teamStats.totxpts }} {{ 'timestamped'|trans }}</span></div>
+      <div class='usage-tile'><span class='usage-number'>{{ teamStats.totdb }}</span><span class='usage-label'>{% trans %}Resource{% plural teamStats.totdb %}Resources{% endtrans %}</span></div>
+      <a href='/api/v2/reports?format=csv&scope=team' class='btn btn-primary btn-sm ml-auto'>{{ 'Generate report'|trans }}</a>
     </div>
   </div>
 
   <h2 class='p-2 pl-3 section-title'>{{ 'Configure your Team'|trans }}</h2>
 
-  <div class='pl-3 mt-2'>
-    <div class='d-flex justify-content-between'>
-      <label for='announcement' class='col-form-label'>{{ 'Announcement'|trans }}</label>
-      <input class='form-control col-md-4' data-trigger='blur' data-model='{{ model }}' data-target='announcement' type='text' id='announcement' name='announcement' value='{{ App.Teams.teamArr.announcement }}' />
+  <div class='pl-3 mt-2' id='teamSettings'>
+    <div class='settings-filter'>
+      <i class='fas fa-magnifying-glass fa-fw' aria-hidden='true'></i>
+      <input type='search' id='teamSettingsFilter' class='form-control' placeholder='{{ 'Find a setting'|trans }}' aria-label='{{ 'Find a setting'|trans }}' autocomplete='off'>
     </div>
-    <p class='smallgray'>{{ "The following text will be displayed to all users on all pages while it's active."|trans }}</p>
-    <hr>
-
+    <section class='settings-card'>
+      <h3 class='settings-card-title'>{{ 'Announcement and templates'|trans }}</h3>
+    <div class='setting-row' data-setting-name='announcement the following text will be displayed to all users on all pages while it is active'>
+      <div class='setting-text'>
+        <label for='announcement' class='setting-title'>{{ 'Announcement'|trans }}</label>
+        <p class='setting-help'>{{ "The following text will be displayed to all users on all pages while it's active."|trans }}</p>
+      </div>
+      <input class='form-control setting-input' data-trigger='blur' data-model='{{ model }}' data-target='announcement' type='text' id='announcement' name='announcement' value='{{ App.Teams.teamArr.announcement }}' />
+    </div>
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'force_exp_tpl',
       'label': 'Force experiment template use'|trans,
       'help': 'Users will be forced to select an existing Template, and will not be able to create a blank entry.'|trans} %}
-
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'force_res_tpl',
       'label': 'Force resource template use'|trans,
       'help': 'Users will be forced to select an existing Resource Template, and will not be able to create a blank entry.'|trans} %}
+    </section>
 
-    {# EXPERIMENTS (& status, categories, templates #}
+    <section class='settings-card'>
+      <h3 class='settings-card-title'>{{ 'Experiments'|trans }}</h3>
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'users_canwrite_experiments',
       'label': 'Allow users to create experiments'|trans} %}
-
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'users_canwrite_experiments_categories',
       'label': 'Allow users to create and edit experiments categories'|trans} %}
-
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'users_canwrite_experiments_status',
       'label': 'Allow users to create and edit experiment status'|trans} %}
-
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'users_canwrite_experiments_templates',
       'label': 'Allow users to create experiments templates'|trans} %}
+    </section>
 
-    {# RESOURCES (& status, categories, templates #}
+    <section class='settings-card'>
+      <h3 class='settings-card-title'>{{ 'Resources'|trans }}</h3>
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'users_canwrite_resources',
       'label': 'Allow users to create resources'|trans} %}
-
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'users_canwrite_resources_categories',
       'label': 'Allow users to create and edit resources categories'|trans} %}
-
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'users_canwrite_resources_status',
       'label': 'Allow users to create and edit resources status'|trans} %}
-
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'users_canwrite_resources_templates',
       'label': 'Allow users to create resources templates'|trans} %}
+    </section>
 
-    {# DATABASE (entries and modules) #}
-    <div class='small text-uppercase text-muted font-weight-bold mt-4 mb-2' style='letter-spacing:0.04em'>{{ 'Database'|trans }}</div>
+    <section class='settings-card'>
+      <h3 class='settings-card-title'>{{ 'Database'|trans }}</h3>
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'users_canwrite_inventory',
       'label': 'Allow users to create Database entries'|trans} %}
@@ -134,7 +127,9 @@
       'slug': 'users_canwrite_inventory_categories',
       'label': 'Allow users to create and edit Modules'|trans,
       'help': 'Modules group the entries of the Database. Deleting a module stays for admins; personal modules are not affected.'|trans} %}
+    </section>
 
+    <p class='settings-none' id='teamSettingsNone' hidden>{{ 'No setting matches.'|trans }}</p>
   </div>
 
   {# the LabCollector connection is hidden from the admin panel while App.showLabcollector is false (one switch, in App.php); the code and the data stay #}
@@ -156,7 +151,8 @@
 
   <h2 class='p-2 pl-3 section-title' id='featuresSettings'>{{ 'Features'|trans }}</h2>
   <div class='pl-3 mt-2 mb-5'>
-    <div class='small text-uppercase text-muted font-weight-bold mb-2' style='letter-spacing:0.04em'>{{ 'Tools menu'|trans }}</div>
+    <section class='settings-card'>
+      <h3 class='settings-card-title'>{{ 'Tools menu'|trans }}</h3>
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'tools_compounds',
       'label': 'Show Compounds in the Tools menu'|trans} %}
@@ -174,16 +170,21 @@
       'slug': 'tools_inventory',
       'label': 'Show Inventory in the Tools menu'|trans,
       'help': 'Off by default. Only the menu entry: the storage browser pages that resources link to keep working.'|trans} %}
+    </section>
 
-    <div class='small text-uppercase text-muted font-weight-bold mt-4 mb-2' style='letter-spacing:0.04em'>{{ 'Resources'|trans }}</div>
+    <section class='settings-card'>
+      <h3 class='settings-card-title'>{{ 'Resources'|trans }}</h3>
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'feature_bookable_resources',
       'label': 'Bookable resources'|trans,
       'help': 'Off by default. When off, resources cannot be set as bookable or booked and the booking buttons are hidden. Bookings that exist are kept: turn it on again to get them back.'|trans} %}
+    </section>
   </div>
 
   <h2 class='p-2 pl-3 section-title' id='ordersSettings'>{{ 'Orders'|trans }}</h2>
   <div class='pl-3 mt-2 mb-5'>
+    <section class='settings-card'>
+      <h3 class='settings-card-title'>{{ 'Order status'|trans }}</h3>
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'orders_autoadvance_on_procurement_id',
       'label': 'Automatically move an order from Requested to Ordered once a procurement ID is detected'|trans,
@@ -203,6 +204,7 @@
       'slug': 'orders_attachments_default_open',
       'label': "Show an order's attachments expanded by default"|trans,
       'help': 'On by default. Turn off to have the Attachments list start collapsed on every order card.'|trans} %}
+    </section>
 
     <p class='smallgray'>{{ 'Automatically archive an order once it has stayed in a given status for a set number of days. Off by default -- add a rule per status you want to watch.'|trans }}</p>
     <div data-svelte-component='orders-autoarchive-rules' data-endpoint='{{ model }}' data-rules='{{ App.Teams.teamArr.orders_autoarchive_rules|e('html_attr') }}'></div>

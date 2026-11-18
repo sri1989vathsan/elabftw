@@ -2014,28 +2014,64 @@ tr:first-child td {
   z-index: 20050;
 }
 
-// Pin button of the row and board layouts: muted, small, shown a little stronger when pinned
-.entity-row-pin {
-  background: none;
-  border: 0;
-  color: color-mix(in srgb, currentColor 55%, transparent);
+// The pin button, one look everywhere (rows, cards, board, the entry page): a quiet outline-like thumbtack when not pinned, an amber tilted one when pinned,
+// 1.5rem to hit, no button chrome. In the lists the quiet one only shows when you point at the row (always on a touch screen).
+// Pinned is the icon without the 'color-weak' class, which is how all the places that draw the button mark it.
+button[data-action='toggle-pin'] {
+  align-items: center;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 4px;
+  box-shadow: none !important;
+  color: var(--fx-muted, #7a8591) !important;
+  display: inline-flex;
   flex: 0 0 auto;
-  height: 1.4rem;
-  padding: 0;
-  width: 1.4rem;
+  height: var(--fx-ctl, 1.5rem);
+  justify-content: center;
+  min-width: var(--fx-ctl, 1.5rem);
+  opacity: 0.55;
+  padding: 0 0.25rem;
+  width: auto;
 
-  &.is-pinned {
-    color: var(--primary);
+  .fa-thumbtack {
+    color: inherit !important;
+    transition: transform 0.12s ease;
   }
 
   &:hover,
   &:focus-visible {
-    color: var(--primary);
+    background: color-mix(in srgb, currentColor 12%, transparent) !important;
+    opacity: 1;
+  }
+
+  &:has(.fa-thumbtack:not(.color-weak)),
+  &.is-pinned {
+    color: var(--fx-pin, #d98e04) !important;
+    opacity: 1;
+
+    .fa-thumbtack {
+      transform: rotate(35deg);
+    }
   }
 }
 
-.entity-rows .entity-row-pin {
-  margin-left: -0.2rem;
+.entity-row-pin {
+  margin-left: 0;
+}
+
+// in the lists the unpinned pin shows on hover or focus only
+.entity-row-pin:not(.is-pinned) {
+  opacity: 0;
+
+  @media (hover: none) {
+    opacity: 0.55;
+  }
+}
+
+:hover > .entity-row-pin:not(.is-pinned),
+.entity-board-card:hover .entity-row-pin:not(.is-pinned),
+.entity-row-pin:not(.is-pinned):focus-visible {
+  opacity: 0.7;
 }
 
 .entity-rows .entity-row:focus-within,
@@ -13010,4 +13046,161 @@ button.wp-legend-item {
   color: var(--fx-muted) !important;
   font-size: 0.75rem;
   padding: 0.3rem var(--fx-pad);
+}
+
+/* Admin Team tab (and every other page that uses binary-setting.html): settings as rows in boxed cards. The title and its muted description share
+ * the left edge, the control is on the right, centred on the row; an OFF switch is light with a border, an ON switch is the accent colour. */
+.settings-filter {
+  margin-bottom: 0.8rem;
+  max-width: 20rem;
+  position: relative;
+
+  > i {
+    color: var(--fx-muted, #7a8591);
+    left: 0.5rem;
+    pointer-events: none;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .form-control {
+    font-size: 0.9rem;
+    height: var(--fx-ctl, 1.5rem);
+    padding: 0 0.5rem 0 1.9rem;
+  }
+}
+
+.settings-card {
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.settings-card[hidden],
+.setting-row[hidden],
+.settings-none[hidden] {
+  display: none !important;
+}
+
+.settings-card-title {
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  color: var(--fx-muted, #7a8591);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin: 0;
+  padding: 0.4rem 0.8rem;
+  text-transform: uppercase;
+}
+
+.setting-row {
+  align-items: center;
+  border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  min-height: 2.1rem;
+  padding: 0.35rem 0.8rem;
+
+  .settings-card > .settings-card-title + & {
+    border-top: 0;
+  }
+
+  &:hover {
+    background: color-mix(in srgb, currentColor 4%, transparent);
+  }
+}
+
+.setting-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.setting-title {
+  font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.setting-help {
+  color: var(--fx-muted, #7a8591);
+  font-size: 0.75rem;
+  line-height: 1.3;
+  margin: 0.1rem 0 0;
+}
+
+.setting-row .setting-input {
+  flex: none;
+  font-size: 0.9rem;
+  height: var(--fx-ctl, 1.5rem);
+  max-width: 100%;
+  padding: 0 0.5rem;
+  width: min(22rem, 50%);
+}
+
+.setting-row .setting-switch {
+  flex: none;
+  margin: 0;
+
+  .slider {
+    background-color: transparent;
+    border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+
+    &::before {
+      background-color: color-mix(in srgb, currentColor 45%, transparent);
+      bottom: 1px;
+      left: 1px;
+    }
+  }
+
+  input:checked + .slider {
+    background-color: var(--primary);
+    border-color: var(--primary);
+
+    &::before {
+      background-color: var(--primary-fg, #fff);
+      transform: translateX(20px);
+    }
+  }
+}
+
+.settings-none {
+  color: var(--fx-muted, #7a8591);
+}
+
+.usage-tiles {
+  gap: 0.5rem;
+}
+
+.usage-tile {
+  align-items: baseline;
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  border-radius: 8px;
+  display: inline-flex;
+  gap: 0.4rem;
+  padding: 0.3rem 0.8rem;
+}
+
+.usage-number {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.usage-label,
+.usage-sub {
+  color: var(--fx-muted, #7a8591);
+  font-size: 0.8rem;
+}
+
+@media (max-width: 640px) {
+  .setting-row {
+    flex-wrap: wrap;
+  }
+
+  .setting-row .setting-input {
+    width: 100%;
+  }
 }
