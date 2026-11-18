@@ -193,6 +193,25 @@ abstract class AbstractEntity extends AbstractRest
         ?int $createdFromId = null,
     ): int;
 
+    /**
+     * The folder chosen in the create dialog (folder_id of the request): the new experiment or resource goes there. Without one it stays where the
+     * create put it (a template's folder, or the root). The folder must exist in the team of the user (readOne throws if not).
+     */
+    private function assignChosenFolder(int $newId, array $reqBody): void
+    {
+        if (!($this instanceof Experiments || $this instanceof Items) || empty($reqBody['folder_id'])) {
+            return;
+        }
+        $folderId = (int) $reqBody['folder_id'];
+        $Folders = new ExperimentsFolders($this->Users, $folderId);
+        $Folders->readOne();
+        if ($this instanceof Experiments) {
+            $Folders->assignExperiment($newId, $folderId);
+        } else {
+            $Folders->assignResource($newId, $folderId);
+        }
+    }
+
     // Duplicate an entity, adding ' I' to the title to make the copy noticeable.
     abstract public function duplicate(bool $copyFiles = false, bool $linkToOriginal = false): int;
 
@@ -226,7 +245,9 @@ abstract class AbstractEntity extends AbstractRest
                                 $metadata,
                             );
                         }
-                        return $this->copyEntityFrom(sourceEntity: $template, title: $title, blankExtrafields: false, overrideCreateParams: $overrideCreateParams);
+                        $fromTemplateId = $this->copyEntityFrom(sourceEntity: $template, title: $title, blankExtrafields: false, overrideCreateParams: $overrideCreateParams);
+                        $this->assignChosenFolder($fromTemplateId, $reqBody);
+                        return $fromTemplateId;
                     }
                     // create a template from current entity
                     if (isset($reqBody['entity']) && ((int) $reqBody['entity']) !== -1) {
@@ -282,14 +303,7 @@ abstract class AbstractEntity extends AbstractRest
                         contentType: $contentType,
                     );
                     // Assign concrete experiments and resources to their shared folder tree.
-                    if (($this instanceof Experiments || $this instanceof Items) && !empty($reqBody['folder_id'])) {
-                        $Folders = new ExperimentsFolders($this->Users);
-                        if ($this instanceof Experiments) {
-                            $Folders->assignExperiment($newId, (int) $reqBody['folder_id']);
-                        } else {
-                            $Folders->assignResource($newId, (int) $reqBody['folder_id']);
-                        }
-                    }
+                    $this->assignChosenFolder($newId, $reqBody);
                     return $newId;
                 }
             )(),

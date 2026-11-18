@@ -21,6 +21,7 @@ use Elabftw\Models\Users\AnonymousUser;
 use Elabftw\Models\Users\AuthenticatedUser;
 use Elabftw\Models\Config;
 use Elabftw\Models\ExperimentsCategories;
+use Elabftw\Models\ExperimentsFolders;
 use Elabftw\Models\ExperimentsStatus;
 use Elabftw\Models\FavCategories;
 use Elabftw\Models\FavFilters;
@@ -69,6 +70,8 @@ final class App
     public array $experimentsStatusArr = array();
 
     public array $favoriteCategoriesArr = array();
+
+    private ?array $createFoldersCache = null;
 
     public array $favoriteFiltersArr = array();
 
@@ -174,6 +177,25 @@ final class App
             }
         }
         $this->initi18n();
+    }
+
+    /**
+     * The folders the "Create" dialog offers (experiments and resources share the tree), with the bookmarked ones. Read on first use and only for a
+     * logged in user, so that every page can have the picker, not only the list pages whose controller passes the same data.
+     *
+     * @return array{rows: array<int, array<string, mixed>>, favoriteIds: array<int, int|string>}
+     */
+    public function getCreateFolders(): array
+    {
+        if ($this->createFoldersCache !== null) {
+            return $this->createFoldersCache;
+        }
+        $this->createFoldersCache = array('rows' => array(), 'favoriteIds' => array());
+        if ($this->Users->team && $this->Session->has('is_auth') && !$this->Session->get('is_anon')) {
+            $Folders = new ExperimentsFolders($this->Users);
+            $this->createFoldersCache = array('rows' => $Folders->readHierarchyRows(), 'favoriteIds' => $Folders->getFavoriteFolders());
+        }
+        return $this->createFoldersCache;
     }
 
     public function isAnonymous(): bool
