@@ -1693,6 +1693,12 @@ tr:first-child td {
       padding: 0 0.5rem;
     }
 
+    // the icons follow the button's colour (the plain .btn-secondary ones were white on the quiet background)
+    .btn .fas,
+    .btn .far {
+      color: inherit;
+    }
+
     // everything but the highlighted action is quiet: no fill, muted icon, a tint on hover
     .btn-secondary,
     .btn-transparent,

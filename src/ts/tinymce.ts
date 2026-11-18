@@ -322,8 +322,9 @@ export function getTinymceBaseConfig(page: string): object {
     lists_indent_on_tab: false,
     pagebreak_split_block: true,
     pagebreak_separator: '<div class="page-break"></div>',
-    toolbar1: toolbar1,
-    // one slim row: what does not fit goes under the "..." button at its end (nothing is removed)
+    // one slim row (the single `toolbar` option: toolbar_mode does not apply to toolbar1/toolbar2): what does not fit goes under the
+    // "..." button at its end, nothing is removed
+    toolbar: toolbar1,
     toolbar_mode: 'sliding',
     // this addresses CVE-2024-29881, it defaults to true in 7.0, so can be removed in tiny 7.0 TODO
     convert_unsafe_embeds: true,
