@@ -4863,6 +4863,16 @@ h1:has(> #documentTitle) {
 // tables, pictures and spreadsheets are smaller muted rows under their heading. Select mode shows a checkbox column and a bar
 // at the bottom (count, Print, Copy, clear). Everything reads the shared --fx tokens.
 #tocPanel {
+  // the bar of select mode sticks to the bottom of the panel
+  &:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .toc-panel-inner {
+    flex: 1 1 auto;
+  }
+
   .toc-heading {
     align-items: center;
     color: var(--fx-muted);
@@ -5218,7 +5228,7 @@ h1:has(> #documentTitle) {
     bottom: 0;
     display: flex;
     gap: 0.3rem;
-    padding: 0.3rem var(--fx-pad);
+    padding: 0.3rem 1rem;
     position: sticky;
 
     &[hidden] {

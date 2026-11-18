@@ -173,6 +173,8 @@ export default class SidePanel {
         // may be open on top of the panel with its own Escape handling --
         // let it close first rather than also collapsing the whole panel.
         if (panel.querySelector('.favorite-filter-overlay:not([hidden])')) return;
+        // the Contents panel in select mode (or with a row menu open): Escape leaves that first
+        if (panel.classList.contains('toc-select-mode') || panel.querySelector('.toc-row-menu')) return;
         this.hide();
         return;
       }
