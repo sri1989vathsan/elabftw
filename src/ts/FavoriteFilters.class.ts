@@ -47,7 +47,7 @@ interface ResultGroup {
   heading: string;
   items: {
     label: string;
-    description: string;
+    description?: string;
     href?: string;
     onSelect?: () => void;
     // Folders: a clone of that folder's own bookmark star button (see
