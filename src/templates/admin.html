@@ -138,7 +138,8 @@
 
   <h2 class='p-2 pl-3 section-title' id='featuresSettings'>{{ 'Features'|trans }}</h2>
   <div class='pl-3 mt-2 mb-5'>
-    <div class='small text-uppercase text-muted font-weight-bold mb-2' style='letter-spacing:0.04em'>{{ 'Tools menu'|trans }}</div>
+    <section class='settings-card'>
+      <h3 class='settings-card-title'>{{ 'Tools menu'|trans }}</h3>
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'tools_compounds',
       'label': 'Show Compounds in the Tools menu'|trans} %}
@@ -156,16 +157,21 @@
       'slug': 'tools_inventory',
       'label': 'Show Inventory in the Tools menu'|trans,
       'help': 'Off by default. Only the menu entry: the storage browser pages that resources link to keep working.'|trans} %}
+    </section>
 
-    <div class='small text-uppercase text-muted font-weight-bold mt-4 mb-2' style='letter-spacing:0.04em'>{{ 'Resources'|trans }}</div>
+    <section class='settings-card'>
+      <h3 class='settings-card-title'>{{ 'Resources'|trans }}</h3>
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'feature_bookable_resources',
       'label': 'Bookable resources'|trans,
       'help': 'Off by default. When off, resources cannot be set as bookable or booked and the booking buttons are hidden. Bookings that exist are kept: turn it on again to get them back.'|trans} %}
+    </section>
   </div>
 
   <h2 class='p-2 pl-3 section-title' id='ordersSettings'>{{ 'Orders'|trans }}</h2>
   <div class='pl-3 mt-2 mb-5'>
+    <section class='settings-card'>
+      <h3 class='settings-card-title'>{{ 'Order status'|trans }}</h3>
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'orders_autoadvance_on_procurement_id',
       'label': 'Automatically move an order from Requested to Ordered once a procurement ID is detected'|trans,
@@ -185,6 +191,7 @@
       'slug': 'orders_attachments_default_open',
       'label': "Show an order's attachments expanded by default"|trans,
       'help': 'On by default. Turn off to have the Attachments list start collapsed on every order card.'|trans} %}
+    </section>
 
     <p class='smallgray'>{{ 'Automatically archive an order once it has stayed in a given status for a set number of days. Off by default -- add a rule per status you want to watch.'|trans }}</p>
     <div data-svelte-component='orders-autoarchive-rules' data-endpoint='{{ model }}' data-rules='{{ App.Teams.teamArr.orders_autoarchive_rules|e('html_attr') }}'></div>
