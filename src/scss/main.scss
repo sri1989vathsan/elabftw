@@ -6944,9 +6944,45 @@ body.html-tool-workspace-open:not(.html-tool-workspace-is-maximized) .inline-spr
   max-width: 100%;
   min-height: 220px;
   min-width: min(320px, 100%);
-  overflow: auto;
+  // The grid (.jss_content below) is the one that scrolls, both ways; this box only holds it and takes the resize handle. With
+  // overflow: auto here too the box grew scroll bars of its own for the few pixels of the grid's border (a second, useless pair).
+  overflow: hidden;
   resize: both;
   width: 100%;
+}
+
+// Always-visible, thin scroll bars in the theme colours on the scrolling grid of the popup. Setting scrollbar-width/-color (and the
+// webkit pseudo-elements for Safari) turns the overlay bars of macOS, which only show while scrolling, into real ones, so a sheet
+// wider than the popup always shows its horizontal bar at the bottom of the grid, inside the dialog.
+.inline-spreadsheet-container .jss_content {
+  overflow: auto !important;
+  scrollbar-color: var(--secondary) var(--firstlevel);
+  scrollbar-width: thin;
+
+  &::-webkit-scrollbar {
+    height: 12px;
+    width: 12px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: var(--firstlevel);
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--secondary);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+    border-radius: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: var(--primary);
+    background-clip: padding-box;
+  }
+
+  &::-webkit-scrollbar-corner {
+    background: var(--firstlevel);
+  }
 }
 
 /* The library's own scroll viewport must follow the user-resizable host rather
