@@ -21,6 +21,7 @@ use Elabftw\Enums\Scope;
 use Elabftw\Enums\Sort;
 use Elabftw\Enums\ThemeVariant;
 use Elabftw\Enums\ThemePalette;
+use Elabftw\Enums\UiSize;
 use Elabftw\Enums\UsersColumn;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Services\Check;
@@ -108,6 +109,7 @@ final class UserParams extends ContentParams
             UsersColumn::PrimaryFg->value => Filter::nullableHexColor($this->getNullableString()),
             UsersColumn::ThemeVariant->value => (ThemeVariant::tryFrom($this->asInt()) ?? ThemeVariant::Auto)->value,
             UsersColumn::ThemePalette->value => (ThemePalette::tryFrom($this->asString()) ?? ThemePalette::Classic)->value,
+            UsersColumn::UiSize->value => (UiSize::tryFrom($this->asString()) ?? UiSize::Compact)->value,
             UsersColumn::EditorDefaults->value => $this->getEditorDefaults(),
             UsersColumn::SpreadsheetDefaults->value => $this->getSpreadsheetDefaults(),
             UsersColumn::MfaSecret->value => $this->getNullableString(),

@@ -5124,6 +5124,79 @@ h1:has(> #documentTitle) {
   opacity: 1;
 }
 
+// ---- Interface size: Compact (the default, no rules at all) and Comfortable ----
+// Everything of the interface is sized in rem, so the comfortable size raises the root size by 12.5% (text 0.78rem -> 14px, 0.68rem ->
+// 12.2px) and the shared --fx tokens a step more (control 1.4rem -> 1.5rem, row 1.5rem -> 1.7rem: 27px and 31px). Not scaled, because
+// they are measured in px: the spreadsheet grid (cells, rows, columns), the label preview, thumbnails and the TinyMCE content area.
+html[data-ui-size='comfortable'] {
+  font-size: 112.5%;
+
+  --fx-ctl: 1.5rem;
+  --fx-row: 1.7rem;
+  --fx-pad: 0.45rem;
+  --fx-gap: 0.4rem;
+  --fx-icon-size: 0.85rem;
+
+  .side-panel,
+  #sidepanel-buttons,
+  .command-palette-overlay {
+    --fx-ctl: 1.5rem;
+    --fx-row: 1.7rem;
+    --fx-pad: 0.45rem;
+    --fx-gap: 0.4rem;
+    --fx-icon-size: 0.85rem;
+  }
+
+  // the spreadsheet grid keeps its own sizes (px); its text is not scaled either
+  .jss_worksheet,
+  .jss_worksheet td,
+  .jss_worksheet th,
+  .jss_content {
+    font-size: 16px;
+  }
+
+  // a hidden tooltip is 400px wide and, with the larger text, can push the page sideways: take no room until hovered
+  .infotip:not(:hover) .infotip-text {
+    display: none;
+  }
+}
+
+.ui-size-switch {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  border-radius: 6px;
+  display: inline-flex;
+  gap: 0.1rem;
+  padding: 0.1rem;
+
+  button {
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    color: inherit;
+    font-size: 0.85rem;
+    padding: 0.25rem 0.9rem;
+
+    &[aria-pressed='true'] {
+      background: var(--primary);
+      color: var(--primary-fg, #fff);
+    }
+  }
+}
+
+.ui-size-example {
+  align-items: center;
+  color: color-mix(in srgb, currentColor 78%, transparent);
+  display: inline-flex;
+  font-size: 0.78rem;
+  gap: 0.5rem;
+
+  .ui-size-example-chip {
+    background: color-mix(in srgb, currentColor 10%, transparent);
+    border-radius: 0.4rem;
+    padding: 0.1rem 0.5rem;
+  }
+}
+
 // Search results: each group is its own rounded box (header inside on top, rows inside on the same grid, hairlines only between rows
 // inside the box). The box sits on the panel's own left/right edges (the same as the search box and the RESULTS line above), takes at
 // most 8px of padding per side, and a collapsed group is just its header.

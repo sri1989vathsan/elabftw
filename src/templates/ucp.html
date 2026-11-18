@@ -597,6 +597,16 @@
       </div>
     </div>
 
+    <h3 class='pl-3'>{{ 'Size'|trans }}</h3>
+    <div class='pl-3 mt-2 mb-5' id='uiSizeSetting'>
+      <p class='mb-2'>{{ 'Choose how big the interface is. Compact is the default.'|trans }}</p>
+      <div class='ui-size-switch' role='group' aria-label='{{ 'Size'|trans }}'>
+        <button type='button' data-action='set-ui-size' data-ui-size='compact' aria-pressed='{{ App.Users.userData.ui_size|default('compact') != 'comfortable' ? 'true' : 'false' }}'>{{ 'Compact'|trans }}</button>
+        <button type='button' data-action='set-ui-size' data-ui-size='comfortable' aria-pressed='{{ App.Users.userData.ui_size|default('compact') == 'comfortable' ? 'true' : 'false' }}'>{{ 'Comfortable'|trans }}</button>
+      </div>
+      <div class='ui-size-example mt-2' aria-hidden='true'><span class='ui-size-example-row'>Experiment title</span><span class='ui-size-example-chip'>Running 3</span></div>
+    </div>
+
     <h3 class='pl-3'>{{ 'Theme Options'|trans }}</h3>
     <div class='pl-3 mt-2 mb-5'>
       <div class='d-flex justify-content-between'>

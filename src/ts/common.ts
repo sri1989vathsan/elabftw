@@ -480,6 +480,23 @@ on('set-theme', (el: HTMLElement) => {
   });
 });
 
+// The size of the interface: compact (default) or comfortable. Saved on the user (the server), applied at once, and remembered in localStorage for
+// the login page and the first paint (see web/ui-size.js).
+on('set-ui-size', (el: HTMLElement) => {
+  const size = el.dataset.uiSize === 'comfortable' ? 'comfortable' : 'compact';
+  ApiC.patch(`${Model.User}/me`, { ui_size: size }).then(() => {
+    document.documentElement.setAttribute('data-ui-size', size);
+    try {
+      localStorage.setItem('ui-size', size);
+    } catch {
+      // localStorage might be unavailable
+    }
+    document.querySelectorAll<HTMLElement>('[data-action="set-ui-size"]').forEach(button => {
+      button.setAttribute('aria-pressed', button.dataset.uiSize === size ? 'true' : 'false');
+    });
+  });
+});
+
 on('edit-openiris-link', (el: HTMLElement) => {
   const current = el.dataset.currentUrl ?? '';
   // eslint-disable-next-line no-alert

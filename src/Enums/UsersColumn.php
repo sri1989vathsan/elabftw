@@ -26,6 +26,7 @@ enum UsersColumn: string
     case CjkFonts = 'cjk_fonts';
     case ThemeVariant = 'theme_variant';
     case ThemePalette = 'theme_palette';
+    case UiSize = 'ui_size';
     case DefaultRead = 'default_read';
     case DefaultWrite = 'default_write';
     case DefaultReadBase = 'default_read_base';

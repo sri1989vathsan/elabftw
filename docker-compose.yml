@@ -174,6 +174,7 @@ services:
       - ./web/label-formats.js:/elabftw/web/label-formats.js:ro
       - ./web/label-dialog.js:/elabftw/web/label-dialog.js:ro
       - ./web/planned.css:/elabftw/web/planned.css:ro
+      - ./web/ui-size.js:/elabftw/web/ui-size.js:ro
       - ./web/label-config.json:/elabftw/web/label-config.json:ro
       - ./src/templates/label-formats.html:/elabftw/src/templates/label-formats.html:ro
       - ./src/whats-new.json:/elabftw/src/whats-new.json:ro
