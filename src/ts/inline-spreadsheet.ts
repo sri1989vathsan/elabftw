@@ -4920,6 +4920,9 @@ export function openSpreadsheetModal(
     // The empty lettered columns beside a narrow grid (see syncGridFiller): pressing a grey cell adds columns up to it.
     // They stay while the popup is open; the ones still empty at the end are left out of what Update applies.
     let pendingFiller: { baseCols: number } | null = null;
+    // the filler's own insertColumn() fires oninsertcolumn too; a column the person adds or deletes themselves makes the columns before it real
+    // (the cleanup of the empty filler columns used to delete real, empty columns added after the press: a table shrank by columns)
+    let fillerInserting = false;
     const activateFillerCell = (targetCol: number, row: number): void => {
       if (!worksheet || working.kind === 'well-plate') return;
       commitRescueInput();
@@ -4927,7 +4930,8 @@ export function openSpreadsheetModal(
       const missing = Math.min(targetCol + 1, MAX_DIMENSION) - currentCols;
       if (missing > 0) {
         flushMirrorIntoWorksheet(worksheet);
-        worksheet.insertColumn?.(missing, currentCols - 1, false);
+        fillerInserting = true;
+        try { worksheet.insertColumn?.(missing, currentCols - 1, false); } finally { fillerInserting = false; }
         pendingFiller ??= { baseCols: currentCols };
       }
       const col = Math.min(targetCol, MAX_DIMENSION - 1);
@@ -6518,6 +6522,7 @@ export function openSpreadsheetModal(
           styleNewlyInsertedRow(changedWorksheet, inserted);
         },
         oninsertcolumn: (changedWorksheet: JssInstance, inserted?: unknown): void => {
+          if (!fillerInserting) pendingFiller = null;
           if (acceptsGridChanges) hasChanges = true;
           finishPopupStructure(changedWorksheet);
           syncMountedDimensions(changedWorksheet);
@@ -6531,6 +6536,7 @@ export function openSpreadsheetModal(
           syncMountedDimensions(changedWorksheet);
         },
         ondeletecolumn: (changedWorksheet: JssInstance): void => {
+          pendingFiller = null;
           if (acceptsGridChanges) hasChanges = true;
           finishPopupStructure(changedWorksheet);
           syncMountedDimensions(changedWorksheet);
@@ -10168,6 +10174,8 @@ export function buildReadOnlySpreadsheetHost(
   // The empty lettered columns beside the grid: pressing a grey cell adds the columns up to it. They stay while the table
   // is being worked in; the ones still empty are taken off once, when the next press lands outside the table.
   let pendingFiller: { baseCols: number } | null = null;
+  // see the popup's fillerInserting: a column the person inserts or deletes makes the added columns real
+  let fillerInserting = false;
   const settlePendingFiller = (): void => {
     const pending = pendingFiller;
     if (!pending) return;
@@ -10181,6 +10189,9 @@ export function buildReadOnlySpreadsheetHost(
     if (!pendingFiller) return;
     const scope = sheetContainer.closest<HTMLElement>('.elabftw-spreadsheet-editor-overlay, .elabftw-spreadsheet-readonly-view') ?? sheetContainer;
     if (event.target instanceof Node && scope.contains(event.target)) return;
+    // the right-click menu is drawn outside the table but belongs to it: pressing one of its items (Delete row, Insert column...) is work in the
+    // table, not a press elsewhere. It used to take the empty columns off, so a table lost columns when a menu item was used after a grey press.
+    if (event.target instanceof Element && event.target.closest('.jcontextmenu, .jss_contextmenu')) return;
     settlePendingFiller();
   }, true);
   if (editable && !plateLocked) {
@@ -10196,7 +10207,8 @@ export function buildReadOnlySpreadsheetHost(
       if (missing > 0) {
         // typed values live only in the mirror until the grid is redrawn; the insert re-reads the worksheet
         flushMirrorIntoWorksheet(mounted);
-        mounted.insertColumn?.(missing, currentCols - 1, false);
+        fillerInserting = true;
+        try { mounted.insertColumn?.(missing, currentCols - 1, false); } finally { fillerInserting = false; }
         pendingFiller ??= { baseCols: currentCols };
       }
       const col = Math.min(targetCol, MAX_DIMENSION - 1);
@@ -10945,6 +10957,7 @@ export function buildReadOnlySpreadsheetHost(
         requestOverlayRelayout();
       },
       oninsertcolumn: (changedWorksheet: JssInstance, inserted?: unknown): void => {
+        if (!fillerInserting) pendingFiller = null;
         finishInlineStructure(changedWorksheet);
         notifyStructuralChange(changedWorksheet);
         requestOverlayRelayout();
@@ -10958,6 +10971,7 @@ export function buildReadOnlySpreadsheetHost(
         requestOverlayRelayout();
       },
       ondeletecolumn: (changedWorksheet: JssInstance) => {
+        pendingFiller = null;
         finishInlineStructure(changedWorksheet);
         notifyStructuralChange(changedWorksheet);
         requestOverlayRelayout();

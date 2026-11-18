@@ -299,6 +299,7 @@ B = both Firefox and Chromium; C = Chromium only (needs the real clipboard).
 | `no-stray-column-row` | pasted 3x1 and 3x2 sheets stay 3x1 / 3x2: no column of 1,2,3, no empty row nobody added | B |
 | `toast-inside-viewport` | the app's own toasts and tooltips stay in the window with a margin and do not cover the column letters (the "Last sync was successful" box seen in a screenshot is the Polybox client of the computer, not this page) | B |
 | `inline-scrollbar-thin` | the scroll bar of a wide inline sheet is thin, like the popup's | B |
+| `filler-then-insert-column` | after a press on the grey filler, a column inserted (directly, and by the right-click menu with the record kept as the mixed session keeps it) or a menu item used is not taken off by the filler cleanup | B |
 
 ### 11.2 Diagnostics
 
@@ -326,21 +327,26 @@ B = both Firefox and Chromium; C = Chromium only (needs the real clipboard).
 - find-in-grid used to report 0 or 2 current matches because earlier runs left the same word in other tables; the word is unique now.
 - "a spreadsheet sticks out of the editor sideways" in the editor-size check depends on the content of the scratch page.
 
-### 11.5 Results of the last full runs (3 parallel runs, seeds 11 / 22 / 33, headless Firefox, about 15 minutes each)
+### 11.5 Results of the last full runs (headless Firefox, 3 parallel runs, seeds 11 / 22 / 33, about 17-20 minutes each)
 
-| | Build 31 (before the fix) | Build 36 (after) | Build 46 (final UI) |
-|---|---|---|---|
-| Page errors (`reading 'style'`, `records[t] is undefined`) | 0 / 6 / 1 | 0 / 0 / 0 | 0 / 0 / 0 |
-| Structure data loss (insert/delete, formulas) | seed 22 about 75 lines, seed 33 6 | 0 / 0 / 0 | 0 / 1 line / 0 |
-| find-in-grid "exactly one current match" | 2 per seed | 0 | 0 |
-| Clipboard scenarios (headless Firefox only) | 8-9 per seed | 8-9 per seed | 8-9 per seed |
-| mixed "size NxM instead of ..." | seed 11 | all 3 seeds | seeds 11 and 33 |
-| Slowing down | none | none | none |
+| | Build 31 (before the fix) | Build 36 | Build 46 | Build 55 (final, 18 Nov) |
+|---|---|---|---|---|
+| Page errors | 0 / 6 / 1 | 0 / 0 / 0 | 0 / 0 / 0 | **0 / 0 / 0** |
+| Structure data loss (insert/delete, formulas) | seed 22 about 75 lines, seed 33 6 | 0 / 0 / 0 | 0 / 1 line / 0 | **0 / 0 / 0** |
+| mixed "size NxM instead of ..." | seed 11 | all 3 | 11 and 33 (7 each) | **11: 4, 22: 0, 33: 6** (see 11.6) |
+| Editor size problems | - | - | 0 / 6 / 12 | **0 / 0 / 0** |
+| Menu problems | 1 per run | 1 per run | 0 / 4 / 0 | **0 / 1 / 1** (scripted right-click, artefact) |
+| Scroll jiggle events | 0 / 47 / 66 | 0 / 47 / 66 | 0 / 45 / 70 | **0 / 0 / 0** (fresh scratch pages) |
+| Slowing down | none | none | none | **none** |
+| Clipboard scenarios (headless Firefox only) | 8-9 per seed | 8-9 | 8-9 | 8-9 (copy-table-format 2, paste-* and the new text-column-fits / no-stray-column-row paste variants 14; all "paste made 0 spreadsheets") |
 
-Chromium, formulas-and-structure + popup-wide-scroll + paste-copy-widths, Comfortable and Compact interface size: 0 data loss, 0 failures, 0 page errors in both.
+New scenarios in Firefox (build 55): popup-wide-scroll, popup-own-scrollbar, text-column-fits (typing and insert-command variants), preview-equals-live, toast-inside-viewport, inline-scrollbar-thin, filler-then-insert-column: no findings. Their paste variants cannot run in headless Firefox (no clipboard).
+
+Chromium (headless Google Chrome driven over the DevTools protocol, `scratchpad/cdp_soak.py`; the Browser pane runs too slowly while hidden): copy-paste, paste-external, paste-outside-widths, paste-copy-widths, copy-table-format, paste-range-format, undo-redo, cut-undo, text-column-fits, preview-equals-live, no-stray-column-row, formulas-and-structure, filler-revert, mixed on build 53: all pass (0 page errors, 0 structure data loss, 0 menu problems). paste-copy-widths-rich failed because the test changed only the `<colgroup>` of a copy whose saved data still said 100 px (the test now writes both, as the editor's own copy does). The run's other findings were artefacts of a scratch page used for many runs ("55 layout spacers for 54 spreadsheets", `save` slowing from 2 s to 7 s with 54 old tables on the page): use a fresh scratch experiment for every full run. A full-list Chrome run on build 55 lost its connection after 18 minutes (not analysed).
 
 ### 11.6 Open items
 
-1. **mixed: size shrink** ("size 5x4 instead of 5x7", then "cell F5 not found"): rows missing from the saved table after a long mixed run; not reproducible when `mixed` runs alone (4 A/B runs with and without the sync). Next: the full soak in Chromium with the dump and the probe; bisect which earlier scenario leaves the page in that state; compare saved size and grid size after each "add rows" and "enter in last row". Medium.
-2. **One-column drift, seed 22, mixed round 12** ("col-before: size changed by 0 rows and -2 columns, expected +1"): looks like the grey-filler cleanup (`dropEmptyColumnsFrom`) removing two empty columns at the moment of the insert. Needs a targeted repro in Chromium. Medium-low.
-3. **Cosmetic**: scroll jiggle (0 / 45 / 70 events per seed) and a taller last row after "row-before" in Firefox (49 px against 33 px).
+1. **mixed: size shrink, partly fixed** (commit 208e1a4e8). Root cause found with `filler-then-insert-column` and the "last operations" now listed in each size finding: the empty grey filler columns are taken off by the next press outside the table, and (a) a press on an item of the right-click menu (drawn outside the table) counted as a press outside, (b) a column inserted or deleted after the filler press was swept up with the filler's (every empty column from the base width). Before: pressing the filler and then Delete row removed 9 columns; fixed in the inline grid. Left: seeds 11 and 33 still lose columns (4x12 became 4x5 at a popup Apply; 8x8 became 8x6 around a popup Cancel), always after a `filler-click`. The popup's own trimming of "grey columns that were pressed but never typed" (`buildResult`) is the next place to look (columns added by an inline filler press, made real by a menu insert, but empty, are trimmed when the popup applies). Seed 22 is clean. Medium.
+2. **One-column drift** (seed 22, "col-before: ... -2 columns"): same cause as the first part of item 1 (cleanup at the moment of the insert); not seen on build 55.
+3. **Cosmetic**: scroll jiggle was 0 on fresh pages in build 55 (45 and 70 events on older, crowded pages); the taller last row after "row-before" in Firefox was not seen.
+4. Test hygiene: a scratch experiment accumulates tables; start every full run on a fresh one.
