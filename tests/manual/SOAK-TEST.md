@@ -275,3 +275,72 @@ on leaving, PCR products with tails or a wrapped sequence, the wide-window prime
 3. If the new behaviour has its own rule (a size, a menu), add the check to the helpers so every scenario gets it.
 4. Add a line to the table in section 4, a line to the history in section 7, and run it: at least two sessions in Chrome and in Firefox, with the window in front.
 5. A change to the spreadsheet code without a scenario or a check here is not finished.
+
+---
+
+## 11. Added on 18 November 2026: new scenarios, diagnostics, the last full runs, open items
+
+Rule: every spreadsheet bug that is reported, and every fix, gets a scenario in the default list of the script and a line here.
+B = both Firefox and Chromium; C = Chromium only (needs the real clipboard).
+
+### 11.1 Scenarios added since section 4 was written
+
+| Name | What it checks | Runs in |
+|---|---|---|
+| `paste-outside-widths` | a table from Excel, Sheets or Word keeps its column widths (`<col>` in pt, class of the style block, width attribute) | C |
+| `paste-copy-widths`, `paste-copy-widths-rich` | a copy of one of our own sheets pasted through the paste handler keeps the column widths | C |
+| `popup-wide-scroll` | a sheet wider than the popup: the scroller has overflow-x, scrollLeft can be set, the last column letter becomes visible, the toolbar stays | B |
+| `popup-own-scrollbar` | the popup's own thin scroll bar (overlay mode): thumb smaller than the track, dragging scrolls, Home works | B |
+| `find-in-grid` | Find and replace marks exactly one current match (uses a word nobody left in the page) | B |
+| `cut-undo` | Ctrl+X removes from grid and saved table, one Ctrl+Z brings it back, redo cuts again | C |
+| `padding-fit` | text keeps 8 px from the cell edges; a long value up to the 360 px cap is not clipped | B |
+| `text-column-fits` | a sheet of 3 long texts made by typing, external HTML paste, plain tab-separated paste and the insert command: text is left-aligned, and fitted or at the cap | B (pastes by event) |
+| `preview-equals-live` | the preview before the first click equals the live grid: column widths, row heights, alignment, and the content below does not move | B |
+| `no-stray-column-row` | pasted 3x1 and 3x2 sheets stay 3x1 / 3x2: no column of 1,2,3, no empty row nobody added | B |
+| `toast-inside-viewport` | the app's own toasts and tooltips stay in the window with a margin and do not cover the column letters (the "Last sync was successful" box seen in a screenshot is the Polybox client of the computer, not this page) | B |
+| `inline-scrollbar-thin` | the scroll bar of a wide inline sheet is thin, like the popup's | B |
+
+### 11.2 Diagnostics
+
+| Name | What it gives |
+|---|---|
+| `window.__jssMenuDiag` | what the last right-click Insert / Delete did: the sheet it acted on, sizes before and after, whether it was skipped |
+| `window.__popupScrollInfo` | the popup's scroller (overflow, scrollLeft, widths) for the popup scroll scenarios |
+| `window.__noMinDimSync` | A/B switch of `syncMinDimensions()` (the fix of the insert/delete TypeError) |
+| width-desync probe | the first time a live worksheet's first data row is wider or narrower than its header row / column list, with the operation and the ops before it |
+| error-time dump | the live worksheets as they were when a page error was thrown |
+| `window.__forceOverlayScrollbars` | shows the popup's own scroll bar in the popup scenarios |
+
+### 11.3 How to run, more precisely
+
+- One or a few scenarios: `spreadsheetSoak({ seed: 5, sessions: 1, scenarios: ['formulas-and-structure', 'popup-wide-scroll'] })`.
+- A long run without `await`: read `window.spreadsheetSoakProgress` while it runs and `window.spreadsheetSoakReport` when it is done. In the Browser pane a hidden
+  page runs timers slowly: poll in short loops (under about 40 s per call).
+- Parallel runs: one scratch experiment per run, seeds 11, 22, 33 were used; headless Firefox through Marionette (`scratchpad/ffm.py`) or the Browser pane (Chromium).
+- **Clipboard scenarios in Chromium only.**
+
+### 11.4 Known test artefacts (not app bugs)
+
+- Headless Firefox has no clipboard: the copy/paste scenarios report "paste made 0 spreadsheets" there.
+- A scripted right-click at the top of the screen lands under the sticky bar ("no menu appeared", about 1 per run).
+- find-in-grid used to report 0 or 2 current matches because earlier runs left the same word in other tables; the word is unique now.
+- "a spreadsheet sticks out of the editor sideways" in the editor-size check depends on the content of the scratch page.
+
+### 11.5 Results of the last full runs (3 parallel runs, seeds 11 / 22 / 33, headless Firefox, about 15 minutes each)
+
+| | Build 31 (before the fix) | Build 36 (after) | Build 46 (final UI) |
+|---|---|---|---|
+| Page errors (`reading 'style'`, `records[t] is undefined`) | 0 / 6 / 1 | 0 / 0 / 0 | 0 / 0 / 0 |
+| Structure data loss (insert/delete, formulas) | seed 22 about 75 lines, seed 33 6 | 0 / 0 / 0 | 0 / 1 line / 0 |
+| find-in-grid "exactly one current match" | 2 per seed | 0 | 0 |
+| Clipboard scenarios (headless Firefox only) | 8-9 per seed | 8-9 per seed | 8-9 per seed |
+| mixed "size NxM instead of ..." | seed 11 | all 3 seeds | seeds 11 and 33 |
+| Slowing down | none | none | none |
+
+Chromium, formulas-and-structure + popup-wide-scroll + paste-copy-widths, Comfortable and Compact interface size: 0 data loss, 0 failures, 0 page errors in both.
+
+### 11.6 Open items
+
+1. **mixed: size shrink** ("size 5x4 instead of 5x7", then "cell F5 not found"): rows missing from the saved table after a long mixed run; not reproducible when `mixed` runs alone (4 A/B runs with and without the sync). Next: the full soak in Chromium with the dump and the probe; bisect which earlier scenario leaves the page in that state; compare saved size and grid size after each "add rows" and "enter in last row". Medium.
+2. **One-column drift, seed 22, mixed round 12** ("col-before: size changed by 0 rows and -2 columns, expected +1"): looks like the grey-filler cleanup (`dropEmptyColumnsFrom`) removing two empty columns at the moment of the insert. Needs a targeted repro in Chromium. Medium-low.
+3. **Cosmetic**: scroll jiggle (0 / 45 / 70 events per seed) and a taller last row after "row-before" in Firefox (49 px against 33 px).
