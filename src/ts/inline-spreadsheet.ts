@@ -3582,6 +3582,27 @@ function applySpreadsheetRowHeights(
 /** A column nobody sized grows to fit its longest value (never shrinks, never past this width: longer text wraps). */
 const AUTO_FIT_MAX_COL_WIDTH = 360;
 const AUTO_FIT_MAX_CELLS = 2500;
+/** Text typed into a column nobody sized (still the default width) widens it to fit, up to the cap, as a fitted paste would have. */
+function growUntouchedColumnToFit(cell: HTMLElement | null | undefined, col: number): void {
+  const worksheetEl = cell?.closest<HTMLElement>('.jss_worksheet');
+  if (!cell || !worksheetEl) return;
+  const cols = Array.from(worksheetEl.querySelectorAll<HTMLTableColElement>(':scope > colgroup > col'));
+  const colElement = cols[col + 1];
+  if (!colElement) return;
+  const current = Number.parseFloat(colElement.getAttribute('width') ?? '') || 0;
+  // untouched = still the default width, or still the width this function gave it (a person's drag changes it, and ends the automatic fit)
+  if (current !== DEFAULT_DATA_COL_WIDTH && String(current) !== colElement.dataset.autoFit) return;
+  const target = Math.min(AUTO_FIT_MAX_COL_WIDTH, measureNaturalCellWidth(cell));
+  if (target <= current) return;
+  colElement.setAttribute('width', String(target));
+  colElement.dataset.autoFit = String(target);
+  window.dispatchEvent(new Event('elabftw-spreadsheet-layout'));
+}
+
+function isUserSizedWidth(width: number | undefined): boolean {
+  return width !== undefined && width !== DEFAULT_DATA_COL_WIDTH;
+}
+
 function fitUnsizedColumns(
   container: HTMLElement,
   dataCols: HTMLTableColElement[],
@@ -3592,7 +3613,8 @@ function fitUnsizedColumns(
   const widest = new Map<number, number>();
   cells.forEach(cell => {
     const col = Number.parseInt(cell.dataset.x ?? '', 10);
-    if (!Number.isInteger(col) || sized[String(col)] !== undefined || (cell.textContent ?? '').trim() === '') return;
+    // A saved width equal to the default (what a new or pasted sheet is stored with) counts as not sized: it is fitted too.
+    if (!Number.isInteger(col) || isUserSizedWidth(sized[String(col)]) || (cell.textContent ?? '').trim() === '') return;
     widest.set(col, Math.max(widest.get(col) ?? 0, measureNaturalCellWidth(cell)));
   });
   widest.forEach((natural, col) => {
@@ -3619,6 +3641,8 @@ function applySpreadsheetColWidths(
     if (!Number.isInteger(col) || !Number.isFinite(width)) return;
     const colElement = dataCols[col];
     if (!colElement) return;
+    // A default-width column that was fitted to its text above keeps the fitted width.
+    if (width === DEFAULT_DATA_COL_WIDTH && (Number.parseFloat(colElement.getAttribute('width') ?? '') || 0) > width) return;
     // Attribute-ONLY, deliberately no style.width. jspreadsheet-ce's own
     // setWidth() (used by the real mouse-drag) only ever does
     // colElement.setAttribute("width", ...) -- it never touches style.width.
@@ -6400,13 +6424,13 @@ export function openSpreadsheetModal(
                 : {}
             ))
             : undefined,
-          columns: initialColWidths
-            ? Array.from({ length: mountedCols }, (_, col) => (
-              initialColWidths[String(col)]
-                ? { width: initialColWidths[String(col)] }
-                : {}
-            ))
-            : undefined,
+          // Text starts at the left edge (jspreadsheet centres a column unless told otherwise, which cut long text off on both
+          // sides); a cell that was given an alignment keeps it through its own style.
+          columns: Array.from({ length: mountedCols }, (_, col) => (
+            initialColWidths?.[String(col)]
+              ? { align: 'left', width: initialColWidths[String(col)] }
+              : { align: 'left' }
+          )),
           style: mountedStyles,
           tableOverflow: true,
           tableWidth: '100%',
@@ -9670,6 +9694,7 @@ export function buildReadOnlySpreadsheetHost(
     // normal debounced persistence path instead.
     updateRawDataMirrorCell(col, row, value, false);
     previewSpreadsheetCell(sheetContainer, rawDataMirror, col, row, value);
+    growUntouchedColumnToFit(sheetContainer.querySelector<HTMLElement>(`.jss_worksheet td[data-x="${col}"][data-y="${row}"]`), col);
     notifyFromMirror();
     delete document.body.dataset.spreadsheetCellEditing;
     document.body.classList.remove('elabftw-spreadsheet-editing');
@@ -10523,6 +10548,7 @@ export function buildReadOnlySpreadsheetHost(
     // a single action.
     if (!hydrationConfirmed) return;
     updateRawDataMirrorCell(changedCol, changedRow, newValue);
+    growUntouchedColumnToFit(_cell, changedCol);
     notifyFromMirror();
   };
   // Row/column insert, delete and resize: no single cell/value to reconcile
@@ -10695,7 +10721,7 @@ export function buildReadOnlySpreadsheetHost(
         rowHeights[String(row)] ? { height: rowHeights[String(row)] } : {}
       )),
       columns: Array.from({ length: cols }, (_, col) => (
-        colWidths[String(col)] ? { width: colWidths[String(col)] } : {}
+        colWidths[String(col)] ? { align: 'left', width: colWidths[String(col)] } : { align: 'left' }
       )),
       style: styles,
       // A read-only view (view page) fills whatever CSS space it's given --
@@ -11351,7 +11377,42 @@ export function buildSpreadsheetPreviewHost(table: HTMLTableElement, reservedBar
       + '<button type="button" class="btn btn-sm btn-outline-secondary" tabindex="-1" disabled>Add rows</button>';
     host.appendChild(placeholder);
   }
+  fitPreviewColumns(host, worksheet, saved?.colWidths, dataCols);
   return host;
+}
+
+/**
+ * The live grid widens a column nobody sized to fit its text when it mounts (fitUnsizedColumns). The preview does the same, measured
+ * the same way in a hidden copy of itself, so that clicking a table changes no width, wrapping or height. Columns with a saved width keep it.
+ */
+function fitPreviewColumns(
+  host: HTMLElement,
+  worksheet: HTMLTableElement,
+  sized: ColWidths | undefined,
+  dataCols: number,
+): void {
+  const known: ColWidths = {};
+  Object.entries(sized ?? {}).forEach(([key, width]) => { if (isUserSizedWidth(width)) known[key] = width; });
+  let unsized = false;
+  for (let col = 0; col < dataCols; col++) if (known[String(col)] === undefined) unsized = true;
+  if (!unsized) return;
+  const saved = { position: host.style.position, left: host.style.left, top: host.style.top, visibility: host.style.visibility, width: host.style.width };
+  Object.assign(host.style, { position: 'fixed', left: '-10000px', top: '0', visibility: 'hidden', width: '2000px' });
+  document.body.appendChild(host);
+  try {
+    const cols = Array.from(worksheet.querySelectorAll<HTMLTableColElement>(':scope > colgroup > col'));
+    fitUnsizedColumns(host, cols.slice(1), known);
+    let total = 0;
+    cols.forEach(col => {
+      const width = Number.parseFloat(col.getAttribute('width') ?? '') || 0;
+      col.style.width = `${width}px`;
+      total += width;
+    });
+    worksheet.style.width = `${total}px`;
+  } finally {
+    host.remove();
+    Object.assign(host.style, saved);
+  }
 }
 
 /**

@@ -294,8 +294,8 @@ B = both Firefox and Chromium; C = Chromium only (needs the real clipboard).
 | `find-in-grid` | Find and replace marks exactly one current match (uses a word nobody left in the page) | B |
 | `cut-undo` | Ctrl+X removes from grid and saved table, one Ctrl+Z brings it back, redo cuts again | C |
 | `padding-fit` | text keeps 8 px from the cell edges; a long value up to the 360 px cap is not clipped | B |
-| `text-column-fits` | a sheet of 3 long texts made by typing, external HTML paste, plain tab-separated paste and the insert command: text is left-aligned, and fitted or at the cap | B (pastes by event) |
-| `preview-equals-live` | the preview before the first click equals the live grid: column widths, row heights, alignment, and the content below does not move | B |
+| `text-column-fits` | a sheet of 3 long texts made by typing, external HTML paste, plain tab-separated paste and the insert command: text is left-aligned, the column is fitted to the text (up to the 360 px cap; a column still at the default 100 px counts as unsized, typing into it widens it) | B (pastes by event) |
+| `preview-equals-live` | the preview a reload would build (`elabftwSpreadsheetDiagnostics.buildPreview(uid)`, from the stored table) equals the live grid: column widths, row heights, alignment, data-area height; for sheets made by external HTML paste, plain-text paste, the insert command and typing | B |
 | `no-stray-column-row` | pasted 3x1 and 3x2 sheets stay 3x1 / 3x2: no column of 1,2,3, no empty row nobody added | B |
 | `toast-inside-viewport` | the app's own toasts and tooltips stay in the window with a margin and do not cover the column letters (the "Last sync was successful" box seen in a screenshot is the Polybox client of the computer, not this page) | B |
 | `inline-scrollbar-thin` | the scroll bar of a wide inline sheet is thin, like the popup's | B |

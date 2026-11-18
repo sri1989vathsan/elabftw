@@ -2917,6 +2917,11 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       const table = tableByUid(uid);
       return table ? spreadsheetOverlays.get(table)?.el ?? null : null;
     },
+    // For automated tests: the preview a reload would show for this table (built from its stored markup), not attached to the page.
+    buildPreview: (uid: string): HTMLElement | null => {
+      const table = tableByUid(uid);
+      return table ? buildSpreadsheetPreviewHost(table, 0) : null;
+    },
     // For automated tests: add a scratch spreadsheet at the end of the text and remove it again.
     insertScratch: (rows: number, cols: number, options?: { plate?: number }): string | null => {
       const known = new Set(Array.from(editor.getBody().querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet'))

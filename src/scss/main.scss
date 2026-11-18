@@ -7762,6 +7762,26 @@ body.html-tool-workspace-open:not(.html-tool-workspace-is-maximized) .inline-spr
   white-space: pre-wrap;
 }
 
+/* The scroll bars of the sheets in the text are thin and quiet, like the one of the popup, instead of the thick system bars */
+.elabftw-spreadsheet-readonly-grid .jss_content {
+  scrollbar-color: color-mix(in srgb, currentColor 35%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+.elabftw-spreadsheet-readonly-grid .jss_content::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.elabftw-spreadsheet-readonly-grid .jss_content::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: 4px;
+}
+
+.elabftw-spreadsheet-readonly-grid .jss_content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 /* The editor's Find and replace marks its matches in the stored table, which is hidden behind the grid: the grid cells that hold a
  * match are marked the same way (see mirrorFindHighlights in SpreadsheetExtension.ts). */
 .elabftw-spreadsheet-editor-overlay .jss_worksheet td.elabftw-find-match {

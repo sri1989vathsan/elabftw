@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'text-column-fits', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -1209,6 +1209,69 @@ async function spreadsheetSoak(options = {}) {
       await consistency('paste-copy-widths: inline, popup and stored HTML agree', true);
       await save();
   };
+
+  // ---- text columns, preview versus live grid (the screenshot of three sheets in a narrow column) ------------------------------
+  const LONG_TEXT = ['HEK293T sGFP-mCherry', 'HEK293T antiCD19-mCherry', 'HEK293T w endoAGPR-mCherry'];
+  // The preview a reload would show is built from the stored table, put out of sight to be measured, then removed
+  const withPreview = async (uid, fn) => {
+    const host = api.buildPreview(uid);
+    if (!host) return null;
+    Object.assign(host.style, { position: 'fixed', left: '-10000px', top: '0', width: '1000px' });
+    document.body.appendChild(host);
+    await sleep(100);
+    try { return fn(host); } finally { host.remove(); }
+  };
+  const sheetMetrics = (uid, usePreview = false, given = null) => {
+    const root = given || (usePreview ? null : api.overlayElement(uid));
+    const ws = root && root.querySelector('.jss_worksheet');
+    if (!ws) return null;
+    const cols = [...ws.querySelectorAll('thead td[data-x]')].map(td => Math.round(td.getBoundingClientRect().width));
+    const rows = [...ws.querySelectorAll('tbody tr')].map(tr => Math.round(tr.getBoundingClientRect().height));
+    const cells = [...ws.querySelectorAll('tbody td[data-x][data-y]')].filter(td => td.textContent.trim() !== '');
+    const aligns = [...new Set(cells.map(td => getComputedStyle(td).textAlign))];
+    const clipped = cells.filter(td => td.scrollWidth > td.clientWidth + 1).map(td => `${td.dataset.x},${td.dataset.y}`);
+    const box = ws.getBoundingClientRect();
+    const table = tableEl(uid);
+    const next = table && (table.closest('.elabftw-table-indent') || table).nextElementSibling;
+    const nextTop = next ? Math.round(next.getBoundingClientRect().top + window.scrollY) : null;
+    return { cols, rows, aligns, clipped, width: Math.round(box.width), height: Math.round(box.height), nextTop, dataCols: cols.length, dataRows: rows.length, textCells: cells.length };
+  };
+  const newTablesSince = before => api.snapshot(true).filter(snap => !before.has(snap.uid));
+  const pasteHtmlOrText = async (html, text) => {
+    editor.selection.select(editor.getBody(), true); editor.selection.collapse(false);
+    const dt = new DataTransfer();
+    if (html) dt.setData('text/html', html);
+    dt.setData('text/plain', text);
+    editor.getDoc().dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    await sleep(1300);
+  };
+  // Makes a sheet of the long texts in one of the ways a person gets one; returns { uid, label, rows } or null.
+  const makeTextSheet = async way => {
+    layoutDirty = true;
+    const rows = LONG_TEXT.map((text, i) => [text, String(i + 1)]);
+    const before = new Set(api.snapshot(false).map(snap => snap.uid));
+    if (way === 'typing') {
+      const uid = await createTable('text column (typed)', { rows: 3, cols: 2 });
+      if (!uid) return null;
+      for (let r = 0; r < 3; r++) await typeInto(uid, r, 0, rows[r][0], 'Enter');
+      await verify('text sheet typed', true);
+      return { uid, label: 'typed', rows };
+    }
+    if (way === 'external-html') {
+      await pasteHtmlOrText(`<table><tbody>${rows.map(row => `<tr>${row.map(v => `<td>${v}</td>`).join('')}</tr>`).join('')}</tbody></table>`, rows.map(r => r.join('\t')).join('\n'));
+    } else if (way === 'plain-text') {
+      await pasteHtmlOrText('', rows.map(r => r.join('\t')).join('\n'));
+    } else if (way === 'command') {
+      editor.focus();
+      editor.execCommand('elabftwInsertSpreadsheetData', false, { data: rows, displayData: rows, rows: 3, cols: 2, kind: 'standard', caption: '' });
+      await sleep(1000);
+    }
+    const added = newTablesSince(before);
+    if (added.length !== 1) { fail(`text sheet by ${way}: ${added.length} spreadsheets were made, expected 1`); return null; }
+    models.set(added[0].uid, { label: `text column (${way})`, grid: rows.map(r => r.slice()), plate: false });
+    return { uid: added[0].uid, label: way, rows };
+  };
+
   const scenarios = {
     async 'plate-day'() {
       const uid = await createTable('96-well plate', { plate: 96 });
@@ -2181,6 +2244,114 @@ async function spreadsheetSoak(options = {}) {
       } finally {
         window.__forceOverlayScrollbars = false;
       }
+    },
+
+    // A column of long text must fit (or, at the widest, be cut at the left edge): never centred and cut off on both sides.
+    async 'text-column-fits'() {
+      for (const way of ['typing', 'external-html', 'plain-text', 'command']) {
+        const made = await makeTextSheet(way);
+        if (!made) continue;
+        await live(made.uid);
+        await sleep(400);
+        const m = sheetMetrics(made.uid);
+        if (!m) { fail(`text-column-fits: no grid for the sheet made by ${way}`); continue; }
+        const table = `text column (${way})`;
+        if (m.aligns.some(a => a !== 'left' && a !== 'start')) dataLoss.push({ context, table, problem: `text is aligned ${JSON.stringify(m.aligns)}, it must start at the left unless the source said otherwise` });
+        const capped = m.cols[0] >= 360;
+        if (m.clipped.length && !capped) dataLoss.push({ context, table, problem: `text is cut off in a column that is not at its widest: cells ${m.clipped.join(' ')} (column A ${m.cols[0]} px)` });
+        if (way !== 'typing' && m.cols[0] < 150) dataLoss.push({ context, table, problem: `column A stays ${m.cols[0]} px for text of 24 characters: the pasted/created sheet was not fitted` });
+        note('text-column-fits');
+      }
+    },
+    // What is shown before the first click (the preview) must be what the live grid is: same widths, row heights, wrapping,
+    // alignment and height. (The preview is built from the stored table, as a reload does: a table inserted in the editor is live at once.)
+    async 'preview-equals-live'() {
+      for (const way of ['external-html', 'plain-text', 'command', 'typed-then-reloaded']) {
+        let made;
+        if (way === 'typed-then-reloaded') {
+          // a typed sheet, once it is saved: the preview built from its stored table is what a reload shows
+          made = await makeTextSheet('typing');
+          if (!made) continue;
+          await sleep(900);
+        } else {
+          made = await makeTextSheet(way);
+          if (!made) continue;
+        }
+        // the live grid first, then the preview a reload would build from the same stored table
+        await live(made.uid);
+        await sleep(900);
+        const second = sheetMetrics(made.uid);
+        const first = await withPreview(made.uid, host => sheetMetrics(made.uid, true, host));
+        const table = `preview vs live (${way})`;
+        if (!first || !second) { fail(`preview-equals-live: no metrics (${way})`); continue; }
+        const near = (a, b) => a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 2);
+        if (!near(first.cols.slice(0, 2), second.cols.slice(0, 2))) dataLoss.push({ context, table, problem: `column widths changed on the first click: ${first.cols.join('/')} -> ${second.cols.join('/')}` });
+        if (!near(first.rows, second.rows)) dataLoss.push({ context, table, problem: `row heights changed on the first click: ${first.rows.join('/')} -> ${second.rows.join('/')}` });
+        if (JSON.stringify(first.aligns) !== JSON.stringify(second.aligns)) dataLoss.push({ context, table, problem: `text alignment changed on the first click: ${first.aligns.join(',')} -> ${second.aligns.join(',')}` });
+        if (Math.abs(first.height - second.height) > 4) dataLoss.push({ context, table, problem: `the data area is ${first.height} px high in the preview and ${second.height} px live` });
+        note('preview-equals-live');
+      }
+    },
+    // The size of a sheet is its data: no column of 1, 2, 3 and no empty row below that nobody added.
+    async 'no-stray-column-row'() {
+      for (const shape of [[3, 1], [3, 2]]) {
+        const [rowsN, colsN] = shape;
+        layoutDirty = true;
+        const rows = Array.from({ length: rowsN }, (_, r) => Array.from({ length: colsN }, (_, c) => `r${r + 1}c${c + 1} text`));
+        const before = new Set(api.snapshot(false).map(snap => snap.uid));
+        await pasteHtmlOrText(`<table><tbody>${rows.map(row => `<tr>${row.map(v => `<td>${v}</td>`).join('')}</tr>`).join('')}</tbody></table>`, rows.map(r => r.join('\t')).join('\n'));
+        const added = newTablesSince(before);
+        if (added.length !== 1) { fail(`no-stray-column-row: a ${rowsN}x${colsN} paste made ${added.length} spreadsheets`); continue; }
+        models.set(added[0].uid, { label: `stray check ${rowsN}x${colsN}`, grid: rows.map(r => r.slice()), plate: false });
+        const stored = tableEl(added[0].uid);
+        const storedRows = stored.querySelectorAll('tbody tr').length;
+        const storedCols = stored.querySelectorAll('thead th, thead td').length - 1;
+        await live(added[0].uid);
+        await sleep(400);
+        const m = sheetMetrics(added[0].uid);
+        // the grey filler columns are not data: count the columns that hold or are headed in the stored table
+        const shownCols = [...api.overlayElement(added[0].uid).querySelectorAll('.jss_worksheet thead td[data-x]')].filter(td => !td.classList.contains('elabftw-filler')).length;
+        if (storedRows !== rowsN || storedCols !== colsN) dataLoss.push({ context, table: `stray check ${rowsN}x${colsN}`, problem: `stored table is ${storedRows}x${storedCols}, the source was ${rowsN}x${colsN}` });
+        if (m && (m.dataRows !== rowsN)) dataLoss.push({ context, table: `stray check ${rowsN}x${colsN}`, problem: `the grid shows ${m.dataRows} rows, the source had ${rowsN}` });
+        const firstColumn = [...api.overlayElement(added[0].uid).querySelectorAll('.jss_worksheet tbody td[data-x="0"][data-y]')].map(td => td.textContent.trim());
+        if (firstColumn.join(',') === '1,2,3') dataLoss.push({ context, table: `stray check ${rowsN}x${colsN}`, problem: 'column A holds 1,2,3 that nobody typed' });
+        note('no-stray-column-row');
+        void shownCols;
+      }
+    },
+    // The app's own toasts and tooltips stay inside the window, off the left edge and off the sheet being edited. (The "Last sync was
+    // successful" box of the screenshot is the Polybox sync client of the computer, not part of this page.)
+    async 'toast-inside-viewport'() {
+      const uid = await createTable('toast check', { rows: 3, cols: 3 });
+      if (!uid) return;
+      const overlayEls = [...document.querySelectorAll('.overlay, .toast, .infotip-text')].filter(el => {
+        const r = el.getBoundingClientRect(); const cs = getComputedStyle(el);
+        const offscreen = r.left >= innerWidth || r.right <= 0 || r.top >= innerHeight || r.bottom <= 0;
+        return r.width > 0 && r.height > 0 && !offscreen && cs.visibility !== 'hidden' && cs.display !== 'none' && cs.opacity !== '0';
+      });
+      const sheetRect = (api.overlayElement(uid) || document.body).getBoundingClientRect();
+      for (const el of overlayEls) {
+        const r = el.getBoundingClientRect();
+        const label = (el.className || el.tagName).toString().slice(0, 40);
+        if (r.left < 8 || r.top < 0 || r.right > innerWidth + 1 || r.bottom > innerHeight + 1) dataLoss.push({ context, table: 'toast check', problem: `${label} is not inside the window with a margin: left ${Math.round(r.left)}, right ${Math.round(r.right)} of ${innerWidth}` });
+        const header = (api.overlayElement(uid) || document).querySelector('.jss_worksheet thead');
+        const hb = header && header.getBoundingClientRect();
+        if (hb && r.left < hb.right && r.right > hb.left && r.top < hb.bottom && r.bottom > hb.top && getComputedStyle(el).pointerEvents !== 'none') dataLoss.push({ context, table: 'toast check', problem: `${label} covers the column letters of the sheet and takes clicks` });
+      }
+      void sheetRect;
+      note('toast-inside-viewport');
+    },
+    // The scroll bars of the sheets in the text are thin, like the popup's.
+    async 'inline-scrollbar-thin'() {
+      const uid = await createTable('wide inline sheet', { rows: 4, cols: 20 });
+      if (!uid) return;
+      const root = await live(uid);
+      const scroller = root.querySelector('.jss_content');
+      if (!scroller) { fail('inline-scrollbar-thin: no scroller'); return; }
+      const cs = getComputedStyle(scroller);
+      const thin = cs.scrollbarWidth === 'thin' || (scroller.offsetHeight - scroller.clientHeight) <= 10;
+      if (!thin) dataLoss.push({ context, table: 'wide inline sheet', problem: `the inline sheet has a thick scroll bar (scrollbar-width ${cs.scrollbarWidth}, ${scroller.offsetHeight - scroller.clientHeight} px)` });
+      note('inline-scrollbar-thin');
     },
 
     async 'find-in-grid'() {

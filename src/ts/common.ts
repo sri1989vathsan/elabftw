@@ -2286,6 +2286,14 @@ on('create-entity', async (el: HTMLElement, event: Event) => {
     el.dataset.type = 'items';
     page = 'database.php';
   }
+  // the next dialog offers the folder of this entry first (see create-new.ts)
+  if (el.dataset.type === 'experiments' || el.dataset.type === 'items' || el.dataset.type === 'database') {
+    try {
+      localStorage.setItem('create-last-folder', String(params['folder_id'] ?? ''));
+    } catch {
+      // localStorage might be unavailable
+    }
+  }
   const id = await ApiC.post2location(`${el.dataset.type}`, params);
   if (params['compound']) {
     await ApiC.post(`${el.dataset.type}/${id}/compounds_links/${params['compound']}`, {});
