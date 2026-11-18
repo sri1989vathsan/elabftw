@@ -20,4 +20,6 @@ enum DisplayMode: string
     case Compact = 'cr';
     // compact rows with a preview pane
     case Preview = 'pv';
+    // board by status (experiments)
+    case Board = 'bd';
 }

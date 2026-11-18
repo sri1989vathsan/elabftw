@@ -236,7 +236,8 @@ async function displayEntities(
   }
   entitiesTableModule?.unmountEntitiesTable();
   // cards, compact rows and rows with a preview are one component; the mode is a store it follows
-  entityLayout.set(mode === 'cr' || mode === 'pv' ? mode : 'it');
+  // the board groups experiments by their status: resources have none, so they show cards instead
+  entityLayout.set(mode === 'cr' || mode === 'pv' || (mode === 'bd' && entity.type === 'experiments') ? mode : 'it');
   mountEntityListSv(rootEl, order, sort);
 }
 

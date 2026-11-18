@@ -51,6 +51,8 @@
     next_step?: string | null;
     locked?: boolean;
     modified_at?: string | null;
+    steps_done?: number | string | null;
+    steps_total?: number | string | null;
     date?: string | null;
     created_at?: string | null;
     is_pinned?: boolean;
@@ -96,6 +98,67 @@
   let previewId = $state<number | null>(null);
 
   const previewEntity = $derived(entities.find(item => item.id === previewId) ?? entities[0] ?? null);
+
+  // ---- board by status (experiments): one column per status of the team, in their configured order ----
+  type StatusColumn = { id: string | null; title: string; color: string };
+  let statusColumns = $state<StatusColumn[]>([]);
+  let statusesLoaded = false;
+  let draggedId = $state<number | null>(null);
+  let dropColumn = $state<string | null>(null);
+
+  async function loadStatuses(): Promise<void> {
+    if (statusesLoaded) return;
+    statusesLoaded = true;
+    try {
+      const list = await ApiC.getJson('teams/current/experiments_status?limit=9000') as Array<{ id: number; title: string; color: string }>;
+      statusColumns = [
+        { id: null, title: t('not-set'), color: 'bdbdbd' },
+        ...(Array.isArray(list) ? list : []).map(status => ({ id: String(status.id), title: status.title, color: status.color || 'bdbdbd' })),
+      ];
+    } catch {
+      statusesLoaded = false;
+    }
+  }
+
+  $effect(() => {
+    if (layoutMode === 'bd') void loadStatuses();
+  });
+
+  function columnEntities(column: StatusColumn): EntityListItem[] {
+    return entities.filter(item => (item.status == null || item.status === '' ? null : String(item.status)) === column.id);
+  }
+
+  async function moveToStatus(item: EntityListItem, column: StatusColumn): Promise<void> {
+    const previous = { status: item.status, status_title: item.status_title, status_color: item.status_color };
+    // shown at once; put back when the server refuses
+    item.status = column.id;
+    item.status_title = column.id === null ? null : column.title;
+    item.status_color = column.id === null ? null : column.color;
+    entities = [...entities];
+    try {
+      await ApiC.patch(`${entityType}/${item.id}`, { status: column.id === null ? null : Number(column.id), notifOnSaved: 0 });
+    } catch {
+      Object.assign(item, previous);
+      entities = [...entities];
+    }
+  }
+
+  function stepsLabel(item: EntityListItem): string {
+    const total = Number(item.steps_total ?? 0);
+    return total > 0 ? `${Number(item.steps_done ?? 0)}/${total}` : '';
+  }
+
+  // arrow keys move the selection of the preview list
+  function onPreviewKeydown(event: KeyboardEvent): void {
+    if (layoutMode !== 'pv' || (event.key !== 'ArrowDown' && event.key !== 'ArrowUp')) return;
+    if ((event.target as HTMLElement | null)?.closest('input, textarea, select')) return;
+    const index = Math.max(0, entities.findIndex(item => item.id === (previewEntity?.id ?? -1)));
+    const next = entities[Math.min(entities.length - 1, Math.max(0, index + (event.key === 'ArrowDown' ? 1 : -1)))];
+    if (!next) return;
+    event.preventDefault();
+    previewId = next.id;
+    void tick().then(() => document.querySelector(`.entity-rows [data-entity-id="${next.id}"]`)?.scrollIntoView({ block: 'nearest' }));
+  }
 
   // rows are grouped by the month of their date (created for templates); order is kept
   const groups = $derived.by(() => {
@@ -696,12 +759,87 @@
       {#if entity.status_title}<span class='entity-row-meta' title={t('Status')}>{entity.status_title}</span>{/if}
       {#if entity.category_title}<span class='entity-row-meta' title={t('Category')}>{entity.category_title}</span>{/if}
       <span class='entity-row-meta entity-row-date'>{formatDate(isTemplateType(entityType) ? entity.created_at : entity.date)}</span>
+      <button
+        type='button'
+        title={t('toggle-pin')}
+        aria-label={t('toggle-pin')}
+        data-action='toggle-pin'
+        data-id={entity.id}
+        class={`entity-row-pin ${entity.is_pinned ? 'is-pinned' : ''}`}
+      ><i class={`fas fa-thumbtack fa-fw ${!entity.is_pinned ? 'color-weak' : ''}`} aria-hidden='true'></i></button>
     </section>
   {/snippet}
 
-  {#if layoutMode === 'cr' || layoutMode === 'pv'}
-    <div class={`entity-rows ${layoutMode === 'pv' ? 'entity-rows-with-preview' : ''}`} id='itemList'>
+  {#if layoutMode === 'bd'}
+    <div class='entity-board' id='itemList' role='group' aria-label={t('Board by status')}>
+      {#if isLoading && entities.length === 0}
+        {#each [0, 1, 2, 3] as column (column)}
+          <div class='entity-board-column'><div class='fx-skeleton'></div><div class='fx-skeleton'></div></div>
+        {/each}
+      {:else}
+        {#each statusColumns as column (column.id ?? 'none')}
+          {@const cards = columnEntities(column)}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class={`entity-board-column ${dropColumn === (column.id ?? 'none') ? 'is-drop' : ''}`}
+            ondragover={event => { if (draggedId !== null) { event.preventDefault(); dropColumn = column.id ?? 'none'; } }}
+            ondragleave={() => { if (dropColumn === (column.id ?? 'none')) dropColumn = null; }}
+            ondrop={event => {
+              event.preventDefault();
+              const moved = entities.find(item => item.id === draggedId);
+              draggedId = null;
+              dropColumn = null;
+              if (moved && (moved.status == null || moved.status === '' ? null : String(moved.status)) !== column.id) void moveToStatus(moved, column);
+            }}
+          >
+            <h3 class='entity-board-title'>
+              <i class='fas fa-circle fa-fw' style={`color: #${column.color}`} aria-hidden='true'></i>
+              <span>{column.title}</span>
+              <span class='entity-board-count'>{cards.length}</span>
+            </h3>
+            <div class='entity-board-cards'>
+              {#each cards as entity (entity.id)}
+                <article
+                  class='entity-board-card'
+                  style={`--left-color: #${getLeftColor(entity)};`}
+                  data-entity-id={entity.id}
+                  draggable={canEditEntity(entity)}
+                  ondragstart={event => { draggedId = entity.id; event.dataTransfer?.setData('text/plain', String(entity.id)); }}
+                  ondragend={() => { draggedId = null; dropColumn = null; }}
+                >
+                  <a class='entity-board-card-title' href={`?mode=view&id=${entity.id}`}>{entity.title || t('entity-default-title')}</a>
+                  <div class='entity-board-card-meta'>
+                    <span>{formatDate(entity.date)}</span>
+                    {#if entity.fullname}<span class='entity-board-card-owner'>{entity.fullname}</span>{/if}
+                    {#if stepsLabel(entity)}<span title={t('Steps')}><i class='fas fa-list-check fa-fw' aria-hidden='true'></i>{stepsLabel(entity)}</span>{/if}
+                    <button
+                      type='button'
+                      class={`entity-row-pin ml-auto ${entity.is_pinned ? 'is-pinned' : ''}`}
+                      title={t('toggle-pin')}
+                      aria-label={t('toggle-pin')}
+                      data-action='toggle-pin'
+                      data-id={entity.id}
+                    ><i class={`fas fa-thumbtack fa-fw ${!entity.is_pinned ? 'color-weak' : ''}`} aria-hidden='true'></i></button>
+                  </div>
+                </article>
+              {/each}
+            </div>
+          </div>
+        {/each}
+      {/if}
+    </div>
+    {#if hasMore}
+      <p class='entity-board-footer'>{t('Showing only the entries loaded so far. Switch to a list layout to load more.')}</p>
+    {/if}
+  {:else if layoutMode === 'cr' || layoutMode === 'pv'}
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions -->
+    <div class={`entity-rows ${layoutMode === 'pv' ? 'entity-rows-with-preview' : ''}`} id='itemList' tabindex={layoutMode === 'pv' ? 0 : -1} role={layoutMode === 'pv' ? 'listbox' : undefined} aria-label={t('Entries')} onkeydown={onPreviewKeydown}>
       <div class='entity-rows-list'>
+        {#if isLoading && entities.length === 0}
+          {#each [0, 1, 2, 3, 4, 5] as row (row)}<div class='fx-skeleton'></div>{/each}
+        {:else if entities.length === 0}
+          <p class='fx-empty'>{t('No entries to show.')}</p>
+        {/if}
         {#each groups as group (group.key)}
           <h3 class='entity-group-title'>{group.label} <span class='entity-group-count'>{group.items.length}</span></h3>
           {#each group.items as entity, index (`${entity.id}-${index}`)}
@@ -724,7 +862,13 @@
               {formatDate(previewEntity.date ?? previewEntity.created_at)}
               {#if previewEntity.fullname} · {previewEntity.fullname}{/if}
               {#if previewEntity.status_title} · {previewEntity.status_title}{/if}
+              {#if previewEntity.category_title} · {previewEntity.category_title}{/if}
             </div>
+            {#if (previewEntity.tags_decoded?.length ?? 0) > 0}
+              <div class='entity-preview-tags'>
+                {#each previewEntity.tags_decoded ?? [] as tag (tag.id)}<span class='tag'>{tag.tag}</span>{/each}
+              </div>
+            {/if}
             {@render fieldBlock(`pv-${previewEntity.id}-goal`, t('Goals'), 'fa-bullseye', previewEntity.experiment_goal, 6)}
             {@render fieldBlock(`pv-${previewEntity.id}-concl`, t('Conclusion'), 'fa-clipboard-check', previewEntity.experiment_conclusion, 6)}
             {@render fieldBlock(`pv-${previewEntity.id}-notes`, t('Notes'), 'fa-file-lines', previewEntity.experiment_notes, 6)}
