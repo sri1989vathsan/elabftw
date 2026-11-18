@@ -2665,6 +2665,33 @@ function startTrackingGlobalListeners(): () => () => void {
   };
 }
 
+// jspreadsheet-ce keeps ONE global "current worksheet" (jspreadsheet.current) and builds its right-click menu and runs
+// every menu action (insert/delete row or column, ...) on it. After a remount or with several tables on the page it can
+// still point at an instance that was replaced or torn down; the menu action then ran on that dead sheet and threw
+// "Cannot read properties of undefined (reading 'style')" (headers empty) while the visible grid did nothing. So the
+// sheet under the pointer is pinned as current before a right-click is handled, and before any press when the current
+// one is gone (detached or without headers).
+const pinnedContainers = new WeakSet<HTMLElement>();
+
+function pinCurrentWorksheet(container: HTMLElement): void {
+  if (pinnedContainers.has(container)) return;
+  pinnedContainers.add(container);
+  const factory = jspreadsheet as unknown as { current?: { element?: Element; headers?: unknown[] } | null };
+  const ownWorksheet = (): { element?: Element; headers?: unknown[] } | null => {
+    const holder = container.matches('.jss_container') ? container : container.querySelector<HTMLElement>('.jss_container');
+    const candidate = (holder as (HTMLElement & { jssWorksheet?: { headers?: unknown[] } }) | null)?.jssWorksheet;
+    return candidate && Array.isArray(candidate.headers) && candidate.headers.length > 0 ? candidate : null;
+  };
+  const pin = (event: Event): void => {
+    const own = ownWorksheet();
+    if (!own) return;
+    const current = factory.current;
+    const stale = !current || !current.element?.isConnected || !Array.isArray(current.headers) || current.headers.length === 0;
+    if (event.type === 'contextmenu' || stale) factory.current = own;
+  };
+  for (const type of ['pointerdown', 'mousedown', 'contextmenu']) container.addEventListener(type, pin, true);
+}
+
 function getMountedWorksheet(
   container: HTMLDivElement,
   instance?: JssInstance,
@@ -6138,6 +6165,7 @@ export function openSpreadsheetModal(
         changes => pushCellHistoryEntry(changes),
       );
       const stopTrackingJssListeners = startTrackingGlobalListeners();
+      pinCurrentWorksheet(sheetContainer);
       const instance = (jspreadsheet as unknown as JssFactory)(sheetContainer, {
         worksheets: [{
           data: mountedData,
@@ -10432,6 +10460,7 @@ export function buildReadOnlySpreadsheetHost(
     },
   );
   const stopTrackingJssListeners = startTrackingGlobalListeners();
+  pinCurrentWorksheet(sheetContainer);
   (jspreadsheet as unknown as JssFactory)(sheetContainer, {
     worksheets: [{
       data: displayValues,
