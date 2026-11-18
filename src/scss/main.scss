@@ -1585,10 +1585,21 @@ tr:first-child td {
 
 // the number of my entries next to a category or status on the dashboard
 .catstat-btn .catstat-count {
+  align-items: center;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.68rem;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
-  margin-left: 0.25rem;
-  opacity: 0.85;
+  height: 1.3rem;
+  justify-content: center;
+  line-height: 1;
+  margin-left: 0.3rem;
+  min-width: 1.3rem;
+  padding: 0 0.25rem;
+  vertical-align: middle;
 }
 
 // Pin button of the row and board layouts: muted, small, shown a little stronger when pinned
