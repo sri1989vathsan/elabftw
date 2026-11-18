@@ -956,6 +956,24 @@
   // not one global switch -- a project used for quick scanning shouldn't
   // force the same density on one you actually work the detail of, and
   // vice versa. Per-browser (localStorage), not a synced team setting.
+  // which projects have their "Goals / description" open (remembered in this browser, one flag per project)
+  const DESCRIPTION_OPEN_KEY = 'pm-description-open';
+  function readDescriptionOpen(): Record<string, boolean> {
+    try {
+      return JSON.parse(localStorage.getItem(DESCRIPTION_OPEN_KEY) || '{}') as Record<string, boolean>;
+    } catch {
+      return {};
+    }
+  }
+  let descriptionOpen: Record<string, boolean> = readDescriptionOpen();
+  function toggleDescription(projectId: number): void {
+    descriptionOpen = { ...descriptionOpen, [String(projectId)]: !descriptionOpen[String(projectId)] };
+    try {
+      localStorage.setItem(DESCRIPTION_OPEN_KEY, JSON.stringify(descriptionOpen));
+    } catch {
+      // the choice just is not remembered
+    }
+  }
   let cardDensity: 'compact' | 'expanded' = 'expanded';
 
   // Board (columns) or canvas (free-form cards and arrows) -- remembered per browser.
@@ -2556,17 +2574,24 @@
     {@const topLevelProject = projects.find(p => p.id === effectiveTopLevelId) ?? null}
     {#if topLevelProject}
       <div class="pm-project-description">
-        <div class="d-flex align-items-center flex-wrap" style="gap:0.4rem">
+        <div class="pm-project-line">
           <strong class="pm-project-name-heading">{topLevelProject.name}</strong>
+          {#if visibleTasks.length > 0}
+            <span class="pm-progress-chip" title={`${doneCount} / ${totalCount} ${progressScopeLabel}`}>{donePercent}% · {doneCount}/{totalCount}</span>
+          {/if}
           {#if topLevelProject.target_end_date}
             <span class="pm-muted small"><i class="fas fa-flag-checkered fa-fw mr-1" aria-hidden="true"></i>{t('Target')}: {formatDeadline(topLevelProject.target_end_date)}</span>
           {/if}
+          <button type="button" class="pm-desc-toggle" aria-expanded={!!descriptionOpen[String(topLevelProject.id)]} on:click={() => toggleDescription(topLevelProject.id)}>
+            {t('Goals / description')} <i class="fas {descriptionOpen[String(topLevelProject.id)] ? 'fa-caret-up' : 'fa-caret-down'}" aria-hidden="true"></i>
+          </button>
         </div>
-        <span class="pm-label mb-0 mt-2 d-block">{t('Goals / description')}</span>
-        {#if topLevelProject.description}
-          <div class="pm-project-description-body">{@html topLevelProject.description}</div>
-        {:else}
-          <p class="pm-muted small mb-0">{t('No description yet.')}</p>
+        {#if descriptionOpen[String(topLevelProject.id)]}
+          {#if topLevelProject.description}
+            <div class="pm-project-description-body">{@html topLevelProject.description}</div>
+          {:else}
+            <p class="pm-muted small mb-0">{t('No description yet.')}</p>
+          {/if}
         {/if}
       </div>
     {/if}
@@ -2604,17 +2629,24 @@
 
     {#if subprojectsOfActive.length > 0 && !viewingAllSubprojects && activeProject}
       <div class="pm-project-description pm-subproject-description">
-        <div class="d-flex align-items-center flex-wrap" style="gap:0.4rem">
+        <div class="pm-project-line">
           <strong class="pm-project-name-heading">{activeProject.name}</strong>
+          {#if visibleTasks.length > 0}
+            <span class="pm-progress-chip" title={`${doneCount} / ${totalCount} ${progressScopeLabel}`}>{donePercent}% · {doneCount}/{totalCount}</span>
+          {/if}
           {#if activeProject.target_end_date}
             <span class="pm-muted small"><i class="fas fa-flag-checkered fa-fw mr-1" aria-hidden="true"></i>{t('Target')}: {formatDeadline(activeProject.target_end_date)}</span>
           {/if}
+          <button type="button" class="pm-desc-toggle" aria-expanded={!!descriptionOpen[String(activeProject.id)]} on:click={() => toggleDescription(activeProject.id)}>
+            {t('Goals / description')} <i class="fas {descriptionOpen[String(activeProject.id)] ? 'fa-caret-up' : 'fa-caret-down'}" aria-hidden="true"></i>
+          </button>
         </div>
-        <span class="pm-label mb-0 mt-2 d-block">{t('Goals / description')}</span>
-        {#if activeProject.description}
-          <div class="pm-project-description-body">{@html activeProject.description}</div>
-        {:else}
-          <p class="pm-muted small mb-0">{t('No description yet.')}</p>
+        {#if descriptionOpen[String(activeProject.id)]}
+          {#if activeProject.description}
+            <div class="pm-project-description-body">{@html activeProject.description}</div>
+          {:else}
+            <p class="pm-muted small mb-0">{t('No description yet.')}</p>
+          {/if}
         {/if}
       </div>
     {/if}
@@ -2638,7 +2670,7 @@
       <option value="high">{priorityLabel('high')}</option>
     </select>
   </div>
-  {#if visibleTasks.length > 0}
+  {#if visibleTasks.length > 0 && typeof effectiveTopLevelId !== 'number'}
     <div class="pm-progress mt-2" title={`${doneCount} / ${totalCount} ${progressScopeLabel}`}>
       <div class="pm-progress-bar" style={`width: ${donePercent}%`}></div>
       <span class="pm-progress-label">{donePercent}% {progressScopeLabel}</span>

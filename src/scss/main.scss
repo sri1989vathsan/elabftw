@@ -10090,3 +10090,42 @@ button.wp-legend-item {
     display: none;
   }
 }
+
+// the project line: name, a progress chip, the target date and the "Goals / description" toggle, all on one line
+.pm-board {
+  .pm-project-line {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .pm-progress-chip {
+    background: rgba(128, 128, 128, 0.18);
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.05rem 0.5rem;
+  }
+
+  .pm-desc-toggle {
+    background: transparent;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.75rem;
+    margin-left: auto;
+    opacity: 0.75;
+    padding: 0.1rem 0.3rem;
+
+    &:hover,
+    &:focus-visible {
+      opacity: 1;
+    }
+  }
+
+  .pm-project-description {
+    padding-bottom: 0.3rem;
+    padding-top: 0.3rem;
+  }
+}
