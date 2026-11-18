@@ -347,6 +347,20 @@ function installTransposedPaste(
 }
 
 /**
+ * jspreadsheet-ce builds every new row with getNumberOfColumns(), which is the largest of the column list, the first data
+ * row and options.minDimensions[0] -- and never lowers minDimensions when columns are deleted (or rows are). After a
+ * column delete the next Insert row therefore built more cells than there are headers and threw "Cannot read properties of
+ * undefined (reading 'style')" in createCell (and 'records[t] is undefined' for rows), the visible grid doing nothing.
+ * Keeping minDimensions equal to the real size after every structure change (and just before an insert) avoids it.
+ */
+function syncMinDimensions(worksheet: JssInstance | null | undefined): void {
+  const sheet = worksheet as unknown as { headers?: unknown[]; options?: { data?: unknown[]; minDimensions?: number[] } } | null | undefined;
+  if (!sheet?.options || !Array.isArray(sheet.headers) || sheet.headers.length === 0) return;
+  const rows = Array.isArray(sheet.options.data) ? sheet.options.data.length : 0;
+  sheet.options.minDimensions = [sheet.headers.length, rows];
+}
+
+/**
  * The grid's own "Insert a new row/column before/after" run on whichever worksheet jspreadsheet believes is current. When
  * that was not the sheet on screen (a replaced instance, or one still being built) the insert threw "Cannot read
  * properties of undefined (reading 'style')" inside createCell and the visible grid did nothing. The insert now runs on
@@ -378,6 +392,7 @@ function retargetInsertItems(
         headers: sheet?.headers?.length ?? null,
         data0: sheet?.options?.data?.[0] ? Object.keys(sheet.options.data[0] as object).length : null,
         columns: sheet?.options?.columns?.length ?? null,
+        minDimensions: (sheet?.options as { minDimensions?: number[] } | undefined)?.minDimensions ?? null,
       });
     }
   };
@@ -392,6 +407,7 @@ function retargetInsertItems(
         note('sheet has no headers, insert skipped', target);
         return;
       }
+      syncMinDimensions(target);
       try {
         entry[1](target);
       } catch (error) {
@@ -4817,6 +4833,7 @@ export function openSpreadsheetModal(
       pendingStructure = acceptsGridChanges ? beginStructure(target, axis, kind, arg, readPopupColWidths) : null;
     };
     const finishPopupStructure = (target: JssInstance): void => {
+    syncMinDimensions(target);
       if (!pendingStructure) return;
       const entry = finishStructure(target, pendingStructure, readPopupColWidths);
       lastPopupStructure = pendingStructure;
@@ -8056,6 +8073,7 @@ export function buildReadOnlySpreadsheetHost(
       : null;
   };
   const finishInlineStructure = (target: JssInstance): void => {
+    syncMinDimensions(target);
     if (!pendingStructure) return;
     const entry = finishStructure(target, pendingStructure, () => readRenderedColWidths(sheetContainer));
     lastInlineStructure = pendingStructure;
