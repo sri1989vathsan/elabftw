@@ -5080,6 +5080,18 @@ h1:has(> #documentTitle) {
   }
 }
 
+// Placeholder contrast (scripted over the new pages and dialogs, WCAG AA 4.5:1): the Search box on the dark panel (4.05 -> 70% of the
+// text colour) and the Goals / Conclusion / Notes editors (3.84 -> 75% of the text colour).
+#favoritesPanel #favoriteFilterText::placeholder {
+  color: color-mix(in srgb, var(--fx-fg) 75%, transparent) !important;
+  opacity: 1 !important;
+}
+
+.entity-summary-edit textarea::placeholder {
+  color: color-mix(in srgb, currentColor 75%, transparent);
+  opacity: 1;
+}
+
 // Search results: each group is its own rounded box (header inside on top, rows inside on the same grid, hairlines only between rows
 // inside the box). The box sits on the panel's own left/right edges (the same as the search box and the RESULTS line above), takes at
 // most 8px of padding per side, and a collapsed group is just its header.
