@@ -54,6 +54,42 @@ final class DashboardStats
         return $out;
     }
 
+    /**
+     * My resources by status: status id (0 for "not set") => count. Only the requester's own, non deleted resources.
+     *
+     * @return array<int, int>
+     */
+    public function resourcesByStatus(): array
+    {
+        $req = $this->Db->prepare(
+            'SELECT COALESCE(status, 0) AS status_id, COUNT(*) AS n
+            FROM items
+            WHERE userid = :userid AND state = :state
+            GROUP BY status_id',
+        );
+        $req->bindValue(':userid', $this->Users->userid, PDO::PARAM_INT);
+        $req->bindValue(':state', State::Normal->value, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $out = array();
+        foreach ($req->fetchAll() as $row) {
+            $out[(int) $row['status_id']] = (int) $row['n'];
+        }
+        return $out;
+    }
+
+    /** How many of my resources were modified in the last seven days */
+    public function resourcesModifiedThisWeek(): int
+    {
+        $req = $this->Db->prepare(
+            'SELECT COUNT(*) FROM items
+            WHERE userid = :userid AND state = :state AND modified_at >= (NOW() - INTERVAL 7 DAY)',
+        );
+        $req->bindValue(':userid', $this->Users->userid, PDO::PARAM_INT);
+        $req->bindValue(':state', State::Normal->value, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return (int) $req->fetchColumn();
+    }
+
     /** How many of my experiments were modified in the last seven days */
     public function modifiedThisWeek(): int
     {

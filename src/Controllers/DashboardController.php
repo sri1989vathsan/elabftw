@@ -129,6 +129,8 @@ final class DashboardController extends AbstractHtmlController
                 'statsByStatus' => $DashboardStats->experimentsByStatus(),
                 'statsModifiedThisWeek' => $DashboardStats->modifiedThisWeek(),
                 'statsOpenSteps' => $DashboardStats->openSteps(),
+                'statsResourcesByStatus' => $DashboardStats->resourcesByStatus(),
+                'statsResourcesModifiedThisWeek' => $DashboardStats->resourcesModifiedThisWeek(),
                 'itemsStatusArr' => $ItemsStatus->readAll(),
                 'experimentsArr' => $Experiments->readShow($DisplayParamsExp),
                 'experimentsStatusArr' => $ExperimentsStatus->readAll($ExperimentsStatus->getQueryParams(new InputBag(array('limit' => 9999)))),
