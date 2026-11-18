@@ -1965,6 +1965,17 @@ tr:first-child td {
   }
 }
 
+// Notifications of the editor and the page stay inside the viewport and above the side rail (a toast was cut off behind it)
+.tox .tox-notifications-container {
+  margin-left: 3rem;
+  max-width: calc(100vw - 4rem);
+}
+
+.tox-tinymce-aux,
+.tox-silver-sink {
+  z-index: 20050;
+}
+
 // Pin button of the row and board layouts: muted, small, shown a little stronger when pinned
 .entity-row-pin {
   background: none;
