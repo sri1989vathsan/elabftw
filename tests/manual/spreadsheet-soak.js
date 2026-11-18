@@ -74,7 +74,23 @@ async function spreadsheetSoak(options = {}) {
   const opLog = [];
   const note = name => { counts[name] = (counts[name] || 0) + 1; opLog.push(name); if (opLog.length > 60) opLog.shift(); };
   const t0 = performance.now();
-  window.spreadsheetSoakLive = { dataLoss, failures, sizes, menus };
+  // Width desync diagnostic: the first time the live worksheet's first data row is wider (or narrower) than its header
+  // row / column list, with the operation, round and the ops before it. (jspreadsheet's createRow needs them equal.)
+  const desync = [];
+  const jssState = uid => {
+    const root = api.overlayElement(uid); const holder = root && [...root.querySelectorAll('.jss_container')].find(el => el.jssWorksheet);
+    const w = holder && holder.jssWorksheet;
+    if (!w) return null;
+    return { data0: w.options.data && w.options.data[0] ? Object.keys(w.options.data[0]).length : null, headers: w.headers ? w.headers.length : null, columns: w.options.columns ? w.options.columns.length : null, rows: w.options.data ? w.options.data.length : null, records0: w.records && w.records[0] ? w.records[0].length : null };
+  };
+  const checkDesync = (uid, when) => {
+    const st = jssState(uid);
+    if (!st) return;
+    if (st.data0 !== st.headers || (st.columns != null && st.columns !== st.headers) || (st.records0 != null && st.records0 !== st.headers)) {
+      if (desync.length < 6) desync.push({ when, context, state: st, previousOps: opLog.slice(-6) });
+    }
+  };
+  window.spreadsheetSoakLive = { dataLoss, failures, sizes, menus, desync };
   const baselineTables = api.snapshot(false).length;
   const baselineUids = new Set(api.snapshot(false).map(snap => snap.uid));
   let baselineGone = false;
@@ -565,6 +581,7 @@ async function spreadsheetSoak(options = {}) {
     if ((kind === 'del-row' && rows <= 2) || (kind === 'del-col' && cols <= 2)) return;
     if ((kind.startsWith('row') && rows >= 14) || (kind.startsWith('col') && cols >= 10)) return;
     const r = int(0, rows - 1); const c = int(0, cols - 1);
+    checkDesync(uid, `before menu-${kind}`);
     note(`menu-${kind}`);
     // Size of the stored table (it follows the live grid a moment after each change).
     const domSize = () => { const t = tableEl(uid); return [t.rows.length - 1, t.rows[0].cells.length - 1]; };
@@ -597,6 +614,7 @@ async function spreadsheetSoak(options = {}) {
       await sleep(700);
     });
     if (!clicked) return;
+    checkDesync(uid, `after menu-${kind}`);
     let sizeAfter = domSize();
     // the grid redraws a little after the menu click: wait for the expected change, up to 5 s
     const wanted = { 'row-after': [1, 0], 'row-before': [1, 0], 'col-after': [0, 1], 'col-before': [0, 1], 'del-row': [-1, 0], 'del-col': [0, -1] }[kind];
@@ -2083,10 +2101,12 @@ async function spreadsheetSoak(options = {}) {
     // The editor's Find and replace marks its matches in the stored table, hidden behind the grid: the grid cells that hold a match
     // must be marked too (the current one stronger), and the marks must go when the search is closed.
     async 'find-in-grid'() {
+      // a word no earlier run left in this page: matches in other tables would hold the one "current" mark instead
+      const word = 'zebrafinch' + Math.random().toString(36).slice(2, 7);
       const uid = await createTable('find in grid', { rows: 4, cols: 3 });
       if (!uid) return;
-      await typeInto(uid, 1, 2, 'zebrafinch');
-      await typeInto(uid, 3, 0, 'another zebrafinch here');
+      await typeInto(uid, 1, 2, word);
+      await typeInto(uid, 3, 0, 'another ' + word + ' here');
       // the typed text reaches the stored table (where Find looks) once the grid has written it out: settle first
       await verify('find-in-grid: typed', true);
       const search = editor.plugins?.searchreplace;
@@ -2100,16 +2120,21 @@ async function spreadsheetSoak(options = {}) {
         while (Date.now() - started < ms) { if (condition()) return true; await sleep(100); }
         return condition();
       };
-      const found = search.find('zebrafinch', true, false);
+      const found = search.find(word, true, false);
       if (found < 2) fail(`Find counted ${found} matches of a text that is in two cells`);
       await until(() => marked().length >= 2 && currentCount() === 1);
       const now = marked();
       if (!now.includes('2,1') || !now.includes('0,3')) dataLoss.push({ context, table: models.get(uid)?.label, problem: `the cells that hold a match were not marked in the grid (marked: ${now.join(' ') || 'none'})` });
-      if (currentCount() !== 1) dataLoss.push({ context, table: models.get(uid)?.label, problem: 'exactly one cell should be marked as the current match' });
+      const findState = () => {
+        const body = editor.getBody();
+        const markers = [...body.querySelectorAll('.mce-match-marker')];
+        return `markers=${markers.length} selected=${markers.filter(m => m.classList.contains('mce-match-marker-selected')).length} current=${currentCount()} marked=${marked().length} cells=${[...grid().querySelectorAll('td.elabftw-find-match-current')].map(td => td.dataset.x + ',' + td.dataset.y).join(' ')}`;
+      };
+      if (currentCount() !== 1) dataLoss.push({ context, table: models.get(uid)?.label, problem: 'exactly one cell should be marked as the current match (' + findState() + ')' });
       const before = grid().querySelector('td.elabftw-find-match-current')?.dataset.x;
       search.next();
       await until(() => currentCount() === 1 && grid().querySelector('td.elabftw-find-match-current')?.dataset.x !== before);
-      if (currentCount() !== 1) dataLoss.push({ context, table: models.get(uid)?.label, problem: 'after Next exactly one cell should be marked as the current match' });
+      if (currentCount() !== 1) dataLoss.push({ context, table: models.get(uid)?.label, problem: 'after Next exactly one cell should be marked as the current match (' + findState() + ')' });
       search.done();
       await until(() => marked().length === 0);
       if (marked().length > 0) dataLoss.push({ context, table: models.get(uid)?.label, problem: `the marks stayed in the grid after the search was closed (${marked().join(' ')})` });
