@@ -10208,3 +10208,65 @@ button.wp-legend-item {
     }
   }
 }
+
+// compact cards: one row each, the priority as a dot, details on one meta line, the buttons only on hover or focus
+.pm-board .pm-card.pm-card-compact {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.4rem;
+  padding: 0.35rem 0.5rem;
+  position: relative;
+
+  > .d-flex:first-child {
+    align-items: center !important;
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .pm-task-title-btn {
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pm-task-actions {
+    background: var(--mainbackground, #fff);
+    border-radius: 4px;
+    box-shadow: 0 0.1rem 0.5rem rgba(0, 0, 0, 0.25);
+    display: none;
+    padding: 0.1rem;
+    position: absolute;
+    right: 0.25rem;
+    top: 0.2rem;
+    z-index: 3;
+  }
+
+  &:hover .pm-task-actions,
+  &:focus-within .pm-task-actions {
+    display: flex;
+  }
+
+  .pm-priority {
+    border-radius: 50%;
+    font-size: 0;
+    height: 0.55rem;
+    margin: 0 !important;
+    padding: 0;
+    width: 0.55rem;
+  }
+
+  .pm-task-meta {
+    font-size: 0.72rem;
+    margin: 0 !important;
+  }
+
+  .pm-task-updated {
+    display: none;
+  }
+
+  .pm-task-meta.d-flex {
+    margin-left: auto !important;
+  }
+}

@@ -975,7 +975,7 @@
     }
   }
   let subprojectMenuOpen = false;
-  let cardDensity: 'compact' | 'expanded' = 'expanded';
+  let cardDensity: 'compact' | 'expanded' = 'compact';
 
   // Board (columns) or canvas (free-form cards and arrows) -- remembered per browser.
   let canvasView = false;
@@ -1000,9 +1000,10 @@
 
   function loadCardDensity(id: number | null | 'all'): 'compact' | 'expanded' {
     try {
-      return localStorage.getItem(cardDensityStorageKey(id)) === 'compact' ? 'compact' : 'expanded';
+      // compact unless the person chose the expanded cards for this board
+      return localStorage.getItem(cardDensityStorageKey(id)) === 'expanded' ? 'expanded' : 'compact';
     } catch {
-      return 'expanded';
+      return 'compact';
     }
   }
 
@@ -2782,6 +2783,7 @@
           {#each shownTasks as task (task.id)}
             <div
               class="pm-card pm-task"
+              class:pm-card-compact={cardDensity === 'compact'}
               class:pm-task-done={column.kind === 'done'}
               class:pm-task-pinned={task.pinned}
               draggable={canManage(task)}
@@ -2862,7 +2864,7 @@
                 <span class="badge badge-info mt-1">{#if activeProjectId === 'all' && task.project_parent_name}{task.project_parent_name} › {/if}{task.project_name ?? t('Unfiled')}</span>
               {/if}
               {#if task.priority}
-                <span class="badge pm-priority pm-priority-{task.priority} mt-1">{priorityLabel(task.priority)}</span>
+                <span class="badge pm-priority pm-priority-{task.priority} mt-1" title={priorityLabel(task.priority)}>{priorityLabel(task.priority)}</span>
               {/if}
               {#if task.deadline}
                 {@const urgency = deadlineUrgency(task)}
