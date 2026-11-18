@@ -6483,11 +6483,71 @@ the form-control fails to do that so we do the border ourselves */
 
 }
 
-/* COMMENTS */
+/* COMMENTS: a thin thread. One muted header line, the text under it, a hover tint; no heavy box. */
 .comment-header {
-  background-color: var(--firstlevel);
+  background-color: transparent;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem !important;
+}
+
+#commentsDiv .box {
+  background: transparent;
+  border: 0;
+  border-left: 3px solid color-mix(in srgb, var(--primary) 55%, transparent);
+  border-radius: 3px;
+  margin-bottom: 0.35rem;
+  padding: 0;
+
+  &:hover {
+    background: color-mix(in srgb, currentColor 5%, transparent);
+  }
+
+  p.comment {
+    font-size: 0.88rem;
+    margin: 0 0.5rem 0.3rem !important;
+    padding: 0.1rem 0.25rem !important;
+  }
 }
 /* END COMMENTS */
+
+/* STEPS (view): 1.5rem rows, muted details on one line, done steps struck through and muted */
+#stepsDivContent [id^='step_view_'] {
+  align-items: center;
+  border-radius: 3px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.5rem;
+  margin-bottom: 0 !important;
+  min-height: 1.5rem;
+  padding: 0.1rem 0.35rem !important;
+
+  &:hover {
+    background: color-mix(in srgb, currentColor 6%, transparent);
+  }
+
+  input[type='checkbox'] {
+    margin: 0;
+  }
+
+  .text-muted {
+    font-size: 0.72rem;
+    margin-right: 0 !important;
+  }
+
+  &.finished {
+    color: color-mix(in srgb, currentColor 55%, transparent);
+
+    .step-static,
+    .text-muted + .text-muted,
+    label {
+      text-decoration: line-through;
+    }
+  }
+
+  &.highlighted {
+    box-shadow: inset 3px 0 0 var(--primary);
+  }
+}
 
 @mixin breakable {
   hyphens: auto;
