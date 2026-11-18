@@ -6951,6 +6951,82 @@ body.html-tool-workspace-open:not(.html-tool-workspace-is-maximized) .inline-spr
   width: 100%;
 }
 
+// Our own scroll bars of the popup (see installOverlayScrollbars): used when the browser only has overlay bars that hide until you
+// scroll. The room for them is reserved from the start, so nothing moves when they appear.
+.inline-spreadsheet-container.has-own-scrollbars {
+  --own-bar: 12px;
+
+  position: relative;
+
+  > .jss_container {
+    height: calc(100% - var(--own-bar)) !important;
+    width: calc(100% - var(--own-bar)) !important;
+  }
+
+  .jss_content {
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .elabftw-own-scrollbar {
+    background: var(--firstlevel);
+    border-radius: 6px;
+    position: absolute;
+    z-index: 3;
+
+    &:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: -2px;
+    }
+  }
+
+  .elabftw-own-scrollbar-x {
+    bottom: 0;
+    height: var(--own-bar);
+    left: 0;
+    right: var(--own-bar);
+  }
+
+  .elabftw-own-scrollbar-y {
+    bottom: var(--own-bar);
+    right: 0;
+    top: 0;
+    width: var(--own-bar);
+  }
+
+  .elabftw-own-scrollbar-thumb {
+    background: var(--secondary);
+    border-radius: 6px;
+    cursor: grab;
+    height: 100%;
+    touch-action: none;
+    width: 100%;
+
+    &:hover,
+    &.is-dragging {
+      background: var(--primary);
+    }
+
+    &.is-dragging {
+      cursor: grabbing;
+    }
+  }
+
+  .elabftw-own-scrollbar-x .elabftw-own-scrollbar-thumb {
+    height: calc(var(--own-bar) - 4px);
+    margin: 2px 0;
+    width: auto;
+  }
+
+  .elabftw-own-scrollbar-y .elabftw-own-scrollbar-thumb {
+    margin: 0 2px;
+    width: calc(var(--own-bar) - 4px);
+  }
+}
+
 // Always-visible, thin scroll bars in the theme colours on the scrolling grid of the popup. Setting scrollbar-width/-color (and the
 // webkit pseudo-elements for Safari) turns the overlay bars of macOS, which only show while scrolling, into real ones, so a sheet
 // wider than the popup always shows its horizontal bar at the bottom of the grid, inside the dialog.

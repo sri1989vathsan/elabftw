@@ -303,6 +303,153 @@ function isCutKey(event: KeyboardEvent): boolean {
 }
 
 /**
+ * macOS (and some Linux/Android setups) draw overlay scroll bars: they are invisible until you scroll, so a sheet wider than the
+ * popup shows nothing to grab and its right columns cannot be reached with the mouse. When the browser uses them (a probe box with
+ * overflow:scroll has no bar width; window.__forceOverlayScrollbars = true forces this for tests), the popup draws its own thin bars,
+ * always visible, in the theme colours, pinned under and beside the grid, synced with the scrolling element (.jss_content): the
+ * thumb is the size of the visible part, it can be dragged, a click on the track pages, the arrow keys / Home / End work on the
+ * focused bar, and the wheel and trackpad still scroll natively. The room for the bars is reserved from the start (no layout shift).
+ */
+function usesOverlayScrollbars(): boolean {
+  if ((window as unknown as { __forceOverlayScrollbars?: boolean }).__forceOverlayScrollbars === true) return true;
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:absolute;top:-9999px;left:-9999px;width:60px;height:60px;overflow:scroll;visibility:hidden';
+  document.body.append(probe);
+  const overlay = probe.offsetWidth - probe.clientWidth === 0;
+  probe.remove();
+  return overlay;
+}
+
+function installOverlayScrollbars(host: HTMLElement): () => void {
+  if (!usesOverlayScrollbars()) return () => undefined;
+  host.classList.add('has-own-scrollbars');
+  let scroller: HTMLElement | null = null;
+  const bars: Array<{ el: HTMLElement; update: () => void }> = [];
+
+  const makeBar = (axis: 'x' | 'y'): { el: HTMLElement; update: () => void } => {
+    const horizontal = axis === 'x';
+    const el = document.createElement('div');
+    el.className = `elabftw-own-scrollbar elabftw-own-scrollbar-${axis}`;
+    el.setAttribute('role', 'scrollbar');
+    el.setAttribute('aria-orientation', horizontal ? 'horizontal' : 'vertical');
+    el.tabIndex = 0;
+    const thumb = document.createElement('div');
+    thumb.className = 'elabftw-own-scrollbar-thumb';
+    el.append(thumb);
+    host.append(el);
+
+    const metrics = (): { view: number; total: number; pos: number; track: number; thumbLen: number } | null => {
+      if (!scroller) return null;
+      const view = horizontal ? scroller.clientWidth : scroller.clientHeight;
+      const total = horizontal ? scroller.scrollWidth : scroller.scrollHeight;
+      const pos = horizontal ? scroller.scrollLeft : scroller.scrollTop;
+      const track = horizontal ? el.clientWidth : el.clientHeight;
+      const thumbLen = Math.min(track, Math.max(28, track * view / Math.max(total, 1)));
+      return { view, total, pos, track, thumbLen };
+    };
+    const update = (): void => {
+      const m = metrics();
+      const overflow = m !== null && m.total > m.view + 1;
+      el.style.visibility = overflow ? 'visible' : 'hidden';
+      if (!m || !overflow) return;
+      const room = m.total - m.view;
+      const offset = room > 0 ? m.pos / room * (m.track - m.thumbLen) : 0;
+      thumb.style[horizontal ? 'width' : 'height'] = `${m.thumbLen}px`;
+      thumb.style.transform = horizontal ? `translateX(${offset}px)` : `translateY(${offset}px)`;
+      el.setAttribute('aria-valuemin', '0');
+      el.setAttribute('aria-valuemax', String(Math.round(room)));
+      el.setAttribute('aria-valuenow', String(Math.round(m.pos)));
+    };
+    const scrollTo = (value: number): void => {
+      if (!scroller) return;
+      const room = (horizontal ? scroller.scrollWidth - scroller.clientWidth : scroller.scrollHeight - scroller.clientHeight);
+      const next = Math.max(0, Math.min(room, value));
+      if (horizontal) scroller.scrollLeft = next; else scroller.scrollTop = next;
+    };
+    thumb.addEventListener('pointerdown', event => {
+      const m = metrics();
+      if (!m) return;
+      event.preventDefault();
+      event.stopPropagation();
+      try {
+        thumb.setPointerCapture(event.pointerId);
+      } catch {
+        // a synthetic pointer (a test) has nothing to capture: the moves are sent to the thumb itself
+      }
+      const start = horizontal ? event.clientX : event.clientY;
+      const startPos = m.pos;
+      const ratio = (m.total - m.view) / Math.max(1, m.track - m.thumbLen);
+      thumb.classList.add('is-dragging');
+      const move = (ev: PointerEvent): void => scrollTo(startPos + ((horizontal ? ev.clientX : ev.clientY) - start) * ratio);
+      const up = (): void => {
+        thumb.classList.remove('is-dragging');
+        thumb.removeEventListener('pointermove', move);
+        thumb.removeEventListener('pointerup', up);
+        thumb.removeEventListener('pointercancel', up);
+      };
+      thumb.addEventListener('pointermove', move);
+      thumb.addEventListener('pointerup', up);
+      thumb.addEventListener('pointercancel', up);
+    });
+    el.addEventListener('pointerdown', event => {
+      if (event.target !== el) return;
+      const m = metrics();
+      if (!m) return;
+      const rect = el.getBoundingClientRect();
+      const at = horizontal ? event.clientX - rect.left : event.clientY - rect.top;
+      const thumbStart = m.total > m.view ? m.pos / (m.total - m.view) * (m.track - m.thumbLen) : 0;
+      scrollTo(m.pos + (at < thumbStart ? -1 : 1) * m.view * 0.9);
+    });
+    el.addEventListener('keydown', event => {
+      const m = metrics();
+      if (!m) return;
+      const back = horizontal ? 'ArrowLeft' : 'ArrowUp';
+      const forward = horizontal ? 'ArrowRight' : 'ArrowDown';
+      if (event.key === back) scrollTo(m.pos - 40);
+      else if (event.key === forward) scrollTo(m.pos + 40);
+      else if (event.key === 'PageUp') scrollTo(m.pos - m.view * 0.9);
+      else if (event.key === 'PageDown') scrollTo(m.pos + m.view * 0.9);
+      else if (event.key === 'Home') scrollTo(0);
+      else if (event.key === 'End') scrollTo(m.total);
+      else return;
+      event.preventDefault();
+    });
+    return { el, update };
+  };
+
+  bars.push(makeBar('x'), makeBar('y'));
+  const updateAll = (): void => bars.forEach(bar => bar.update());
+  const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(updateAll) : null;
+  const bind = (): void => {
+    const found = host.querySelector<HTMLElement>('.jss_content');
+    if (found === scroller) return;
+    scroller?.removeEventListener('scroll', updateAll);
+    resize?.disconnect();
+    scroller = found;
+    if (scroller) {
+      scroller.addEventListener('scroll', updateAll, { passive: true });
+      resize?.observe(scroller);
+      const table = scroller.querySelector('.jss_worksheet');
+      if (table) resize?.observe(table);
+      bars.forEach(bar => bar.el.setAttribute('aria-controls', scroller?.id || ''));
+    }
+    updateAll();
+  };
+  const mutation = new MutationObserver(() => { bind(); updateAll(); });
+  mutation.observe(host, { childList: true, subtree: true });
+  window.addEventListener('resize', updateAll);
+  bind();
+  return () => {
+    mutation.disconnect();
+    resize?.disconnect();
+    scroller?.removeEventListener('scroll', updateAll);
+    window.removeEventListener('resize', updateAll);
+    bars.forEach(bar => bar.el.remove());
+    host.classList.remove('has-own-scrollbars');
+  };
+}
+
+/**
  * Paste transposed from the keyboard: Ctrl/Cmd+Shift+V inside the grid. The browser then fires the usual paste event
  * (with the clipboard in it), which is taken over here instead of pasting as it is. Returns the function that removes it.
  */
@@ -6783,6 +6930,8 @@ export function openSpreadsheetModal(
       onSpreadsheetCopy(event as ClipboardEvent, true);
     }, true);
     ui.sheetHost.addEventListener('paste', onSpreadsheetPaste, true);
+    // always-visible scroll bars when the browser only draws overlay ones that hide until you scroll
+    popupPageListenerRemovers.push(installOverlayScrollbars(ui.sheetHost));
     // Ctrl/Cmd+Shift+V pastes the clipboard transposed, with its top-left cell at the selected cell
     popupPageListenerRemovers.push(installTransposedPaste(ui.sheetHost, () => {
       const selection = getSelectedRange();
