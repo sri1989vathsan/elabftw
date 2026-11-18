@@ -7467,6 +7467,43 @@ input[type='color'] {
   }
 }
 
+/* Notifications panel density (bell dropdown and history): tighter rows and smaller icons, one muted
+   second colour, the same hover tint as the other lists. Unread keeps its primary left rule. */
+#navbar-notif-dropdown,
+.card > .notification {
+  --fx-muted: color-mix(in srgb, currentColor 62%, transparent);
+}
+
+#navbar-notif-dropdown .notif-list .notification,
+.card > .notification {
+  font-size: 0.82rem;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+
+  &[data-ack='0'] {
+    padding-left: calc(0.75rem - 3px);
+  }
+
+  .notif-icon {
+    height: 1.5rem;
+    margin-top: 0;
+    width: 1.5rem;
+
+    i {
+      font-size: 0.7rem;
+    }
+  }
+
+  .relative-moment {
+    color: var(--fx-muted);
+  }
+}
+
+#navbar-notif-dropdown .notif-list {
+  max-height: min(60vh, 26rem);
+  overflow-y: auto;
+}
+
 .notif-icon {
   align-items: center;
   border-radius: 50%;
