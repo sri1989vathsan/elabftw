@@ -347,6 +347,61 @@ function installTransposedPaste(
 }
 
 /**
+ * The grid's own "Insert a new row/column before/after" run on whichever worksheet jspreadsheet believes is current. When
+ * that was not the sheet on screen (a replaced instance, or one still being built) the insert threw "Cannot read
+ * properties of undefined (reading 'style')" inside createCell and the visible grid did nothing. The insert now runs on
+ * the worksheet that owns the container, and is skipped (with a note in window.__jssMenuDiag for the soak) when that sheet
+ * has no headers, instead of throwing.
+ */
+function retargetInsertItems(
+  menuWorksheet: JssInstance,
+  x: unknown,
+  y: unknown,
+  items: JssMenuItem[],
+  ownWorksheet?: () => JssInstance | null | undefined,
+): void {
+  const col = Number.parseInt(String(x), 10);
+  const row = Number.parseInt(String(y), 10);
+  const patterns: Array<[RegExp, (target: JssInstance) => void]> = [
+    [/^Insert a new row before$/i, target => target.insertRow?.(1, row, true)],
+    [/^Insert a new row after$/i, target => target.insertRow?.(1, row, false)],
+    [/^Insert a new column before$/i, target => target.insertColumn?.(1, col, true)],
+    [/^Insert a new column after$/i, target => target.insertColumn?.(1, col, false)],
+  ];
+  const note = (what: string, target: JssInstance | null | undefined): void => {
+    const sheet = target as unknown as { headers?: unknown[]; options?: { data?: unknown[]; columns?: unknown[] } } | null | undefined;
+    const diag = ((window as unknown as { __jssMenuDiag?: unknown[] }).__jssMenuDiag ??= []);
+    if (diag.length < 20) {
+      diag.push({
+        what,
+        sameAsMenuSheet: target === menuWorksheet,
+        headers: sheet?.headers?.length ?? null,
+        data0: sheet?.options?.data?.[0] ? Object.keys(sheet.options.data[0] as object).length : null,
+        columns: sheet?.options?.columns?.length ?? null,
+      });
+    }
+  };
+  for (const item of items) {
+    const entry = patterns.find(([pattern]) => pattern.test(item.title ?? ''));
+    if (!entry) continue;
+    item.onclick = (): void => {
+      const target = ownWorksheet?.() ?? menuWorksheet;
+      const sheet = target as unknown as { headers?: unknown[] } | null | undefined;
+      if (target !== menuWorksheet) note('menu sheet is not the sheet on screen', target);
+      if (!sheet || !Array.isArray(sheet.headers) || sheet.headers.length === 0) {
+        note('sheet has no headers, insert skipped', target);
+        return;
+      }
+      try {
+        entry[1](target);
+      } catch (error) {
+        note(`insert threw: ${String(error)}`, target);
+      }
+    };
+  }
+}
+
+/**
  * The grid's own "Delete selected rows/columns" only removes the whole selection when
  * entire rows/columns were picked through their headers; a range of cells (what dragging
  * over the row numbers gives) fell back to deleting just the clicked row or column.
@@ -359,9 +414,11 @@ const deleteWholeSelectionMenu = (
   _event: unknown,
   items: JssMenuItem[],
   sizeLocked = false,
+  ownWorksheet?: () => JssInstance | null | undefined,
 ): JssMenuItem[] => {
   // A well plate has a fixed size: nothing that adds or removes rows or columns.
   if (sizeLocked) return items.filter(item => !/^(Insert|Delete)\b.*\b(row|column)s?\b/i.test(item.title ?? ''));
+  retargetInsertItems(worksheet, x, y, items, ownWorksheet);
   const range = worksheet?.selectedCell as number[] | null | undefined;
   if (!Array.isArray(range) || range.length < 4) return items;
   const clickedX = Number.parseInt(String(x), 10);
@@ -6277,7 +6334,7 @@ export function openSpreadsheetModal(
           styleNewlyInsertedColumn(changedWorksheet, inserted);
         },
         contextMenu: (...menuArgs: Parameters<typeof deleteWholeSelectionMenu>) =>
-          deleteWholeSelectionMenu(menuArgs[0], menuArgs[1], menuArgs[2], menuArgs[3], menuArgs[4], plateLocked),
+          deleteWholeSelectionMenu(menuArgs[0], menuArgs[1], menuArgs[2], menuArgs[3], menuArgs[4], plateLocked, () => getMountedWorksheet(sheetContainer)),
         ondeleterow: (changedWorksheet: JssInstance): void => {
           if (acceptsGridChanges) hasChanges = true;
           finishPopupStructure(changedWorksheet);
@@ -10699,7 +10756,7 @@ export function buildReadOnlySpreadsheetHost(
         styleNewlyInsertedColumn(changedWorksheet, inserted);
       },
       contextMenu: (...menuArgs: Parameters<typeof deleteWholeSelectionMenu>) =>
-        deleteWholeSelectionMenu(menuArgs[0], menuArgs[1], menuArgs[2], menuArgs[3], menuArgs[4], plateLocked),
+        deleteWholeSelectionMenu(menuArgs[0], menuArgs[1], menuArgs[2], menuArgs[3], menuArgs[4], plateLocked, () => getMountedWorksheet(sheetContainer)),
       ondeleterow: (changedWorksheet: JssInstance) => {
         finishInlineStructure(changedWorksheet);
         notifyStructuralChange(changedWorksheet);
