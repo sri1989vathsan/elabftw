@@ -29,9 +29,16 @@ import {
 } from './RecoveryDraft.class';
 
 // remove exclusive edit mode when leaving the page
-window.onbeforeunload = function() {
+window.onbeforeunload = function(event: BeforeUnloadEvent) {
+  // leaving by the browser's back button or a link with unsaved typing: the browser's own leave prompt (autosave normally keeps the
+  // state 'saved'; Save and go back saves first and then goes, so it never asks)
+  const unsaved = document.getElementById('entitySaveState')?.dataset.state === 'unsaved';
+  if (unsaved) {
+    event.preventDefault();
+  }
   ApiC.keepalive = true;
   ApiC.patch(`${entity.type}/${entity.id}`, { notifOnSaved: 0, action: Action.RemoveExclusiveEditMode });
+  return unsaved ? '' : undefined;
 };
 // Which editor are we using? md or tiny
 const editor = getEditor();
