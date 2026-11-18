@@ -4823,7 +4823,8 @@ h1:has(> #documentTitle) {
     column-gap: 0;
     display: grid;
     grid-template-columns: calc(var(--sr-bar) + var(--sr-pad)) var(--sr-icon-col) minmax(0, 1fr) auto;
-    min-height: var(--fx-row);
+    height: var(--fx-ctl);
+    min-height: var(--fx-ctl);
     padding: 0 var(--fx-pad) 0 0;
 
     .favorite-filter-section-chevron {
@@ -4847,6 +4848,9 @@ h1:has(> #documentTitle) {
       display: block;
       font-size: 0.68rem;
       font-weight: 600;
+      line-height: 1.2;
+      // the plain group title has a top margin of 0.6rem; here it pushed the text below the centre line of the chevron, the icon and the count
+      margin: 0;
       min-height: 0;
       overflow: hidden;
       padding: 0 0 0 var(--sr-gap);
@@ -4855,8 +4859,9 @@ h1:has(> #documentTitle) {
     }
 
     // the count is the same small badge as the agenda's group headers (badge badge-secondary)
+    // ends where the date column of the rows ends (the rows have the same padding on their right)
     .favorite-group-count {
-      margin: 0;
+      margin: 0 var(--fx-pad) 0 0;
     }
   }
 
