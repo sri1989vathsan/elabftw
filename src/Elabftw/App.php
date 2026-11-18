@@ -72,6 +72,10 @@ final class App
 
     public array $favoriteCategoriesArr = array();
 
+    // The LabCollector connection (URL and API key) of the team settings in the admin panel. Hidden for now: set to true to show it again; nothing else
+    // (the pages, the Tools menu entry, the data, the migrations) is touched by this switch.
+    public bool $showLabcollector = false;
+
     private ?array $createFoldersCache = null;
 
     public array $favoriteFiltersArr = array();

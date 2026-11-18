@@ -21,7 +21,7 @@
   {% if not labCollectorStatus.configured %}
     <div class='alert alert-info'>
       {{ 'A team admin must configure the LabCollector URL and API key first, in Team settings.'|trans }}
-      {% if App.Users.isAdmin %}
+      {% if App.Users.isAdmin and App.showLabcollector %}
         <a href='admin.php?tab=1#labcollectorSettings'>{{ 'Go to Team settings'|trans }}</a>
       {% endif %}
     </div>

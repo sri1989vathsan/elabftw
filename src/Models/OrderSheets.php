@@ -106,6 +106,7 @@ final class OrderSheets extends AbstractRest
         $text ??= ScanReader::textFromPdf($file->getPathname());
         $byOwner = array();
         $collected = 0;
+        $autoCollect = $this->autoCollectEnabled($team);
         $firstUploadId = null;
         $sheetName = null;
         foreach ($orders as $order) {
@@ -128,8 +129,11 @@ final class OrderSheets extends AbstractRest
                 );
             }
             $firstUploadId ??= $existingUploadId;
-            // the goods are here: only an ordered order becomes "collected"; any other status stays as it is
-            $collected += $this->markCollected($orderId);
+            // the goods are here: only an ordered order becomes "collected"; any other status stays as it is. A team can switch this off
+            // (the Orders settings of the admin panel); the sheet is attached either way
+            if ($autoCollect) {
+                $collected += $this->markCollected($orderId);
+            }
             $result['orders'][] = array('id' => $orderId, 'title' => (string) $order['title']);
             // only a sheet that was not attached before counts as news for the person who placed the order
             if ($isNew) {
@@ -280,6 +284,16 @@ final class OrderSheets extends AbstractRest
             }
         }
         return false;
+    }
+
+    /** The team setting (default on): move an ordered order to Collected when a shop sheet is matched to it. */
+    private function autoCollectEnabled(int $team): bool
+    {
+        $req = $this->Db->prepare('SELECT orders_autocollect_on_sheet FROM teams WHERE id = :team');
+        $req->bindValue(':team', $team, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $value = $req->fetchColumn();
+        return $value === false || (int) $value === 1;
     }
 
     private function markCollected(int $orderId): int

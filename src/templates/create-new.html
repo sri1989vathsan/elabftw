@@ -1,4 +1,5 @@
-{# RIGHT MENU: CREATE NEW BUTTON #}
+{# RIGHT MENU: CREATE NEW BUTTON (the same button on the dashboard cards and the lists: plus icon, 'Create', control height) #}
 {% if not App.isAnonymous() %}
-<button type='button' data-action='toggle-create-modal' data-type='{{ entityType|default('') }}' class='btn btn-primary'>{{ 'Create'|trans }}</button>
+{% set createTitle = entityType|default('') == 'experiments' ? 'Create experiment'|trans : (entityType|default('') == 'items' ? 'Create resource'|trans : 'Create'|trans) %}
+<button type='button' data-action='toggle-create-modal' data-type='{{ entityType|default('') }}' class='btn btn-primary btn-sm dashboard-create' title='{{ createTitle }}' aria-label='{{ createTitle }}'><i class='fas fa-plus' aria-hidden='true'></i><span class='dashboard-create-text'>{{ 'Create'|trans }}</span></button>
 {% endif %}

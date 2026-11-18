@@ -154,6 +154,7 @@ final class CustomMigrationRunner
         '153_user_ui_prefs.sql',
         '154_user_ui_size.sql',
         '155_label_format_fisher.sql',
+        '156_orders_autocollect_on_sheet.sql',
     );
 
     private Db $Db;

@@ -126,6 +126,8 @@
 
   </div>
 
+  {# the LabCollector connection is hidden from the admin panel while App.showLabcollector is false (one switch, in App.php); the code and the data stay #}
+  {% if App.showLabcollector %}
   <h2 class='p-2 pl-3 section-title' id='labcollectorSettings'>{{ 'LabCollector'|trans }}</h2>
   <div class='pl-3 mt-2 mb-5'>
     <p class='smallgray'>{{ 'Connect this team to a LabCollector instance to browse its records from the Tools menu. The API key is stored encrypted and is never displayed again once saved.'|trans }}</p>
@@ -139,6 +141,7 @@
     </div>
     <p class='smallgray mb-0'>{{ 'Find or generate this token in LabCollector under Admin > Others > Setup > Web services API.'|trans }}</p>
   </div>
+  {% endif %}
 
   <h2 class='p-2 pl-3 section-title' id='ordersSettings'>{{ 'Orders'|trans }}</h2>
   <div class='pl-3 mt-2 mb-5'>
@@ -151,6 +154,11 @@
       'slug': 'orders_autoadvance_on_attachment',
       'label': 'Automatically move an order from Requested to Ordered as soon as any file is attached'|trans,
       'help': 'Fires for any attachment, not just one with a procurement ID -- only applies to a Requested order.'|trans} %}
+
+    {% include 'binary-setting.html' with {'model': model, 'src': src,
+      'slug': 'orders_autocollect_on_sheet',
+      'label': 'When a shop sheet PDF is matched to an order, move that order from Ordered to Collected automatically'|trans,
+      'help': 'On by default. Only an order that is in Ordered moves, only the orders the PDF is matched to, never backwards. Turn off to move orders by hand.'|trans} %}
 
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'orders_attachments_default_open',
