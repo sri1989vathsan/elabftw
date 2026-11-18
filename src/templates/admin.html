@@ -49,80 +49,74 @@
 {# TAB 1 TEAM CONFIG #}
 <div data-tabcontent='1' hidden>
   <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Usage Statistics'|trans }}</h2>
-  <div class='pl-3 mb-5'>
-    <div class='d-flex justify-content-between'>
-      <div>
-      {{ 'Members'|trans }}: {{ teamStats.active_users_count }} &ndash;
-              {% trans %}
-              Experiment
-              {% plural teamStats.totxp %}
-              Experiments
-              {% endtrans %}
-              : {{ teamStats.totxp }} ({{ teamStats.totxpts }} timestamped) &ndash;
-              {% trans %}
-              Resource
-              {% plural teamStats.totdb %}
-              Resources
-              {% endtrans %}
-              : {{ teamStats.totdb }}</div>
-      <div><a href='/api/v2/reports?format=csv&scope=team' class='btn btn-primary'>{{ 'Generate report'|trans }}</a></div>
+  <div class='pl-3 mb-4'>
+    <div class='d-flex flex-wrap align-items-center usage-tiles'>
+      <div class='usage-tile'><span class='usage-number'>{{ teamStats.active_users_count }}</span><span class='usage-label'>{{ 'Members'|trans }}</span></div>
+      <div class='usage-tile'><span class='usage-number'>{{ teamStats.totxp }}</span><span class='usage-label'>{% trans %}Experiment{% plural teamStats.totxp %}Experiments{% endtrans %}</span><span class='usage-sub'>{{ teamStats.totxpts }} {{ 'timestamped'|trans }}</span></div>
+      <div class='usage-tile'><span class='usage-number'>{{ teamStats.totdb }}</span><span class='usage-label'>{% trans %}Resource{% plural teamStats.totdb %}Resources{% endtrans %}</span></div>
+      <a href='/api/v2/reports?format=csv&scope=team' class='btn btn-primary btn-sm ml-auto'>{{ 'Generate report'|trans }}</a>
     </div>
   </div>
 
   <h2 class='p-2 pl-3 section-title'>{{ 'Configure your Team'|trans }}</h2>
 
-  <div class='pl-3 mt-2'>
-    <div class='d-flex justify-content-between'>
-      <label for='announcement' class='col-form-label'>{{ 'Announcement'|trans }}</label>
-      <input class='form-control col-md-4' data-trigger='blur' data-model='{{ model }}' data-target='announcement' type='text' id='announcement' name='announcement' value='{{ App.Teams.teamArr.announcement }}' />
+  <div class='pl-3 mt-2' id='teamSettings'>
+    <div class='settings-filter'>
+      <i class='fas fa-magnifying-glass fa-fw' aria-hidden='true'></i>
+      <input type='search' id='teamSettingsFilter' class='form-control' placeholder='{{ 'Find a setting'|trans }}' aria-label='{{ 'Find a setting'|trans }}' autocomplete='off'>
     </div>
-    <p class='smallgray'>{{ "The following text will be displayed to all users on all pages while it's active."|trans }}</p>
-    <hr>
-
+    <section class='settings-card'>
+      <h3 class='settings-card-title'>{{ 'Announcement and templates'|trans }}</h3>
+    <div class='setting-row' data-setting-name='announcement the following text will be displayed to all users on all pages while it is active'>
+      <div class='setting-text'>
+        <label for='announcement' class='setting-title'>{{ 'Announcement'|trans }}</label>
+        <p class='setting-help'>{{ "The following text will be displayed to all users on all pages while it's active."|trans }}</p>
+      </div>
+      <input class='form-control setting-input' data-trigger='blur' data-model='{{ model }}' data-target='announcement' type='text' id='announcement' name='announcement' value='{{ App.Teams.teamArr.announcement }}' />
+    </div>
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'force_exp_tpl',
       'label': 'Force experiment template use'|trans,
       'help': 'Users will be forced to select an existing Template, and will not be able to create a blank entry.'|trans} %}
-
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'force_res_tpl',
       'label': 'Force resource template use'|trans,
       'help': 'Users will be forced to select an existing Resource Template, and will not be able to create a blank entry.'|trans} %}
+    </section>
 
-    {# EXPERIMENTS (& status, categories, templates #}
+    <section class='settings-card'>
+      <h3 class='settings-card-title'>{{ 'Experiments'|trans }}</h3>
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'users_canwrite_experiments',
       'label': 'Allow users to create experiments'|trans} %}
-
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'users_canwrite_experiments_categories',
       'label': 'Allow users to create and edit experiments categories'|trans} %}
-
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'users_canwrite_experiments_status',
       'label': 'Allow users to create and edit experiment status'|trans} %}
-
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'users_canwrite_experiments_templates',
       'label': 'Allow users to create experiments templates'|trans} %}
+    </section>
 
-    {# RESOURCES (& status, categories, templates #}
+    <section class='settings-card'>
+      <h3 class='settings-card-title'>{{ 'Resources'|trans }}</h3>
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'users_canwrite_resources',
       'label': 'Allow users to create resources'|trans} %}
-
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'users_canwrite_resources_categories',
       'label': 'Allow users to create and edit resources categories'|trans} %}
-
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'users_canwrite_resources_status',
       'label': 'Allow users to create and edit resources status'|trans} %}
-
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'users_canwrite_resources_templates',
       'label': 'Allow users to create resources templates'|trans} %}
+    </section>
 
+    <p class='settings-none' id='teamSettingsNone' hidden>{{ 'No setting matches.'|trans }}</p>
   </div>
 
   {# the LabCollector connection is hidden from the admin panel while App.showLabcollector is false (one switch, in App.php); the code and the data stay #}

@@ -1460,8 +1460,9 @@
     box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.25);
     max-width: 340px;
     position: fixed;
-    right: 1rem;
-    top: 66px;
+    /* bottom right, left of the buttons on the right edge: not over the tab bars of the admin and settings pages */
+    bottom: 1rem;
+    right: 4.5rem;
     width: 100%;
     z-index: 1030;
   }

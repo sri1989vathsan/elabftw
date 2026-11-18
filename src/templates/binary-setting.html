@@ -1,17 +1,19 @@
 {# use this template to generate a binary setting for instance config. Set a "slug" and "label" keys. Set also an array "src" so we can check current config. #}
 {# optionally a "model" and "help" #}
 {# "affix" can be used to avoid the same html id attribute #}
+{# one row: the title and the muted description on the same left edge, the switch on the right; .setting-row is styled in main.scss and found by the filter box of the Team tab #}
 {% set model = model|default('config') %}
 {% set src = src|default(App.Config.configArr) %}
 {% set slugId = slug ~ (affix ? '-' ~ affix) %}
-<div class='d-flex justify-content-between'>
-  <label for='{{ slugId }}' class='col-form-label'>{{ label }}</label>
-  <label class='switch ucp-align'><span class='sr-only'>{{ label }}</span>
+<div class='setting-row' data-setting-name='{{ label|lower|e('html_attr') }} {{ (help ?? '')|lower|e('html_attr') }}'>
+  <div class='setting-text'>
+    <label for='{{ slugId }}' class='setting-title'>{{ label }}</label>
+    {% if help %}
+      <p class='setting-help'>{{ help }}</p>
+    {% endif %}
+  </div>
+  <label class='switch setting-switch'><span class='sr-only'>{{ label }}</span>
     <input type='checkbox' autocomplete='off' data-trigger='change' data-model='{{ model|default('config') }}' data-target='{{ slug }}' {{ src[slug] ? 'checked="checked"' }} id='{{ slugId }}'>
     <span class='slider'></span>
   </label>
 </div>
-{% if help %}
-  <p class='smallgray'>{{ help }}</p>
-{% endif %}
-<hr>
