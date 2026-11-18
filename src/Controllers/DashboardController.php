@@ -18,6 +18,7 @@ use Elabftw\Enums\EntityType;
 use Elabftw\Enums\Notifications;
 use Elabftw\Enums\Orderby;
 use Elabftw\Models\Announcements;
+use Elabftw\Models\DashboardStats;
 use Elabftw\Models\Experiments;
 use Elabftw\Models\ExperimentsStatus;
 use Elabftw\Models\FavTags;
@@ -42,6 +43,10 @@ use function _;
 final class DashboardController extends AbstractHtmlController
 {
     private const int SHOWN_NUMBER = 6;
+
+    // The Scheduled bookings card is switched off for now. PHP and Twig both read this one value (passed to the template as
+    // showScheduledBookings), and nothing of the scheduler is loaded while it is off. Set it to true to show the card again.
+    private const bool SHOW_SCHEDULED_BOOKINGS = false;
 
     #[Override]
     protected function getTemplate(): string
@@ -68,8 +73,6 @@ final class DashboardController extends AbstractHtmlController
         $Items = new Items($this->app->Users);
         $ItemsTypes = new ItemsTypes($this->app->Users);
         $Templates = new Templates($this->app->Users);
-        $now = new DateTimeImmutable();
-        $Scheduler = new Scheduler($Items, start: $now->format(DateTimeImmutable::ATOM));
         // for items we need to create a new DisplayParams object, otherwise the scope setting will also apply here
         $DisplayParamsItems = new DisplayParams(
             $this->app->Users,
@@ -82,6 +85,13 @@ final class DashboardController extends AbstractHtmlController
         $ItemsStatus = new ItemsStatus($this->app->Teams);
         $UserRequestActions = new UserRequestActions($this->app->Users);
         $Announcements = new Announcements($this->app->Users);
+        $bookingsArr = array();
+        if (self::SHOW_SCHEDULED_BOOKINGS) {
+            $now = new DateTimeImmutable();
+            $Scheduler = new Scheduler($Items, start: $now->format(DateTimeImmutable::ATOM));
+            $bookingsArr = $Scheduler->readAll();
+        }
+        $DashboardStats = new DashboardStats($this->app->Users);
 
         $DisplayParamsTemplates = new DisplayParams($this->app->Users, EntityType::Templates);
         $DisplayParamsItemsTypes = new DisplayParams($this->app->Users, EntityType::ItemsTypes);
@@ -114,7 +124,11 @@ final class DashboardController extends AbstractHtmlController
             array(
                 'announcementsArr' => $Announcements->readActive(),
                 'notifIdByAnnouncementId' => $notifIdByAnnouncementId,
-                'bookingsArr' => $Scheduler->readAll(),
+                'showScheduledBookings' => self::SHOW_SCHEDULED_BOOKINGS,
+                'bookingsArr' => $bookingsArr,
+                'statsByStatus' => $DashboardStats->experimentsByStatus(),
+                'statsModifiedThisWeek' => $DashboardStats->modifiedThisWeek(),
+                'statsOpenSteps' => $DashboardStats->openSteps(),
                 'itemsStatusArr' => $ItemsStatus->readAll(),
                 'experimentsArr' => $Experiments->readShow($DisplayParamsExp),
                 'experimentsStatusArr' => $ExperimentsStatus->readAll($ExperimentsStatus->getQueryParams(new InputBag(array('limit' => 9999)))),

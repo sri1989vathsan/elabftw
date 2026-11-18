@@ -1511,6 +1511,71 @@ tr:first-child td {
   }
 }
 
+// Dashboard stat tiles: flat, the --fx look (large number, muted label); each tile links to the matching list
+.dashboard-stats {
+  --fx-muted: color-mix(in srgb, currentColor 62%, transparent);
+  --fx-hover: color-mix(in srgb, currentColor 7%, transparent);
+
+  align-items: stretch;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+
+  .dashboard-stat {
+    background: var(--fx-hover);
+    border-radius: 6px;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 3.2rem;
+    padding: 0.35rem 0.8rem;
+    text-decoration: none;
+
+    &:hover,
+    &:focus-visible {
+      background: color-mix(in srgb, currentColor 12%, transparent);
+      color: inherit;
+    }
+  }
+
+  .dashboard-stat-wide {
+    flex: 1 1 18rem;
+  }
+
+  .dashboard-stat-number {
+    font-size: 1.5rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    line-height: 1.1;
+  }
+
+  .dashboard-stat-label {
+    color: var(--fx-muted);
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  .dashboard-stat-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.7rem;
+    margin-top: 0.15rem;
+  }
+
+  .dashboard-stat-chip {
+    color: inherit;
+    font-size: 0.82rem;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
 // Pin button of the row and board layouts: muted, small, shown a little stronger when pinned
 .entity-row-pin {
   background: none;

@@ -3,13 +3,50 @@
 
 {% block body %}
 
-{# The Scheduled bookings card is switched off for now (its markup and data stay below). To show it again, set this to true. #}
-{% set showScheduledBookings = false %}
+{# showScheduledBookings comes from DashboardController::SHOW_SCHEDULED_BOOKINGS, the one place to switch the card #}
 
 {% include 'show-view-edit.html' %}
 <h2 class='dashboard-welcome'>{{ 'Welcome %s'|trans|format(App.Users.userData.firstname) }}</h2>
 
 {% include 'request-actions-show.html' %}
+
+{# STAT TILES: counts of my own experiments, flat tiles that link to the matching list #}
+{% set meId = App.Users.userData.userid %}
+{% set runningStatus = experimentsStatusArr|filter(st => st.title|lower == 'running')|first %}
+{% set runningCount = runningStatus ? statsByStatus[runningStatus.id]|default(0) : 0 %}
+<div class='dashboard-stats' aria-label='{{ 'My activity'|trans }}'>
+  {% if statsByStatus|length > 0 %}
+    <div class='dashboard-stat dashboard-stat-wide'>
+      <div class='dashboard-stat-label'>{{ 'My experiments by status'|trans }}</div>
+      <div class='dashboard-stat-chips'>
+        {% for st in experimentsStatusArr|filter(st => statsByStatus[st.id] is defined and statsByStatus[st.id] > 0) %}
+          <a class='dashboard-stat-chip' href='experiments.php?mode=show&amp;status={{ st.id }}&amp;owner={{ meId }}'>
+            <i class='fas fa-circle fa-fw' style='color:#{{ st.color }}' aria-hidden='true'></i>{{ st.title }} <strong>{{ statsByStatus[st.id] }}</strong>
+          </a>
+        {% endfor %}
+        {% if statsByStatus[0] is defined and statsByStatus[0] > 0 %}
+          <a class='dashboard-stat-chip' href='experiments.php?mode=show&amp;owner={{ meId }}'><i class='fas fa-circle fa-fw' style='color:#bdbdbd' aria-hidden='true'></i>{{ 'not-set'|trans }} <strong>{{ statsByStatus[0] }}</strong></a>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+  {% if runningStatus and runningCount > 0 %}
+    <a class='dashboard-stat' href='experiments.php?mode=show&amp;status={{ runningStatus.id }}&amp;owner={{ meId }}'>
+      <span class='dashboard-stat-number'>{{ runningCount }}</span>
+      <span class='dashboard-stat-label'>{{ 'Running'|trans }}</span>
+    </a>
+  {% endif %}
+  {% if statsModifiedThisWeek > 0 %}
+    <a class='dashboard-stat' href='experiments.php?mode=show&amp;owner={{ meId }}&amp;order=lastchange&amp;sort=desc'>
+      <span class='dashboard-stat-number'>{{ statsModifiedThisWeek }}</span>
+      <span class='dashboard-stat-label'>{{ 'Modified this week'|trans }}</span>
+    </a>
+  {% endif %}
+  <a class='dashboard-stat' href='experiments.php?mode=show&amp;owner={{ meId }}' title='{{ 'Unfinished steps on your own experiments'|trans }}'>
+    <span class='dashboard-stat-number'>{{ statsOpenSteps }}</span>
+    <span class='dashboard-stat-label'>{{ 'Open steps'|trans }}</span>
+  </a>
+</div>
 <hr>
 <div class='row dashboard-grid'>
   <div class='col-md-4'>
