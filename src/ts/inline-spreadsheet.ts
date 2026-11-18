@@ -4686,6 +4686,8 @@ export function openSpreadsheetModal(
       const liveData = liveWorksheet?.getData?.();
       if (!liveWorksheet || !Array.isArray(liveData)) return;
       rawDataMirror.forEach((mirrorRow, rowIndex) => mirrorRow.forEach((value, colIndex) => {
+        // a cell past the grid's last column would widen the data without a header, and the next row insert then throws
+        if (Array.isArray(liveWorksheet.headers) && colIndex >= liveWorksheet.headers.length) return;
         if (String(liveData[rowIndex]?.[colIndex] ?? '') !== String(value ?? '')) {
           liveWorksheet.setValueFromCoords?.(colIndex, rowIndex, value, true);
         }
@@ -7919,6 +7921,8 @@ export function buildReadOnlySpreadsheetHost(
     const liveData = liveWorksheet?.getData?.();
     if (!liveWorksheet || !Array.isArray(liveData)) return;
     rawDataMirror.forEach((mirrorRow, rowIndex) => mirrorRow.forEach((value, colIndex) => {
+      // a cell past the grid's last column would widen the data without a header, and the next row insert then throws
+      if (Array.isArray(liveWorksheet.headers) && colIndex >= liveWorksheet.headers.length) return;
       if (String(liveData[rowIndex]?.[colIndex] ?? '') !== String(value ?? '')) {
         liveWorksheet.setValueFromCoords?.(colIndex, rowIndex, value, true);
       }
