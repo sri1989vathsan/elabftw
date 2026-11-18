@@ -679,7 +679,7 @@ final class Inventory extends AbstractConcreteEntity
     #[Override]
     protected function getCreatePermissionKey(): string
     {
-        return 'users_canwrite_resources';
+        return 'users_canwrite_inventory';
     }
 
     /** the owner of a Database entry may change who can edit it (the lock on the permissions is for everybody else) */

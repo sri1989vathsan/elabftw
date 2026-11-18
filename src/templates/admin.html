@@ -124,6 +124,17 @@
       'slug': 'users_canwrite_resources_templates',
       'label': 'Allow users to create resources templates'|trans} %}
 
+    {# DATABASE (entries and modules) #}
+    <div class='small text-uppercase text-muted font-weight-bold mt-4 mb-2' style='letter-spacing:0.04em'>{{ 'Database'|trans }}</div>
+    {% include 'binary-setting.html' with {'model': model, 'src': src,
+      'slug': 'users_canwrite_inventory',
+      'label': 'Allow users to create Database entries'|trans} %}
+
+    {% include 'binary-setting.html' with {'model': model, 'src': src,
+      'slug': 'users_canwrite_inventory_categories',
+      'label': 'Allow users to create and edit Modules'|trans,
+      'help': 'Modules group the entries of the Database. Deleting a module stays for admins; personal modules are not affected.'|trans} %}
+
   </div>
 
   {# the LabCollector connection is hidden from the admin panel while App.showLabcollector is false (one switch, in App.php); the code and the data stay #}

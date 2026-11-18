@@ -32,10 +32,20 @@ final class InventoryCategories extends AbstractStatus
         return CustomUiDescriptions::RESOURCE_CATEGORY;
     }
 
+    /** deleting a module stays with the admins, whatever the switch for creating and editing modules says */
+    #[Override]
+    public function destroy(): bool
+    {
+        if (!$this->Teams->Users->isAdmin) {
+            throw new IllegalActionException();
+        }
+        return parent::destroy();
+    }
+
     #[Override]
     protected function getUsersCanwriteName(): string
     {
-        return 'resources_categories';
+        return 'inventory_categories';
     }
 
     /**
@@ -89,13 +99,15 @@ final class InventoryCategories extends AbstractStatus
         return array_merge($lab, $mine, $others);
     }
 
-    // categories are admin-only to write: everyone can view them (see
-    // web/resources-categories.php), but unlike statuses, there is no
-    // per-team "let regular users manage this" toggle for categories
+    // the modules of the lab: everyone can view them; creating and editing them is for the admins and, while the team switch "Allow users to create
+    // and edit Modules" is on (the default), for every user of the team. Deleting stays with the admins (see destroy()).
     #[Override]
     protected function canWriteOrExplode(): void
     {
-        if (!$this->Teams->Users->isAdmin) {
+        if ($this->Teams->Users->isAdmin) {
+            return;
+        }
+        if ((int) ($this->Teams->teamArr['users_canwrite_inventory_categories'] ?? 1) !== 1) {
             throw new IllegalActionException();
         }
     }

@@ -61,6 +61,8 @@ final class TeamParam extends ContentParams
             'orders_autoadvance_on_procurement_id',
             'orders_autoadvance_on_attachment',
             'orders_attachments_default_open',
+            'users_canwrite_inventory',
+            'users_canwrite_inventory_categories',
             'orders_autocollect_on_sheet' => $this->getBinary(),
             'newcomer_threshold' => $this->asInt(),
             'orders_autoarchive_rules' => $this->getAutoArchiveRules(),
