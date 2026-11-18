@@ -1609,7 +1609,8 @@ tr:first-child td {
  *  - controls are --fx-ctl high with --fx-icon-size icons; rows are --fx-row high and start and end at --fx-pad;
  *  - text is the chrome's light colour, icons and secondary text its muted one, hover one tint, selected the primary colour. */
 .side-panel,
-#sidepanel-buttons {
+#sidepanel-buttons,
+.command-palette-overlay {
     --fx-ctl: 1.4rem;
     --fx-row: 1.5rem;
     --fx-pad: 0.35rem;
@@ -10353,5 +10354,89 @@ button.wp-legend-item {
   > * {
     flex: 0 0 auto;
     white-space: nowrap;
+  }
+}
+
+// the command palette and the shortcuts list on the shared grid: compact rows, one icon column, one hover tint
+.command-palette {
+  font-size: 0.82rem;
+
+  .command-palette-header {
+    padding: 0.5rem 0.75rem;
+
+    input {
+      font-size: 0.95rem;
+    }
+  }
+
+  .command-palette-result {
+    gap: var(--fx-gap);
+    min-height: var(--fx-row);
+    padding: 0.3rem 0.5rem;
+
+    > i {
+      color: var(--fx-muted);
+      font-size: var(--fx-icon-size);
+      text-align: center;
+      width: var(--fx-icon-col);
+    }
+
+    &[aria-selected='true'],
+    &:hover,
+    &:focus-visible {
+      background: var(--fx-hover);
+      outline: 2px solid var(--primary);
+      outline-offset: -2px;
+    }
+  }
+
+  footer {
+    font-size: 0.7rem;
+    padding: 0.35rem 0.75rem;
+  }
+}
+
+.shortcuts-dialog {
+  max-width: 28rem;
+
+  .shortcuts-close {
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    color: var(--fx-muted);
+    cursor: pointer;
+    font-size: 1.1rem;
+    height: var(--fx-ctl);
+    line-height: 1;
+    margin-left: auto;
+    width: var(--fx-ctl);
+
+    &:hover,
+    &:focus-visible {
+      background: var(--fx-hover);
+      color: var(--fx-fg);
+    }
+  }
+
+  .shortcuts-list {
+    display: grid;
+    gap: 0.35rem 0.75rem;
+    grid-template-columns: max-content 1fr;
+    margin: 0;
+    padding: 0.75rem;
+
+    dd {
+      color: var(--fx-fg);
+      margin: 0;
+    }
+
+    kbd {
+      background: var(--fx-hover);
+      border: 1px solid var(--fx-line);
+      border-radius: 4px;
+      color: var(--fx-fg);
+      font-size: 0.72rem;
+      padding: 0.05rem 0.4rem;
+    }
   }
 }

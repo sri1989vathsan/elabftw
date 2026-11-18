@@ -2,6 +2,7 @@ import tinymce from 'tinymce/tinymce';
 import { ApiC } from './api';
 import { captureFocus, restoreFocus, trapTabFocus } from './a11y';
 import { confirmLeaveEditing } from './misc';
+import { EntityType } from './interfaces';
 
 interface PaletteEntry {
   label: string;
@@ -70,6 +71,11 @@ export default class CommandPalette {
     const editorCommand = (command: string): void => {
       tinymce.activeEditor?.execCommand(command);
     };
+    // the same call the "create" keyboard shortcut makes, but to a fixed page so it works from anywhere
+    const createEntity = async (entityType: EntityType, page: string): Promise<void> => {
+      const id = await ApiC.post2location(entityType, { category_id: 0, tags: [] });
+      window.location.href = `${page}?mode=edit&id=${id}`;
+    };
     return [
       { label: 'Save', description: 'Save the current entry', icon: 'fa-save', keywords: 'write autosave', action: () => click('[data-action="update-entity-body"]') },
       { label: 'Save and go back', description: 'Save and return to the folder (or view mode)', icon: 'fa-arrow-left', keywords: 'return view', action: () => click('[data-action="update-entity-body"][data-redirect]') },
@@ -78,6 +84,11 @@ export default class CommandPalette {
       { label: 'Insert note', description: 'Insert a note using your saved defaults', icon: 'fa-note-sticky', keywords: 'callout box', action: () => editorCommand('elabftwInsertNote') },
       { label: 'Insert table or spreadsheet', description: 'Open table, spreadsheet and well-plate options', icon: 'fa-table', keywords: 'formula well plate benchling', action: () => editorCommand('elabftwInsertTable') },
       { label: 'Insert link', description: 'Insert a web, file/folder or LabCollector link', icon: 'fa-link', keywords: 'url file folder', action: () => editorCommand('elabftwInsertWebLink') },
+      { label: 'New experiment', description: 'Create an experiment and open it for editing', icon: 'fa-flask', keywords: 'create add', action: () => void createEntity(EntityType.Experiment, 'experiments.php') },
+      { label: 'New resource', description: 'Create a resource and open it for editing', icon: 'fa-cubes-stacked', keywords: 'create add database item', action: () => void createEntity(EntityType.Item, 'database.php') },
+      { label: 'Go to Dashboard', description: 'The home page', icon: 'fa-house', keywords: 'home start', action: () => { window.location.href = 'dashboard.php'; } },
+      { label: 'Go to Boards', description: 'Project boards and their cards', icon: 'fa-list-check', keywords: 'projects kanban', action: () => { window.location.href = 'projectmanagement.php'; } },
+      { label: 'Keyboard shortcuts', description: 'List the keyboard shortcuts (press ? anywhere outside a text field)', icon: 'fa-keyboard', keywords: 'keys help cheat sheet', action: () => this.openShortcuts() },
       { label: 'Open folders', description: 'Browse personal, bookmarked and team folders', icon: 'fa-folder-tree', keywords: 'sidebar navigation', action: () => click('#foldersPanelOpener') },
       { label: 'Open filters', description: 'Search and filter experiments or resources', icon: 'fa-filter', keywords: 'tags category owner status', action: () => click('#favoritesPanelOpener') },
       { label: 'Search everything', description: 'Search experiments, resources, templates and folders at once', icon: 'fa-magnifying-glass', keywords: 'unified find filters favorites', action: () => click('#favoritesPanelOpener') },
@@ -104,6 +115,16 @@ export default class CommandPalette {
         this.open();
         return;
       }
+      // "?" outside any text field opens the shortcuts list (never while typing, never inside the editor)
+      if (event.key === '?' && !event.ctrlKey && !event.metaKey && !event.altKey && this.overlay.hidden && !(this.shortcutsOverlay && !this.shortcutsOverlay.hidden)) {
+        const target = event.target as HTMLElement | null;
+        const typing = !!target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+        if (!typing) {
+          event.preventDefault();
+          this.openShortcuts();
+          return;
+        }
+      }
       if (this.overlay.hidden) return;
       trapTabFocus(this.overlay, event);
       if (event.key === 'Escape') {
@@ -124,6 +145,86 @@ export default class CommandPalette {
       if (this.searchTimer !== null) window.clearTimeout(this.searchTimer);
       this.searchTimer = window.setTimeout(() => void this.render(), 220);
     });
+  }
+
+  private shortcutsOverlay: HTMLDivElement | null = null;
+  private shortcutsLastFocused: HTMLElement | null = null;
+
+  /** The real shortcuts: the palette and this list are fixed, the rest are the letters set in the person's own preferences. */
+  private shortcutRows(): Array<[string, string]> {
+    const rows: Array<[string, string]> = [
+      ['Ctrl/Cmd + K', 'Open the command palette (search and commands)'],
+      ['?', 'Show this list (outside a text field)'],
+      ['Esc', 'Close the palette or a dialog'],
+      ['↑ ↓ · Enter', 'Move through the palette results and open one'],
+    ];
+    const prefs = document.getElementById('user-prefs')?.dataset;
+    if (prefs && prefs.scDisabled === '0') {
+      const add = (key: string | undefined, text: string): void => { if (key) rows.push([key, text]); };
+      add(prefs.scCreate, 'Create an experiment (a resource on the Resources page)');
+      add(prefs.scEdit, 'Edit the open entry');
+      add(prefs.scTodolist, 'Show or hide the to-do list');
+      add(prefs.scFavorite, 'Show or hide search and filters');
+      add(prefs.scSearch, 'Go to the search bar');
+    }
+    return rows;
+  }
+
+  private openShortcuts(): void {
+    if (!this.overlay.hidden) this.close();
+    this.shortcutsLastFocused = captureFocus();
+    if (!this.shortcutsOverlay) {
+      const overlay = document.createElement('div');
+      overlay.className = 'command-palette-overlay';
+      const section = document.createElement('section');
+      section.className = 'command-palette shortcuts-dialog';
+      section.setAttribute('role', 'dialog');
+      section.setAttribute('aria-modal', 'true');
+      section.setAttribute('aria-label', 'Keyboard shortcuts');
+      const header = document.createElement('header');
+      header.className = 'command-palette-header';
+      const title = document.createElement('strong');
+      title.textContent = 'Keyboard shortcuts';
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'shortcuts-close';
+      close.setAttribute('aria-label', 'Close');
+      close.textContent = '×';
+      header.append(title, close);
+      const list = document.createElement('dl');
+      list.className = 'shortcuts-list';
+      this.shortcutRows().forEach(([keys, text]) => {
+        const dt = document.createElement('dt');
+        const kbd = document.createElement('kbd');
+        kbd.textContent = keys;
+        dt.append(kbd);
+        const dd = document.createElement('dd');
+        dd.textContent = text;
+        list.append(dt, dd);
+      });
+      section.append(header, list);
+      overlay.append(section);
+      document.body.append(overlay);
+      this.shortcutsOverlay = overlay;
+      close.addEventListener('click', () => this.closeShortcuts());
+      overlay.addEventListener('click', event => { if (event.target === overlay) this.closeShortcuts(); });
+      overlay.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          this.closeShortcuts();
+          return;
+        }
+        trapTabFocus(overlay, event);
+      });
+    }
+    this.shortcutsOverlay.hidden = false;
+    window.requestAnimationFrame(() => this.shortcutsOverlay?.querySelector<HTMLElement>('.shortcuts-close')?.focus());
+  }
+
+  private closeShortcuts(): void {
+    if (this.shortcutsOverlay) this.shortcutsOverlay.hidden = true;
+    restoreFocus(this.shortcutsLastFocused);
+    this.shortcutsLastFocused = null;
   }
 
   private open(): void {
