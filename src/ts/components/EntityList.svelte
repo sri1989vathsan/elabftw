@@ -597,6 +597,18 @@
     return date.toISOString().slice(0, 10);
   }
 
+  // One block for Goals, Conclusion and Notes (list card, preview pane): the label and icon in a fixed column, the text in
+  // a hanging indent next to it, every line of the value kept as its own line, numbered/bulleted lines indented as lists,
+  // and long values clamped with a small Show more that expands in place.
+  const LIST_MARKER = /^\s*(\d+[.)]|[-*\u2022])\s+/;
+  function fieldLines(value: string): Array<{ text: string; list: boolean }> {
+    return value.replace(/\r\n?/g, '\n').trim().split('\n').map(text => ({ text: text.trimEnd(), list: LIST_MARKER.test(text) }));
+  }
+  function fieldIsLong(value: string, clamp: number): boolean {
+    return fieldLines(value).length > clamp || value.trim().length > clamp * 70;
+  }
+  let expandedFields = $state<Record<string, boolean>>({});
+
   function getSummaryPreview(summary: string): string {
     const normalized = summary.replace(/\s+/g, ' ').trim();
     return normalized.length > GOAL_COLLAPSE_LENGTH
@@ -630,6 +642,31 @@
 {#if error && entities.length === 0}
   <div class='alert alert-danger'>{error}</div>
 {:else}
+  {#snippet fieldBlock(key: string, label: string, icon: string, value: string | null | undefined, clamp: number)}
+    {#if value?.trim()}
+      {@const open = expandedFields[key] === true}
+      <div class={`fx-field ${open ? 'is-open' : ''}`} style={`--fx-clamp: ${clamp};`}>
+        <div class='fx-field-label'><i class={`fas ${icon} fa-fw`} aria-hidden='true'></i><span>{label}</span></div>
+        <div class='fx-field-body'>
+          <div class='fx-field-text'>
+            {#each fieldLines(value) as line}
+              {#if line.text === ''}
+                <div class='fx-line fx-line-gap'></div>
+              {:else}
+                <div class={`fx-line ${line.list ? 'fx-line-list' : ''}`}>{line.text}</div>
+              {/if}
+            {/each}
+          </div>
+          {#if fieldIsLong(value, clamp)}
+            <button type='button' class='fx-field-more' aria-expanded={open} onclick={() => { expandedFields[key] = !open; }}>
+              {open ? t('Show less') : t('Show more')}
+            </button>
+          {/if}
+        </div>
+      </div>
+    {/if}
+  {/snippet}
+
   {#snippet compactRow(entity: EntityListItem, index: number)}
     {@const rowId = `entity-body-${entity.id}-${index}`}
     <section
@@ -688,16 +725,9 @@
               {#if previewEntity.fullname} · {previewEntity.fullname}{/if}
               {#if previewEntity.status_title} · {previewEntity.status_title}{/if}
             </div>
-            {#each [
-              { value: previewEntity.experiment_goal, label: t('Goals'), icon: 'fa-bullseye' },
-              { value: previewEntity.experiment_conclusion, label: t('Conclusion'), icon: 'fa-clipboard-check' },
-              { value: previewEntity.experiment_notes, label: t('Notes'), icon: 'fa-file-lines' },
-            ] as part}
-              {#if part.value?.trim()}
-                <h4 class='entity-preview-label'><i class={`fas ${part.icon} fa-fw`} aria-hidden='true'></i> {part.label}</h4>
-                <div class='entity-preview-text'>{part.value.trim()}</div>
-              {/if}
-            {/each}
+            {@render fieldBlock(`pv-${previewEntity.id}-goal`, t('Goals'), 'fa-bullseye', previewEntity.experiment_goal, 6)}
+            {@render fieldBlock(`pv-${previewEntity.id}-concl`, t('Conclusion'), 'fa-clipboard-check', previewEntity.experiment_conclusion, 6)}
+            {@render fieldBlock(`pv-${previewEntity.id}-notes`, t('Notes'), 'fa-file-lines', previewEntity.experiment_notes, 6)}
             {#if !previewEntity.experiment_goal?.trim() && !previewEntity.experiment_conclusion?.trim() && !previewEntity.experiment_notes?.trim()}
               <p class='color-medium'>{t('Nothing to preview. Open the entry to read it.')}</p>
             {/if}
@@ -722,21 +752,18 @@
         style={`--left-color: #${getLeftColor(entity)};`}
         aria-label={`${t('Entry')}_${bodyId}`}
       >
-        <div class='d-flex align-items-start mt-1'>
-          <input
-            autocomplete='off'
-            type='checkbox'
-            data-action='checkbox-entity'
-            data-id={entity.id}
-            data-randomid={bodyId}
-            data-type={entityType}
-            aria-label={t('Select')}
-            class='mr-3'
-          />
-        </div>
-
-        <div class='align-self-center'>
-          <div>
+        <div class='align-self-center entity-card-main'>
+          <div class='entity-card-pills'>
+            <input
+              autocomplete='off'
+              type='checkbox'
+              data-action='checkbox-entity'
+              data-id={entity.id}
+              data-randomid={bodyId}
+              data-type={entityType}
+              aria-label={t('Select')}
+              class='entity-card-check'
+            />
             {#if entity.timestamped}
               <div
                 class='infotip'
@@ -844,30 +871,11 @@
             </a>
           </div>
 
-          {#each [
-            { value: entity.experiment_goal, label: t('Goals'), icon: 'fa-bullseye', css: 'experiment-goal' },
-            { value: entity.experiment_conclusion, label: t('Conclusion'), icon: 'fa-clipboard-check', css: 'experiment-conclusion' },
-            { value: entity.experiment_notes, label: t('Notes'), icon: 'fa-file-lines', css: 'experiment-notes' },
-          ] as summary}
-            {#if entityType === 'experiments' && summary.value?.trim()}
-              {#if summary.value.trim().length > GOAL_COLLAPSE_LENGTH}
-                <details class={`${summary.css} experiment-summary border rounded px-2 py-1 mb-2`}>
-                  <summary class='experiment-summary-toggle'>
-                    <i class={`fas ${summary.icon} fa-fw mr-1 color-medium`} aria-hidden='true'></i>
-                    <span class='font-weight-bold'>{summary.label}:</span>
-                    <span class='experiment-summary-preview color-medium ml-1'>{getSummaryPreview(summary.value)}</span>
-                  </summary>
-                  <div class='experiment-summary-text breakable mt-2'>{summary.value.trim()}</div>
-                </details>
-              {:else}
-                <p class='experiment-summary-text breakable my-2'>
-                  <i class={`fas ${summary.icon} fa-fw mr-1 color-medium`} aria-hidden='true'></i>
-                  <span class='font-weight-bold'>{summary.label}:</span>
-                  {summary.value.trim()}
-                </p>
-              {/if}
-            {/if}
-          {/each}
+          {#if entityType === 'experiments'}
+            {@render fieldBlock(`c-${entity.id}-goal`, t('Goals'), 'fa-bullseye', entity.experiment_goal, 3)}
+            {@render fieldBlock(`c-${entity.id}-concl`, t('Conclusion'), 'fa-clipboard-check', entity.experiment_conclusion, 3)}
+            {@render fieldBlock(`c-${entity.id}-notes`, t('Notes'), 'fa-file-lines', entity.experiment_notes, 3)}
+          {/if}
 
           <div class='owner'>
             {#if entity.userid != null && currentUserId !== entity.userid && !isAnon}
@@ -976,15 +984,15 @@
               <i class='fas fa-caret-right color-medium'></i>
             </button>
 
-            <div class='d-flex flex-column color-medium small'>
-              <span class='item-date'>
-                {statusDateLabel} {formatDate(dateValue)}
-              </span>
-              <span class='item-date'>
-                {t('Last modified')}
-                <span title={entity.modified_at ?? ''} class='relative-moment'></span>
-              </span>
-            </div>
+          </div>
+
+          <div class='entity-card-dates color-medium'>
+            <span class='item-date'>{statusDateLabel} {formatDate(dateValue)}</span>
+            <span aria-hidden='true'> · </span>
+            <span class='item-date'>
+              {t('Last modified')}
+              <span title={entity.modified_at ?? ''} class='relative-moment'></span>
+            </span>
           </div>
 
           <div hidden id={bodyId} style='overflow:auto;margin: 10px 0 0 20px'>

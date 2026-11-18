@@ -1408,6 +1408,109 @@ tr:first-child td {
   }
 }
 
+// Goals / Conclusion / Notes: one block everywhere (list card, preview pane, experiment page strip). Label and icon in a
+// fixed column, the text in a hanging indent beside it so wrapped lines never go back under the icon, each line of the value
+// kept as a line (numbered or bulleted lines indented as a list), a small even gap for blank lines, and a clamp with a
+// Show more toggle that expands in place.
+.fx-field {
+  --fx-label-col: 6.1rem;
+  --fx-muted: color-mix(in srgb, currentColor 62%, transparent);
+
+  column-gap: 0.4rem;
+  display: grid;
+  grid-template-columns: var(--fx-label-col) minmax(0, 1fr);
+  margin: 0 0 0.35rem;
+
+  .fx-field-label {
+    align-items: flex-start;
+    color: var(--fx-muted);
+    display: flex;
+    font-size: 0.78rem;
+    font-weight: 600;
+    gap: 0.25rem;
+    line-height: 1.35rem;
+
+    .fas {
+      flex: 0 0 1rem;
+      line-height: 1.35rem;
+      text-align: center;
+    }
+  }
+
+  .fx-field-text {
+    font-size: 0.85rem;
+    line-height: 1.35;
+    max-height: calc(var(--fx-clamp, 3) * 1.35em);
+    overflow: hidden;
+    padding-top: 0.1rem;
+  }
+
+  &.is-open .fx-field-text {
+    max-height: none;
+  }
+
+  .fx-line {
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  .fx-line-list {
+    padding-left: 1.5em;
+    text-indent: -1.5em;
+  }
+
+  .fx-line-gap {
+    height: 0.35rem;
+  }
+
+  .fx-field-more {
+    background: none;
+    border: 0;
+    color: var(--fx-muted);
+    cursor: pointer;
+    font-size: 0.72rem;
+    padding: 0;
+
+    &:hover,
+    &:focus-visible {
+      text-decoration: underline;
+    }
+  }
+}
+
+// List card (comfortable list): checkbox, pills, title, fields, buttons and dates share one left edge; buttons one height.
+.entity .entity-card-main {
+  min-width: 0;
+
+  .entity-card-pills {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.3rem;
+  }
+
+  .entity-card-check {
+    flex: 0 0 auto;
+    margin: 0 0.3rem 0 0;
+  }
+
+  .d-flex.flex-row > .btn,
+  .d-flex.flex-row > a.btn {
+    align-items: center;
+    display: inline-flex;
+    height: 1.8rem;
+    justify-content: center;
+    line-height: 1;
+    margin-bottom: 0;
+    padding: 0 0.6rem !important;
+  }
+
+  .entity-card-dates {
+    font-size: 0.75rem;
+    margin-top: 0.35rem;
+  }
+}
+
 // Compact rows and rows with a preview (display modes cr and pv). Sizes follow the shared --fx-* look:
 // 1.5rem rows, a muted second colour, one hover tint, the primary colour for the selected row.
 .entity-rows {
