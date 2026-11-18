@@ -1372,6 +1372,62 @@ tr:first-child td {
   }
 }
 
+// Experiment page header: a smaller title, and Goals / Conclusion / Notes side by side as one strip
+// (the --fx-* look: muted uppercase label, one hover-free tint, no extra boxes).
+h1:has(> #documentTitle) {
+  font-size: 1.45rem;
+  margin-bottom: 0.4rem;
+}
+
+.entity-summary-edit,
+.entity-summary-strip {
+  --fx-muted: color-mix(in srgb, currentColor 62%, transparent);
+
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  margin-bottom: 0.5rem;
+
+  label {
+    color: var(--fx-muted);
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    margin: 0 0 0.1rem;
+    text-transform: uppercase;
+  }
+
+  textarea {
+    font-size: 0.85rem;
+    min-height: 3.6rem;
+    padding: 0.3rem 0.5rem;
+    resize: vertical;
+  }
+}
+
+.entity-summary-strip {
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  border-left: 3px solid var(--primary);
+  border-radius: 4px;
+  padding: 0.45rem 0.7rem;
+
+  .entity-summary-label {
+    color: var(--fx-muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .entity-summary-text {
+    -webkit-box-orient: vertical;
+    display: -webkit-box;
+    font-size: 0.85rem;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    overflow: hidden;
+    white-space: pre-wrap;
+  }
+}
+
 .layout-switch .btn.active {
   background: var(--primary);
   color: var(--primary-fg, #fff);
