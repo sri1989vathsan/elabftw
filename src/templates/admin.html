@@ -34,6 +34,7 @@
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='7'>{{ 'Category manager'|trans }}</button></li>
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='8'>{{ 'Export by user'|trans }}</button></li>
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='9'>{{ 'Announcements'|trans }}</button></li>
+  <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='10'>{{ 'Labels'|trans }}</button></li>
 </ul>
 
 {% include 'loading-spinner.html' %}
@@ -812,5 +813,12 @@
   </div>
 </div>
 {# END ANNOUNCEMENTS #}
+
+{# TAB 10 LABELS: the printer, the formats and their editor (label-formats.js, label-print.php) #}
+<div data-tabcontent='10' hidden>
+  <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Labels'|trans }}</h2>
+  <div id='labelFormatsApp'></div>
+  <script src='label-formats.js?v={{ 'now'|date('YmdHi') }}'></script>
+</div>
 
 {% endblock body %}

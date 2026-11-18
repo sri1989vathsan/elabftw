@@ -15,10 +15,11 @@ namespace Elabftw\Elabftw;
 use Elabftw\Exceptions\AppException;
 use Elabftw\Exceptions\IllegalActionException;
 use Exception;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * The label formats and the address of the label printer: for the admins of the team.
+ * The label formats and the address of the label printer are the Labels tab of the Admin panel: this old address leads there (admins only).
  */
 require_once 'app/init.inc.php';
 
@@ -28,11 +29,8 @@ try {
     if (!$App->Users->isAdmin) {
         throw new IllegalActionException();
     }
-    $Response->prepare($App->Request);
-    $Response->setContent($App->render('label-formats.html', array(
-        'pageTitle' => _('Label formats'),
-    )));
-    $Response->headers->set('Cache-Control', 'no-store');
+    // the label settings are the Labels tab of the Admin panel; the old address leads there
+    $Response = new RedirectResponse('admin.php?tab=10');
 } catch (AppException $e) {
     $Response = $e->getResponseFromException($App);
 } catch (Exception $e) {
