@@ -4288,47 +4288,26 @@ h1:has(> #documentTitle) {
     font-size: 0.7rem;
     overflow: hidden;
     text-overflow: ellipsis;
-    whi// Search RESULTS in the Activity agenda's look (same sizes, edges, hover tint and heading spacing as the agenda):
-// group header = small muted chevron on the left, a muted type icon, the uppercase muted title, a count at the right end;
-// row = thin coloured bar on the left edge, a small type icon, the title with ellipsis, the date in one right-hand column
-// (folders keep their star in that same column), and one muted line (category · status · owner) under the title.
-#favoritesPanel .favorite-filter-results {
-  .favorite-filter-section-summary {
-    gap: var(--fx-gap);
-    padding: 0 var(--fx-pad);
-
-    .unified-search-group-title {
-      flex: 1 1 auto;
-      min-width: 0;
-      padding: 0;
-    }
-
-    .favorite-filter-section-chevron {
-      color: var(--fx-muted) !important;
-      flex: 0 0 auto;
-      font-size: 0.6rem;
-      margin: 0;
-      width: 0.8rem;
-    }
-
-    .favorite-group-icon {
-      color: var(--fx-muted) !important;
-      flex: 0 0 auto;
-      font-size: 0.68rem;
-      margin: 0;
-    }
-
-    .favorite-group-count {
-      color: var(--fx-muted);
-      font-size: 0.68rem;
-      font-weight: 400;
-      margin-left: auto;
-    }
+    white-space: nowrap;
   }
+}
+
+// Search RESULTS, strictly on one grid (the Activity agenda's look: muted uppercase headers, a thin colour bar, 0.78rem
+// semibold titles, small muted dates). Every result row is the same grid, so the columns line up across all groups:
+//   [colour bar] | icon column | title and muted line (1fr, ellipsis) | date column | action column
+// The group header uses the same icon column on its left edge and puts its count on the dates' right edge.
+#favoritesPanel .favorite-filter-results {
+  container-type: inline-size;
+  --sr-bar: 3px;
+  --sr-pad: 0.55rem;
+  --sr-icon-col: 1.2rem;
+  --sr-date-col: 3.9rem;
+  --sr-action-col: 1.5rem;
+  --sr-gap: 0.3rem;
 
   .favorite-filter-section {
     border: 0;
-    margin: 0 0 0.2rem !important;
+    margin: 0 0 0.25rem !important;
     padding: 0;
   }
 
@@ -4336,84 +4315,180 @@ h1:has(> #documentTitle) {
     padding: 0;
   }
 
+  // header: [chevron][icon column][title][count]; the icon column starts where the rows' icon column starts
+  .favorite-filter-section-summary {
+    align-items: center;
+    column-gap: 0;
+    display: grid;
+    grid-template-columns: calc(var(--sr-bar) + var(--sr-pad)) var(--sr-icon-col) minmax(0, 1fr) auto;
+    min-height: var(--fx-row);
+    padding: 0 var(--fx-pad) 0 0;
+
+    .favorite-filter-section-chevron {
+      color: var(--fx-muted) !important;
+      font-size: 0.55rem;
+      margin: 0;
+      text-align: center;
+      width: auto;
+    }
+
+    .favorite-group-icon {
+      color: var(--fx-muted) !important;
+      font-size: var(--fx-icon-size);
+      margin: 0;
+      text-align: center;
+      width: var(--sr-icon-col);
+    }
+
+    .unified-search-group-title {
+      color: var(--fx-muted);
+      display: block;
+      font-size: 0.68rem;
+      font-weight: 600;
+      min-height: 0;
+      overflow: hidden;
+      padding: 0 0 0 var(--sr-gap);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .favorite-group-count {
+      background: var(--fx-hover);
+      border-radius: 999px;
+      color: var(--fx-muted);
+      font-size: 0.65rem;
+      font-weight: 600;
+      line-height: 1.1rem;
+      margin: 0;
+      min-width: 1.1rem;
+      padding: 0 0.3rem;
+      text-align: center;
+    }
+  }
+
+  // a result: one grid
   .favorite-filter-result {
+    align-items: center;
     border: 0;
     border-bottom: 1px solid var(--fx-line);
-    border-left: 3px solid var(--left-color, #1677b8);
+    border-left: var(--sr-bar) solid var(--left-color, #1677b8);
     border-radius: 0;
+    column-gap: var(--sr-gap);
+    display: grid !important;
+    grid-auto-columns: var(--sr-action-col);
+    grid-template-columns: var(--sr-icon-col) minmax(0, 1fr) var(--sr-date-col);
+    grid-template-rows: 1.55rem auto;
     margin: 0;
-    min-height: 1.9rem;
-    padding: 0.1rem var(--fx-pad) 0.1rem 0.3rem;
+    min-height: 0;
+    padding: 0 var(--fx-pad) 0 var(--sr-pad);
 
     &:last-child {
       border-bottom: 1px solid var(--fx-line);
     }
 
+    &:hover {
+      background: var(--fx-hover);
+    }
+
+    // the first line (icon, title, date, buttons) takes part in the row's grid directly
     > .d-flex {
-      align-items: center;
-      gap: var(--fx-gap);
-      min-height: 1.6rem;
+      display: contents !important;
+    }
+
+    .favorite-filter-result-icon {
+      color: var(--fx-muted) !important;
+      font-size: var(--fx-icon-size);
+      grid-column: 1;
+      grid-row: 1;
+      text-align: center;
+      width: var(--sr-icon-col);
+    }
+
+    .favorite-filter-result-link {
+      color: var(--fx-fg) !important;
+      display: block;
+      font-size: inherit;
+      font-weight: 600;
+      grid-column: 2;
+      grid-row: 1;
+      line-height: 1.55rem;
+      margin: 0;
+      min-width: 0;
+      overflow: hidden;
+      text-decoration: none;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .favorite-filter-result-date {
+      color: var(--fx-muted);
+      font-size: 0.68rem;
+      font-variant-numeric: tabular-nums;
+      font-weight: 400;
+      grid-column: 3;
+      grid-row: 1;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    // buttons (link / add to text / step): their own fixed columns after the date
+    .favorite-filter-result-insert {
+      grid-row: 1;
+      height: 1.3rem;
+      margin: 0 !important;
+      padding: 0;
+      width: var(--sr-action-col);
+    }
+
+    // the muted line sits in the title column, under the title
+    .favorite-filter-result-meta {
+      color: var(--fx-muted) !important;
+      font-size: 0.68rem;
+      font-weight: 400;
+      grid-column: 2 / -1;
+      grid-row: 2;
+      line-height: 1.1rem;
+      margin: 0 0 0.1rem;
+      overflow: hidden;
+      padding: 0;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
   }
 
-  .favorite-filter-result-icon {
-    color: var(--fx-muted) !important;
-    flex: 0 0 var(--fx-icon-col);
-    font-size: var(--fx-icon-size);
-    text-align: center;
-  }
-
-  .favorite-filter-result-link {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .favorite-filter-result-date {
-    color: var(--fx-muted);
-    flex: 0 0 auto;
-    font-size: 0.68rem;
-    font-variant-numeric: tabular-nums;
-    min-width: 4.4rem;
-    text-align: right;
-  }
-
-  // the muted line sits under the title, in the title's column
-  .favorite-filter-result-meta {
-    margin: 0;
-    overflow: hidden;
-    padding-left: calc(var(--fx-icon-col) + var(--fx-gap));
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  // folders and other plain entries: icon, title, and the star in the date column
+  // folders and other plain entries: the same grid, one line; the star sits in the action column right after the date column
   .favorite-filter-result.unified-search-result {
-    align-items: center;
-    display: flex !important;
-    gap: var(--fx-gap);
-    justify-content: flex-start;
-
-    > .favorite-filter-result-link {
-      flex: 1 1 auto;
-    }
+    grid-template-rows: 1.55rem;
 
     > button,
     > .btn {
       align-items: center;
       display: inline-flex;
-      flex: 0 0 4.4rem;
-      height: var(--fx-ctl);
+      grid-column: 3;
+      grid-row: 1;
+      height: 1.3rem;
       justify-content: flex-end;
+      justify-self: end;
       margin: 0 !important;
       padding: 0;
+      width: var(--sr-action-col);
     }
   }
-}
 
-te-space: nowrap;
+  // a narrow panel (about 210 px) has no room for a date column: the title takes it
+  @container (max-width: 170px) {
+    .favorite-filter-result {
+      grid-template-columns: var(--sr-icon-col) minmax(0, 1fr) 0;
+
+      .favorite-filter-result-date {
+        display: none;
+      }
+    }
+
+    .favorite-filter-result.unified-search-result > button,
+    .favorite-filter-result.unified-search-result > .btn {
+      grid-column: 3;
+    }
   }
 }
 
