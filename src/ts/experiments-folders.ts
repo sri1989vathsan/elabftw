@@ -13,6 +13,7 @@ import { on } from './handlers';
 import { notify } from './notify';
 import { getTinymceBaseConfig } from './tinymce';
 import { htmlToMarkdown, markdownToHtml } from './Editor.class';
+import { initFolderDragDrop } from './folder-dragdrop';
 import { currentFlatFolderLevel, initFolderViews, syncFolderView } from './folder-views';
 import SidePanel from './SidePanel.class';
 import i18next from './i18n';
@@ -108,6 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let sidebar = initialSidebar;
   // tree / list / details switch of the folders panel
   initFolderViews();
+  initFolderDragDrop();
 
   const ApiC = new Api();
 

@@ -73,6 +73,9 @@
       <select id='display_mode' data-trigger='change' data-model='users/me' data-target='display_mode' class='form-control col-md-3'>
           <option value='it' {{ App.Users.userData.display_mode == 'it' ? ' selected' }}>{{ 'Item list (default)'|trans }}</option>
           <option value='tb' {{ App.Users.userData.display_mode == 'tb' ? ' selected' }}>{{ 'Tabular'|trans }}</option>
+          <option value='cr' {{ App.Users.userData.display_mode == 'cr' ? ' selected' }}>{{ 'Compact rows'|trans }}</option>
+          <option value='pv' {{ App.Users.userData.display_mode == 'pv' ? ' selected' }}>{{ 'Rows with preview'|trans }}</option>
+          <option value='bd' {{ App.Users.userData.display_mode == 'bd' ? ' selected' }}>{{ 'Board by status (experiments)'|trans }}</option>
       </select>
     </div>
     <hr>

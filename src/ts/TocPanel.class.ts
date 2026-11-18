@@ -67,7 +67,8 @@ export default class TocPanel extends SidePanel {
   private entries: TocEntry[] = [];
   private searchFilters: string[] = [];
   private selectedSectionIds = new Set<string>();
-  private collapsedSectionIds = new Set<string>();
+  private selectMode = false;
+  private lastCheckedId: string | null = null;
   private currentFilterActive = false;
   private currentSectionIds = new Set<string>();
   private scrollSpyObserver: IntersectionObserver | null = null;
@@ -245,16 +246,13 @@ export default class TocPanel extends SidePanel {
     this.selectedSectionIds = new Set(
       [...this.selectedSectionIds].filter(id => availableIds.has(id)),
     );
-    this.collapsedSectionIds = new Set(
-      [...this.collapsedSectionIds].filter(id => availableIds.has(id)),
-    );
     const container = document.getElementById('tocItems');
     if (!container) return;
 
     if (entries.length === 0) {
-      container.innerHTML = '<p class="text-muted px-2">No headings or tables found in the document.</p>';
-      this.renderSectionFilterTree();
-      this.renderSectionFilters();
+      container.innerHTML = '<p class="toc-empty">No headings yet.</p>';
+      this.updateCount(0);
+      this.updateRowSelection();
       this.setupSearchControls();
       this.filterEntries();
       return;
@@ -266,24 +264,38 @@ export default class TocPanel extends SidePanel {
     let html = '<ul class="toc-list list-unstyled mb-0">';
     for (const entry of entries) {
       const isTable = !isSection(entry);
-      const indent = (entry.level - minLevel) * 16;
-      const fontClass = !isTable && entry.level <= 2 ? 'font-weight-bold' : '';
-      const fontSize = isTable || entry.level > 3
-        ? 'style="font-size:0.9em"'
-        : (entry.level === 3 ? 'style="font-size:0.95em"' : '');
+      const indent = (entry.level - minLevel) * 0.8;
       const id = this.escapeAttribute(entry.id);
-      const icon = entry.kind === 'image' ? 'fa-image' : 'fa-table';
-      const text = (isTable ? `<i class="fas ${icon} fa-fw mr-1 toc-table-icon" aria-hidden="true"></i>` : '')
-        + this.escapeHTML(entry.text);
       const label = this.escapeAttribute(entry.text);
       const searchText = this.escapeAttribute(entry.path.toLocaleLowerCase());
-      const kindClass = entry.kind === 'image' ? ' toc-item-image' : (entry.kind === 'table' ? ' toc-item-table' : '');
-      html += `<li class="toc-item${kindClass}" style="padding-left:${indent}px" data-toc-search-text="${searchText}" data-toc-target="${id}">`;
-      html += '<div class="toc-entry d-flex align-items-center">';
-      html += `<a href="#${encodeURIComponent(entry.id)}" class="toc-link flex-grow-1 py-1 px-2 rounded ${fontClass}" ${fontSize} data-toc-target="${id}">${text}</a>`;
+      const kindClass = entry.kind === 'image' ? ' toc-item-image' : (entry.kind === 'table' ? ' toc-item-table' : ' toc-item-section');
+      // the small icon column: H1..H6 for a heading, a table for a spreadsheet, a photo (with a tiny thumbnail) for a picture
+      let kind: string;
+      if (entry.kind === 'image') {
+        const thumb = this.getImageThumbnail(entry.id);
+        kind = thumb
+          ? `<img class="toc-thumb" src="${this.escapeAttribute(thumb)}" alt="" width="26" height="18" loading="lazy">`
+          : '<i class="fas fa-image fa-fw" aria-hidden="true"></i>';
+      } else if (entry.kind === 'table') {
+        kind = '<i class="fas fa-table fa-fw" aria-hidden="true"></i>';
+      } else {
+        kind = `H${entry.level}`;
+      }
+      html += `<li class="toc-item${kindClass}" style="--toc-indent:${indent}rem" data-toc-level="${entry.level}" data-toc-search-text="${searchText}" data-toc-target="${id}">`;
+      html += '<div class="toc-entry">';
+      if (!isTable) {
+        html += `<input type="checkbox" class="toc-row-check" data-toc-section-checkbox="${id}" aria-label="Select ${label}" tabindex="-1">`;
+      }
+      html += `<span class="toc-kind${isTable ? ' toc-kind-leaf' : ''}" aria-hidden="true">${kind}</span>`;
+      html += `<a href="#${encodeURIComponent(entry.id)}" class="toc-link" data-toc-target="${id}" title="${this.escapeAttribute(entry.path)}">${this.escapeHTML(entry.text)}</a>`;
+      html += '<span class="toc-only-mark" hidden title="section only" aria-label="section only">1</span>';
       html += `<button type="button" class="btn btn-sm toc-entry-action toc-copy-link" data-toc-target="${id}" title="Copy link to ${label}" aria-label="Copy link to ${label}"><i class="fas fa-link fa-fw" aria-hidden="true"></i></button>`;
       if (this.getEditor()) {
         html += `<button type="button" class="btn btn-sm toc-entry-action toc-insert-link" data-toc-target="${id}" data-toc-text="${label}" title="Insert link to ${label}" aria-label="Insert link to ${label}"><i class="fas fa-paste fa-fw" aria-hidden="true"></i></button>`;
+      }
+      if (!isTable) {
+        html += `<button type="button" class="btn btn-sm toc-entry-action toc-goto" data-toc-target="${id}" title="Go to ${label}" aria-label="Go to ${label}"><i class="fas fa-arrow-right fa-fw" aria-hidden="true"></i></button>`;
+        html += `<button type="button" class="btn btn-sm toc-entry-action toc-row-more" data-toc-target="${id}" title="Selection options" aria-label="Selection options for ${label}" aria-haspopup="true"><i class="fas fa-ellipsis fa-fw" aria-hidden="true"></i></button>`;
       }
       html += '</div>';
       html += '</li>';
@@ -330,8 +342,8 @@ export default class TocPanel extends SidePanel {
       });
     });
 
-    this.renderSectionFilterTree();
-    this.renderSectionFilters();
+    this.wireRows(container);
+    this.updateCount(entries.filter(isSection).length);
     this.setupSearchControls();
     this.filterEntries();
 
@@ -368,10 +380,31 @@ export default class TocPanel extends SidePanel {
       this.searchFilters = [];
       this.selectedSectionIds.clear();
       this.renderSearchFilters();
-      this.renderSectionFilters();
-      this.updateSectionFilterTree();
+      this.updateRowSelection();
       input.focus();
       this.filterEntries();
+    });
+    document.getElementById('tocSelectToggle')?.addEventListener('click', () => this.setSelectMode(!this.selectMode));
+    document.getElementById('tocSelectClear')?.addEventListener('click', () => this.clearSelection());
+    document.getElementById('tocSelectAll')?.addEventListener('click', () => {
+      this.entries.filter(isSection).forEach(entry => this.selectedSectionIds.add(entry.id));
+      this.updateRowSelection();
+      this.filterEntries();
+    });
+    document.getElementById('tocSelectNone')?.addEventListener('click', () => this.clearSelection());
+    document.querySelectorAll<HTMLButtonElement>('[data-toc-mode]').forEach(button => {
+      button.addEventListener('click', () => {
+        mode.value = button.dataset.tocMode ?? 'all';
+        mode.dispatchEvent(new Event('change'));
+        this.renderSearchFilters();
+      });
+    });
+    // Esc in the panel leaves select mode: the selection and the filter it made are cleared
+    document.getElementById(this.panelId)?.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && this.selectMode && !document.querySelector('.toc-row-menu')) {
+        event.stopPropagation();
+        this.setSelectMode(false);
+      }
     });
     input.dataset.tocSearchReady = 'true';
     this.renderSearchFilters();
@@ -394,6 +427,13 @@ export default class TocPanel extends SidePanel {
     if (!container) return;
 
     container.replaceChildren();
+    // All / Any only matters with two or more filters
+    const modeSwitch = document.getElementById('tocSearchModeSwitch');
+    modeSwitch?.toggleAttribute('hidden', this.searchFilters.length < 2);
+    const currentMode = (document.getElementById('tocSearchMode') as HTMLSelectElement | null)?.value ?? 'all';
+    document.querySelectorAll<HTMLButtonElement>('[data-toc-mode]').forEach(button => {
+      button.setAttribute('aria-pressed', button.dataset.tocMode === currentMode ? 'true' : 'false');
+    });
     this.searchFilters.forEach((filter, index) => {
       const chip = document.createElement('span');
       chip.className = 'toc-search-filter badge badge-secondary';
@@ -415,66 +455,133 @@ export default class TocPanel extends SidePanel {
     });
   }
 
-  private renderSectionFilterTree(): void {
-    const container = document.getElementById('tocSectionFilterTree');
-    const empty = document.getElementById('tocSectionFilterEmpty');
-    if (!container || !empty) return;
+  /** The number of sections in the header of the panel. */
+  private updateCount(sections: number): void {
+    const count = document.getElementById('tocCount');
+    if (count) count.textContent = String(sections);
+  }
 
-    container.replaceChildren();
-    const sectionEntries = this.entries.filter(isSection);
-    empty.hidden = sectionEntries.length > 0;
-    sectionEntries.forEach((entry, index) => {
-      const row = document.createElement('div');
-      row.className = 'toc-section-filter-option';
-      row.dataset.tocSectionId = entry.id;
-      row.setAttribute('role', 'treeitem');
-      row.setAttribute('aria-level', String(entry.ancestorIds.length + 1));
-      row.style.setProperty('--toc-section-indent', `${entry.ancestorIds.length * 0.8}rem`);
-
-      const toggle = document.createElement('button');
-      toggle.type = 'button';
-      toggle.className = 'toc-section-filter-toggle';
-      toggle.dataset.tocSectionToggle = entry.id;
-      if (this.hasSectionChildren(entry.id)) {
-        toggle.setAttribute('aria-expanded', 'true');
-        const icon = document.createElement('i');
-        icon.className = 'fas fa-caret-down fa-fw';
-        icon.setAttribute('aria-hidden', 'true');
-        toggle.appendChild(icon);
-        toggle.addEventListener('click', () => {
-          if (this.collapsedSectionIds.has(entry.id)) {
-            this.collapsedSectionIds.delete(entry.id);
-          } else {
-            this.collapsedSectionIds.add(entry.id);
-          }
-          this.updateSectionFilterTree();
-        });
-      } else {
-        toggle.disabled = true;
-        toggle.setAttribute('aria-hidden', 'true');
-      }
-
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.id = `tocSectionFilter-${index}`;
-      checkbox.dataset.tocSectionCheckbox = entry.id;
-      checkbox.setAttribute('aria-label', `Filter by ${entry.path}`);
-      checkbox.addEventListener('change', () => {
-        this.toggleSectionSelection(entry.id, checkbox.checked);
+  /** The click, key and menu handling of the rows of the list; the list is rebuilt on every refresh, so this runs for each build. */
+  private wireRows(container: HTMLElement): void {
+    container.querySelectorAll<HTMLInputElement>('[data-toc-section-checkbox]').forEach(checkbox => {
+      const entryId = checkbox.dataset.tocSectionCheckbox ?? '';
+      checkbox.addEventListener('click', event => {
+        const mouse = event as MouseEvent;
+        if (mouse.shiftKey && this.lastCheckedId && this.lastCheckedId !== entryId) {
+          event.preventDefault();
+          this.selectRange(this.lastCheckedId, entryId);
+        } else if (mouse.altKey) {
+          // Alt-click: this section only, without its sub-sections
+          event.preventDefault();
+          this.selectSectionOnly(entryId);
+        } else {
+          this.toggleSectionSelection(entryId, checkbox.checked);
+        }
+        this.lastCheckedId = entryId;
       });
-
-      const label = document.createElement('label');
-      label.htmlFor = checkbox.id;
-      label.className = 'toc-section-filter-label';
-      // Hierarchy is already conveyed by the tree indentation. Showing the
-      // full ancestor path here makes deep headings needlessly repetitive.
-      label.textContent = entry.text;
-      label.title = entry.path;
-
-      row.append(toggle, checkbox, label);
-      container.appendChild(row);
     });
-    this.updateSectionFilterTree();
+    container.querySelectorAll<HTMLButtonElement>('.toc-row-more').forEach(button => {
+      button.addEventListener('click', event => {
+        event.stopPropagation();
+        this.openRowMenu(button);
+      });
+    });
+    // Select mode: a click anywhere on a heading row ticks it (shift = range, alt = this section only); the little arrow at the right
+    // end of the row (or a double-click on the text) jumps to the heading instead
+    container.addEventListener('click', event => {
+      if (!this.selectMode) return;
+      const target = event.target as HTMLElement;
+      if (target.closest('.toc-goto, .toc-entry-action, .toc-row-menu, .toc-row-check')) return;
+      const row = target.closest<HTMLElement>('.toc-item-section');
+      const checkbox = row?.querySelector<HTMLInputElement>('.toc-row-check');
+      if (!row || !checkbox) return;
+      event.preventDefault();
+      event.stopPropagation();
+      checkbox.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, shiftKey: event.shiftKey, altKey: event.altKey }));
+    }, true);
+    container.addEventListener('dblclick', event => {
+      if (!this.selectMode) return;
+      const target = (event.target as HTMLElement).closest<HTMLElement>('.toc-item');
+      if (target?.dataset.tocTarget) this.scrollToHeading(target.dataset.tocTarget);
+    });
+    container.querySelectorAll<HTMLButtonElement>('.toc-goto').forEach(button => {
+      button.addEventListener('click', event => {
+        event.stopPropagation();
+        if (button.dataset.tocTarget) this.scrollToHeading(button.dataset.tocTarget);
+      });
+    });
+    // Arrow keys move between the rows, Enter jumps (the link), Space ticks the row in select mode
+    container.addEventListener('keydown', event => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.classList.contains('toc-link')) return;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        const links = Array.from(container.querySelectorAll<HTMLElement>('.toc-item:not([hidden]) .toc-link'));
+        const next = links[links.indexOf(target) + (event.key === 'ArrowDown' ? 1 : -1)];
+        if (next) {
+          event.preventDefault();
+          next.focus();
+        }
+      } else if (event.key === ' ' && this.selectMode) {
+        const checkbox = target.closest('.toc-item')?.querySelector<HTMLInputElement>('.toc-row-check');
+        if (checkbox) {
+          event.preventDefault();
+          checkbox.checked = !checkbox.checked;
+          this.toggleSectionSelection(checkbox.dataset.tocSectionCheckbox ?? '', checkbox.checked);
+          this.lastCheckedId = checkbox.dataset.tocSectionCheckbox ?? null;
+        }
+      }
+    });
+  }
+
+  /** A tiny menu on a row: select this section only, or with its sub-sections. */
+  private openRowMenu(button: HTMLButtonElement): void {
+    document.querySelectorAll('.toc-row-menu').forEach(menu => menu.remove());
+    const entryId = button.dataset.tocTarget ?? '';
+    const menu = document.createElement('div');
+    menu.className = 'toc-row-menu';
+    menu.setAttribute('role', 'menu');
+    const add = (label: string, run: () => void): void => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.setAttribute('role', 'menuitem');
+      item.textContent = label;
+      item.addEventListener('click', () => {
+        menu.remove();
+        this.setSelectMode(true);
+        run();
+      });
+      menu.append(item);
+    };
+    add('Select with sub-sections', () => this.toggleSectionSelection(entryId, true));
+    add('Select this section only', () => this.selectSectionOnly(entryId));
+    button.closest('.toc-entry')?.append(menu);
+    (menu.firstElementChild as HTMLElement | null)?.focus();
+    const close = (event: Event): void => {
+      if (event instanceof KeyboardEvent && event.key !== 'Escape') return;
+      if (event instanceof MouseEvent && menu.contains(event.target as Node)) return;
+      menu.remove();
+      document.removeEventListener('click', close, true);
+      document.removeEventListener('keydown', close, true);
+    };
+    document.addEventListener('click', close, true);
+    document.addEventListener('keydown', close, true);
+  }
+
+  private setSelectMode(on: boolean): void {
+    this.selectMode = on;
+    document.getElementById(this.panelId)?.classList.toggle('toc-select-mode', on);
+    const toggle = document.getElementById('tocSelectToggle');
+    toggle?.setAttribute('aria-pressed', on ? 'true' : 'false');
+    document.getElementById('tocSelectStrip')?.toggleAttribute('hidden', !on);
+    if (!on) this.clearSelection();
+  }
+
+  /** Leaving select mode (Esc, the toggle, the x of the bar) clears the selection and the filter it made. */
+  private clearSelection(): void {
+    this.selectedSectionIds.clear();
+    this.lastCheckedId = null;
+    this.updateRowSelection();
+    this.filterEntries();
   }
 
   private toggleSectionSelection(entryId: string, selected: boolean): void {
@@ -485,135 +592,68 @@ export default class TocPanel extends SidePanel {
         this.selectedSectionIds.delete(id);
       }
     });
-    this.renderSectionFilters();
-    this.updateSectionFilterTree();
+    this.updateRowSelection();
     this.filterEntries();
   }
 
-  private renderSectionFilters(): void {
-    const container = document.getElementById('tocSectionFilters');
-    const count = document.getElementById('tocSectionFilterCount');
-    if (!container || !count) return;
-
-    container.replaceChildren();
-    this.getSectionSelectionGroups().forEach(group => {
-      const chip = document.createElement('span');
-      chip.className = 'toc-search-filter toc-section-filter-chip badge badge-primary';
-      chip.title = group.entry.path;
-      const label = document.createElement('span');
-      label.textContent = group.directOnly && this.hasSectionChildren(group.entry.id)
-        ? `${group.entry.path} (section only)`
-        : group.entry.path;
-      const remove = document.createElement('button');
-      remove.type = 'button';
-      remove.className = 'toc-search-filter-remove';
-      remove.title = `Remove section filter ${group.entry.path}`;
-      remove.setAttribute('aria-label', `Remove section filter ${group.entry.path}`);
-      remove.textContent = '×';
-      remove.addEventListener('click', () => {
-        const ids = group.directOnly ? [group.entry.id] : this.getSectionIds(group.entry.id);
-        ids.forEach(id => this.selectedSectionIds.delete(id));
-        this.renderSectionFilters();
-        this.updateSectionFilterTree();
-        this.filterEntries();
-      });
-      chip.append(label, remove);
-      container.appendChild(chip);
-    });
-
-    const selectedCount = this.entries
-      .filter(entry => isSection(entry) && this.selectedSectionIds.has(entry.id)).length;
-    count.textContent = selectedCount.toString();
-    count.toggleAttribute('hidden', selectedCount === 0);
+  /** This heading without its sub-sections ("section only"). */
+  private selectSectionOnly(entryId: string): void {
+    if (this.selectedSectionIds.has(entryId) && !this.getSectionIds(entryId).some(id => id !== entryId && this.selectedSectionIds.has(id))) {
+      this.selectedSectionIds.delete(entryId);
+    } else {
+      this.selectedSectionIds.add(entryId);
+    }
+    this.updateRowSelection();
+    this.filterEntries();
   }
 
-  private getSectionSelectionGroups(): Array<{
-    entry: TocEntry;
-    directOnly: boolean;
-  }> {
-    const sectionEntries = this.entries.filter(isSection);
-    const fullBranchIds = new Set(
-      sectionEntries
-        .filter(entry => (
-          this.getSectionIds(entry.id)
-            .every(id => this.selectedSectionIds.has(id))
-        ))
-        .map(entry => entry.id),
-    );
-    const groups: Array<{ entry: TocEntry; directOnly: boolean }> = [];
-    sectionEntries.forEach(entry => {
-      if (!this.selectedSectionIds.has(entry.id)) return;
-      if (fullBranchIds.has(entry.id)) {
-        if (!entry.parentId || !fullBranchIds.has(entry.parentId)) {
-          groups.push({ entry, directOnly: false });
-        }
-        return;
-      }
-      groups.push({ entry, directOnly: true });
-    });
-    return groups;
+  /** Shift-click: every section from one to the other, in the order of the page. */
+  private selectRange(fromId: string, toId: string): void {
+    const sections = this.entries.filter(isSection);
+    const from = sections.findIndex(entry => entry.id === fromId);
+    const to = sections.findIndex(entry => entry.id === toId);
+    if (from < 0 || to < 0) return;
+    sections.slice(Math.min(from, to), Math.max(from, to) + 1).forEach(entry => this.selectedSectionIds.add(entry.id));
+    this.updateRowSelection();
+    this.filterEntries();
   }
 
-  private updateSectionFilterTree(): void {
-    const input = document.getElementById('tocSearchInput') as HTMLInputElement | null;
-    const mode = document.getElementById('tocSearchMode') as HTMLSelectElement | null;
-    const filters = [
-      ...this.searchFilters,
-      ...(input?.value.trim() ? [input.value.trim()] : []),
-    ].map(filter => filter.toLocaleLowerCase());
-    const matchAll = mode?.value !== 'any';
-    const matchingIds = new Set<string>();
+  private getImageThumbnail(entryId: string): string {
+    const node = document.getElementById(entryId)
+      ?? this.getEditor()?.getBody().querySelector(`#${CSS.escape(entryId)}`);
+    if (!node) return '';
+    const img = node instanceof HTMLImageElement ? node : node.querySelector('img');
+    return img?.getAttribute('src') ?? '';
+  }
 
-    this.entries.forEach(entry => {
-      const matches = filters.length === 0
-        || (matchAll
-          ? filters.every(filter => entry.path.toLocaleLowerCase().includes(filter))
-          : filters.some(filter => entry.path.toLocaleLowerCase().includes(filter)));
-      if (matches || this.selectedSectionIds.has(entry.id)) {
-        matchingIds.add(entry.id);
-        entry.ancestorIds.forEach(id => matchingIds.add(id));
-      }
-    });
-
-    let visibleOptions = 0;
-    document.querySelectorAll<HTMLElement>('[data-toc-section-id]').forEach(row => {
-      const entryId = row.dataset.tocSectionId;
-      const entry = this.entries.find(candidate => candidate.id === entryId);
-      if (!entry) return;
-      // A search narrows which branches are relevant, but it must not force
-      // those branches open. Keep the user's explicit collapse state active
-      // for live text, saved search chips and selected-section filters alike.
-      const hiddenByCollapsedParent = entry.ancestorIds
-        .some(id => this.collapsedSectionIds.has(id));
-      const visible = matchingIds.has(entry.id) && !hiddenByCollapsedParent;
-      row.hidden = !visible;
-      if (visible) visibleOptions++;
-
-      const branchIds = this.getSectionIds(entry.id);
-      const selectedCount = branchIds.filter(id => this.selectedSectionIds.has(id)).length;
-      const checkbox = row.querySelector<HTMLInputElement>('[data-toc-section-checkbox]');
+  /** The checkboxes of the rows, the "only" markers and the bar at the bottom (count, "Showing x of y", Print, Copy, clear). */
+  private updateRowSelection(): void {
+    document.querySelectorAll<HTMLElement>('#tocItems .toc-item-section').forEach(row => {
+      const entryId = row.dataset.tocTarget ?? '';
+      const branch = this.getSectionIds(entryId);
+      const selected = branch.filter(id => this.selectedSectionIds.has(id)).length;
+      const checkbox = row.querySelector<HTMLInputElement>('.toc-row-check');
       if (checkbox) {
-        checkbox.checked = selectedCount === branchIds.length;
-        checkbox.indeterminate = selectedCount > 0 && selectedCount < branchIds.length;
+        checkbox.checked = selected === branch.length;
+        checkbox.indeterminate = selected > 0 && selected < branch.length;
       }
-      row.classList.toggle('selected', selectedCount > 0);
-
-      const toggle = row.querySelector<HTMLButtonElement>('[data-toc-section-toggle]');
-      if (toggle && !toggle.disabled) {
-        const collapsed = this.collapsedSectionIds.has(entry.id);
-        toggle.setAttribute('aria-expanded', String(!collapsed));
-        toggle.setAttribute(
-          'aria-label',
-          `${collapsed ? 'Expand' : 'Collapse'} ${entry.path}`,
-        );
-        const icon = toggle.querySelector('i');
-        icon?.classList.toggle('fa-caret-right', collapsed);
-        icon?.classList.toggle('fa-caret-down', !collapsed);
-      }
+      row.classList.toggle('selected', selected > 0);
+      // selected without its sub-sections
+      const only = this.hasSectionChildren(entryId) && this.selectedSectionIds.has(entryId) && selected < branch.length;
+      row.querySelector<HTMLElement>('.toc-only-mark')?.toggleAttribute('hidden', !only);
     });
-
-    const empty = document.getElementById('tocSectionFilterEmpty');
-    if (empty) empty.hidden = visibleOptions > 0;
+    // tables and pictures under a ticked heading take the same tint (they have no checkbox of their own)
+    document.querySelectorAll<HTMLElement>('#tocItems .toc-item-table, #tocItems .toc-item-image').forEach(row => {
+      const entry = this.entries.find(candidate => candidate.id === row.dataset.tocTarget);
+      row.classList.toggle('selected', Boolean(entry?.parentId && this.selectedSectionIds.has(entry.parentId)));
+    });
+    const selectedCount = this.entries.filter(entry => isSection(entry) && this.selectedSectionIds.has(entry.id)).length;
+    const bar = document.getElementById('tocSelectBar');
+    const count = document.getElementById('tocSectionFilterCount');
+    const label = document.getElementById('tocSelectedLabel');
+    if (count) count.textContent = String(selectedCount);
+    if (label) label.textContent = `${selectedCount} selected`;
+    bar?.toggleAttribute('hidden', selectedCount === 0);
   }
 
   private getSectionIds(entryId: string): string[] {
@@ -676,9 +716,23 @@ export default class TocPanel extends SidePanel {
     });
     let matches = 0;
 
+    // Rows of the list: only the TEXT filters narrow it. Ticking sections must leave every row where it is (they are the
+    // checkboxes of the list), otherwise the first ticked heading hid all the others and only one could ever be selected.
+    // The selected rows (and their ancestors) stay visible whatever the text filters say.
+    const textMatchIds = new Set<string>();
+    if (filters.length > 0) {
+      this.entries.forEach(entry => {
+        const path = entry.path.toLocaleLowerCase();
+        const hit = matchAll ? filters.every(filter => path.includes(filter)) : filters.some(filter => path.includes(filter));
+        if (hit || this.selectedSectionIds.has(entry.id)) {
+          textMatchIds.add(entry.id);
+          entry.ancestorIds.forEach(id => textMatchIds.add(id));
+        }
+      });
+    }
     for (const item of items) {
       const targetId = item.dataset.tocTarget ?? '';
-      const visible = !filterActive || visibleTocIds.has(targetId);
+      const visible = filters.length === 0 || textMatchIds.has(targetId);
       item.hidden = !visible;
       if (sectionIds.has(targetId) || matchingTableIds.has(targetId)) matches++;
     }
@@ -688,7 +742,7 @@ export default class TocPanel extends SidePanel {
       // (matchingRoots only ever returns entries when one of those is set)
       // -- without the !filterActive check this showed on every plain,
       // unfiltered open of the panel as long as there were headings at all
-      noResults.hidden = !filterActive || items.length === 0 || matches > 0;
+      noResults.hidden = filters.length === 0 || items.length === 0 || items.some(item => !item.hidden);
     }
 
     this.currentFilterActive = filterActive;
@@ -707,7 +761,13 @@ export default class TocPanel extends SidePanel {
         ? 'No sections match the current selection'
         : 'Copy the selected or filtered notebook sections';
     }
-    this.updateSectionFilterTree();
+    this.updateRowSelection();
+    const showing = document.getElementById('tocShowingLabel');
+    if (showing) {
+      const totalSections = this.entries.filter(isSection).length;
+      const shownSections = this.entries.filter(entry => isSection(entry) && sectionIds.has(entry.id)).length;
+      showing.textContent = filterActive ? `Showing ${shownSections} of ${totalSections} sections` : '';
+    }
     this.filterMainText(filterActive, sectionIds);
   }
 

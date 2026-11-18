@@ -332,7 +332,8 @@ final class ExperimentsFolders extends AbstractRest
 
         // Handle moving to a different parent
         if (array_key_exists('parent_id', $params)) {
-            $this->moveToParent(Filter::intOrNull($params['parent_id']));
+            // null (the top level, as a script or the panel's drag and drop may send it) used to crash here: intOrNull takes text or a number
+            $this->moveToParent(Filter::intOrNull((string) ($params['parent_id'] ?? '')));
         }
 
         // Handle renaming
@@ -692,7 +693,8 @@ final class ExperimentsFolders extends AbstractRest
         $this->Db->execute($req);
     }
 
-    private const FOLDER_VIEWS = array('tree', 'list', 'details');
+    // 'details' is the older name of the table view; it stays accepted so a saved choice keeps loading (the page maps it to 'cards')
+    private const FOLDER_VIEWS = array('tree', 'list', 'cards', 'details');
 
     /** The folder view the current user chose, or null when they never chose one. */
     public function getFolderView(): ?string

@@ -1,0 +1,23 @@
+{# One block for Goals / Conclusion / Notes (experiment page strip): icon and label in a fixed column, the text in a hanging
+   indent beside it, each line of the value kept, numbered/bulleted lines indented as lists, long values clamped with a
+   Show more toggle (data-action='toggle-field-more', see common.ts). Same classes as the list card (EntityList.svelte). #}
+{% macro field(label, icon, value, clamp) %}
+  {% set lines = value|replace({"\r\n": "\n", "\r": "\n"})|trim|split("\n") %}
+  <div class='fx-field' style='--fx-clamp: {{ clamp }};'>
+    <div class='fx-field-label'><i class='fas {{ icon }} fa-fw' aria-hidden='true'></i><span>{{ label|trans }}</span></div>
+    <div class='fx-field-body'>
+      <div class='fx-field-text'>
+        {% for line in lines %}
+          {% if line|trim == '' %}
+            <div class='fx-line fx-line-gap'></div>
+          {% else %}
+            <div class='fx-line{{ line matches '/^\\s*(\\d+[.)]|[-*•])\\s+/' ? ' fx-line-list' }}'>{{ line|trim('right') }}</div>
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% if lines|length > clamp or value|length > clamp * 70 %}
+        <button type='button' class='fx-field-more' data-action='toggle-field-more' aria-expanded='false' data-more='{{ 'Show more'|trans }}' data-less='{{ 'Show less'|trans }}'>{{ 'Show more'|trans }}</button>
+      {% endif %}
+    </div>
+  </div>
+{% endmacro %}

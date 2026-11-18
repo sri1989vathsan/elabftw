@@ -203,6 +203,19 @@ final class DisplayParams extends BaseQueryParams
         $this->filterSql .= $this->getSqlIn('entity.timestamped', $query->getString('timestamped'));
         // RATING FILTER
         $this->filterSql .= $this->getSqlIn('entity.rating', $query->getString('rating'));
+        // MODIFIED IN THE LAST N DAYS (dashboard tile "Modified this week")
+        $modifiedDays = $query->getInt('modified_days');
+        if ($modifiedDays > 0 && $modifiedDays <= 3660) {
+            $this->filterSql .= sprintf(' AND entity.modified_at >= (NOW() - INTERVAL %d DAY)', $modifiedDays);
+        }
+        // HAS AN UNFINISHED STEP (dashboard tile "Open steps")
+        if ($query->getInt('open_steps') === 1
+            && ($this->entityType === EntityType::Experiments || $this->entityType === EntityType::Items)) {
+            $this->filterSql .= sprintf(
+                ' AND EXISTS (SELECT 1 FROM %s_steps AS open_st WHERE open_st.item_id = entity.id AND open_st.finished = 0)',
+                $this->entityType->value,
+            );
+        }
         // FOLDER FILTER (experiments, resources and the database)
         if (($this->entityType === EntityType::Experiments || $this->entityType === EntityType::Items || $this->entityType === EntityType::Inventory)
             && $query->has('folder')) {

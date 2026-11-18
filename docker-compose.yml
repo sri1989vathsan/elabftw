@@ -168,6 +168,14 @@ services:
       - ./web/labcollector.php:/elabftw/web/labcollector.php:ro
       - ./web/labcollector-lookup.php:/elabftw/web/labcollector-lookup.php:ro
       - ./web/whats-new.php:/elabftw/web/whats-new.php:ro
+      # label printing: the + menu dialog, the printer and the label formats (admins)
+      - ./web/label-print.php:/elabftw/web/label-print.php:ro
+      - ./web/label-formats.php:/elabftw/web/label-formats.php:ro
+      - ./web/label-formats.js:/elabftw/web/label-formats.js:ro
+      - ./web/label-dialog.js:/elabftw/web/label-dialog.js:ro
+      - ./web/planned.css:/elabftw/web/planned.css:ro
+      - ./web/label-config.json:/elabftw/web/label-config.json:ro
+      - ./src/templates/label-formats.html:/elabftw/src/templates/label-formats.html:ro
       - ./src/whats-new.json:/elabftw/src/whats-new.json:ro
       - ./src/templates/whats-new.html:/elabftw/src/templates/whats-new.html:ro
       - ./web/assets/images/whats-new:/elabftw/web/assets/images/whats-new:ro

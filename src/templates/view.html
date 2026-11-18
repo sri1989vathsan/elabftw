@@ -16,22 +16,16 @@
          <!-- [html-validate-disable-block prefer-native-element: suppress error from malle] -->
         <span id='documentTitle' class='breakable {{ not Entity.isReadOnly ? 'malleable-title malleable' }} rounded py-1' data-target='title' data-endpoint='{{ Entity.entityType.value }}' data-id='{{ Entity.id }}'>{{ Entity.entityData.title }}</span>
       </h1>
-      {% if Entity.entityType.value == 'experiments' and Entity.entityData.experiment_goal %}
-        <div class='d-flex align-items-start mb-2'>
-          <i class='fas fa-bullseye fa-fw mr-2 mt-1 color-medium' aria-hidden='true'></i>
-          <div class='breakable' style='white-space: pre-wrap;'><span class='font-weight-bold'>{{ 'Goals'|trans }}:</span> {{ Entity.entityData.experiment_goal }}</div>
-        </div>
-      {% endif %}
-      {% if Entity.entityType.value == 'experiments' and Entity.entityData.experiment_conclusion %}
-        <div class='d-flex align-items-start mb-2'>
-          <i class='fas fa-clipboard-check fa-fw mr-2 mt-1 color-medium' aria-hidden='true'></i>
-          <div class='breakable' style='white-space: pre-wrap;'><span class='font-weight-bold'>{{ 'Conclusion'|trans }}:</span> {{ Entity.entityData.experiment_conclusion }}</div>
-        </div>
-      {% endif %}
-      {% if Entity.entityType.value == 'experiments' and Entity.entityData.experiment_notes %}
-        <div class='d-flex align-items-start mb-2'>
-          <i class='fas fa-file-lines fa-fw mr-2 mt-1 color-medium' aria-hidden='true'></i>
-          <div class='breakable' style='white-space: pre-wrap;'><span class='font-weight-bold'>{{ 'Notes'|trans }}:</span> {{ Entity.entityData.experiment_notes }}</div>
+      {% if Entity.entityType.value == 'experiments' and (Entity.entityData.experiment_goal or Entity.entityData.experiment_conclusion or Entity.entityData.experiment_notes) %}
+        {% import 'fx-field.html' as fx %}
+        {# Goals / Conclusion / Notes as three soft tiles (the shared multiline block, label above); an empty Conclusion says so #}
+        <div class='entity-summary-tiles'>
+          {% if Entity.entityData.experiment_goal %}<div class='entity-summary-tile'>{{ fx.field('Goals', 'fa-bullseye', Entity.entityData.experiment_goal, 6) }}</div>{% endif %}
+          <div class='entity-summary-tile'>
+            {% if Entity.entityData.experiment_conclusion %}{{ fx.field('Conclusion', 'fa-clipboard-check', Entity.entityData.experiment_conclusion, 6) }}
+            {% else %}<div class='fx-field fx-field-tile'><div class='fx-field-label'><i class='fas fa-clipboard-check fa-fw' aria-hidden='true'></i><span>{{ 'Conclusion'|trans }}</span></div><div class='fx-field-body'><div class='fx-field-text fx-field-empty'>{{ 'Not written yet'|trans }}</div></div></div>{% endif %}
+          </div>
+          {% if Entity.entityData.experiment_notes %}<div class='entity-summary-tile'>{{ fx.field('Notes', 'fa-file-lines', Entity.entityData.experiment_notes, 6) }}</div>{% endif %}
         </div>
       {% endif %}
     </div>
@@ -75,40 +69,23 @@
 
 <section>
 
-  {# DATE #}
-  {% if Entity.entityType.value != 'experiments_templates' %}
-    <div class='mb-2'>
-      {{ 'Started on'|trans }} {{ Entity.entityData.date|date('Y-m-d') }}
-    </div>
-  {% endif %}
-
-  {# OWNER #}
-  <div class='d-flex mb-2 align-items-center'>
-    <div class='edit-mode-label'>
-      <i aria-hidden='true' class='fas fa-fw fa-user mr-1'></i>{{ 'Owner'|trans }}
-    </div>
-    {{ Entity.entityData.fullname }}
-  </div>
-
-  {# TEAM #}
-  <div class='d-flex mb-2 align-items-center'>
-    <div class='edit-mode-label'>
-      <i aria-hidden='true' class='fas fa-fw fa-users mr-1'></i>{{ 'Team'|trans }}
-    </div>
-    {{ Entity.entityData.team_name }}
-  </div>
-
-  {# TAGS #}
-  <div class='d-flex mb-2 align-items-center'>
+  {# DATE, OWNER, TEAM, TAGS: a two-column grid, icons in the label column #}
+  <div class='entity-meta-grid'>
+    {% if Entity.entityType.value != 'experiments_templates' %}
+      <div class='entity-meta-label'><i aria-hidden='true' class='fas fa-fw fa-calendar-day'></i>{{ 'Started on'|trans }}</div>
+      <div class='entity-meta-value'>{{ Entity.entityData.date|date('Y-m-d') }}</div>
+    {% endif %}
+    <div class='entity-meta-label'><i aria-hidden='true' class='fas fa-fw fa-user'></i>{{ 'Owner'|trans }}</div>
+    <div class='entity-meta-value'>{{ Entity.entityData.fullname }}</div>
+    <div class='entity-meta-label'><i aria-hidden='true' class='fas fa-fw fa-users'></i>{{ 'Team'|trans }}</div>
+    <div class='entity-meta-value'>{{ Entity.entityData.team_name }}</div>
     {% if Entity.entityData.tags|length > 0 %}
-      <div class='edit-mode-label'>
-        <i class='fas fa-tags mr-1'></i>{{ 'Tags'|trans }}
-      </div>
-      <span class='tags mathjax-ignore d-flex-inline flex-wrap'>
+      <div class='entity-meta-label'><i aria-hidden='true' class='fas fa-fw fa-tags'></i>{{ 'Tags'|trans }}</div>
+      <div class='entity-meta-value tags mathjax-ignore'>
         {% for tag in Entity.entityData.tags_decoded %}
-        <a class='tag btn {{- tag.is_favorite ? ' favorite' }}' href='?mode=show&amp;tags%5B%5D={{ tag.tag|url_encode }}' aria-label='{{ tag.tag }}'>{{ tag.tag }}</a>
+          <a class='tag btn {{- tag.is_favorite ? ' favorite' }}' href='?mode=show&amp;tags%5B%5D={{ tag.tag|url_encode }}' aria-label='{{ tag.tag }}'>{{ tag.tag }}</a>
         {% endfor %}
-      </span>
+      </div>
     {% endif %}
   </div>
 

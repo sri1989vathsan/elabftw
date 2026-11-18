@@ -1244,6 +1244,1094 @@ tr:first-child td {
   }
 }
 
+// Section headings (the Search results groups and the Filters popover): no big chevron on the left; a small muted one
+// at the right end of the row. The whole summary row is the click target (and stays keyboard-operable as a <summary>;
+// <details> exposes its expanded state). Right = collapsed, down = open.
+#favoritesPanel .favorite-filter-overlay .favorite-filter-section > .favorite-filter-section-summary {
+  justify-content: space-between;
+
+  > .favorite-filter-section-chevron {
+    color: var(--fx-muted) !important;
+    flex: 0 0 auto;
+    font-size: 0.7rem;
+    margin: 0 0 0 auto;
+    order: 2;
+    text-align: center;
+    width: 1rem;
+  }
+}
+
+#favoritesPanel .favorite-filter-overlay .favorite-filter-section > .favorite-filter-section-summary > .favorite-filter-section-chevron {
+  color: #6c757d !important;
+}
+
+// The Filters popover of the Search panel, on the shared --fx look: small medium-weight section rows with a muted chevron,
+// 1.5rem option rows (0.9rem controls, hover tint), icon-only remove buttons that appear on row hover or focus, one muted
+// small line for empty states (#5c636a on white = 6.3:1, AA), hairline dividers, smaller radius and padding, and the
+// Apply / clear controls on the 1.4rem control height. The card stays a self-contained light card (see the note above
+// .favorite-filter-overlay); behaviour and markup hooks are unchanged.
+#favoritesPanel .favorite-filter-overlay {
+  border-radius: 0.4rem;
+  box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.25);
+  font-size: 0.78rem;
+  max-height: min(65vh, 28rem);
+  padding: 0.6rem !important;
+
+  .favorite-filter-section {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    margin-bottom: 0.5rem !important;
+    padding-bottom: 0.25rem;
+
+    &:last-of-type {
+      border-bottom: 0;
+    }
+  }
+
+  .favorite-filter-section-summary {
+    font-size: 0.78rem;
+    font-weight: 500;
+    min-height: 1.5rem;
+    padding: 0 0.15rem;
+  }
+
+  .favorite-filter-section-chevron {
+    color: #6c757d !important;
+  }
+
+  .favorite-filter-section-body {
+    padding: 0 0 0.15rem 0.15rem;
+  }
+
+  .favorite-filter-option {
+    border-radius: 3px;
+    gap: 0.4rem;
+    min-height: 1.5rem;
+    padding: 0 0.3rem;
+
+    &:hover {
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    input[type='checkbox'],
+    input[type='radio'] {
+      flex: 0 0 auto;
+      height: 0.9rem;
+      margin: 0 !important;
+      width: 0.9rem;
+    }
+
+    label {
+      font-size: 0.78rem;
+      line-height: 1.3;
+    }
+
+    // remove-from-favorites: a muted icon that shows on hover or focus; danger colour on its own hover
+    .btn {
+      align-items: center;
+      background: transparent;
+      border: 0;
+      display: inline-flex;
+      height: 1.25rem;
+      justify-content: center;
+      opacity: 0;
+      padding: 0;
+      width: 1.25rem;
+
+      .fas {
+        color: #6c757d !important;
+        font-size: 0.68rem;
+      }
+
+      &:hover .fas,
+      &:focus-visible .fas {
+        color: #b02a37 !important;
+      }
+    }
+
+    &:hover .btn,
+    &:focus-within .btn {
+      opacity: 1;
+    }
+
+    @media (hover: none) {
+      .btn {
+        opacity: 1;
+      }
+    }
+  }
+
+  .category-color-dot {
+    flex-basis: 0.6rem;
+    height: 0.6rem;
+    width: 0.6rem;
+  }
+
+  // empty-state and hint lines: one muted small line with AA contrast
+  p.color-medium,
+  p.small {
+    color: #5c636a !important;
+    font-size: 0.72rem !important;
+    line-height: 1.3;
+    margin: 0 0 0.2rem !important;
+    padding: 0 0.3rem;
+  }
+
+  .favorite-apply-row {
+    align-items: center;
+    gap: 0.3rem;
+    margin-bottom: 0 !important;
+
+    .btn {
+      align-items: center;
+      display: inline-flex;
+      font-size: 0.78rem;
+      height: var(--fx-ctl, 1.4rem);
+      justify-content: center;
+      margin: 0 !important;
+      padding: 0 0.6rem;
+    }
+
+    .favorite-clear-btn {
+      background: transparent;
+      border-color: transparent;
+      color: #495057;
+      padding: 0;
+      width: var(--fx-ctl, 1.4rem);
+
+      .fas {
+        color: #495057 !important;
+      }
+
+      &:hover {
+        background: rgba(0, 0, 0, 0.06);
+      }
+    }
+  }
+}
+
+// Goals / Conclusion / Notes: one block everywhere (list card, preview pane, experiment page strip). Label and icon in a
+// fixed column, the text in a hanging indent beside it so wrapped lines never go back under the icon, each line of the value
+// kept as a line (numbered or bulleted lines indented as a list), a small even gap for blank lines, and a clamp with a
+// Show more toggle that expands in place.
+.fx-field {
+  --fx-label-col: 6.1rem;
+  --fx-muted: color-mix(in srgb, currentColor 62%, transparent);
+
+  column-gap: 0.4rem;
+  display: grid;
+  grid-template-columns: var(--fx-label-col) minmax(0, 1fr);
+  margin: 0 0 0.35rem;
+
+  .fx-field-label {
+    align-items: flex-start;
+    color: var(--fx-muted);
+    display: flex;
+    font-size: 0.78rem;
+    font-weight: 600;
+    gap: 0.25rem;
+    line-height: 1.35rem;
+
+    .fas {
+      flex: 0 0 1rem;
+      line-height: 1.35rem;
+      text-align: center;
+    }
+  }
+
+  .fx-field-text {
+    font-size: 0.85rem;
+    line-height: 1.35;
+    max-height: calc(var(--fx-clamp, 3) * 1.35em);
+    overflow: hidden;
+    padding-top: 0.1rem;
+  }
+
+  &.is-open .fx-field-text {
+    max-height: none;
+  }
+
+  .fx-line {
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  .fx-line-list {
+    padding-left: 1.5em;
+    text-indent: -1.5em;
+  }
+
+  .fx-line-gap {
+    height: 0.35rem;
+  }
+
+  .fx-field-more {
+    background: none;
+    border: 0;
+    color: var(--fx-muted);
+    cursor: pointer;
+    font-size: 0.72rem;
+    padding: 0;
+
+    &:hover,
+    &:focus-visible {
+      text-decoration: underline;
+    }
+  }
+}
+
+// List card (comfortable list): checkbox, pills, title, fields, buttons and dates share one left edge; buttons one height.
+.entity .entity-card-main {
+  min-width: 0;
+
+  .entity-card-pills {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.3rem;
+  }
+
+  .entity-card-check {
+    flex: 0 0 auto;
+    margin: 0 0.3rem 0 0;
+  }
+
+  .d-flex.flex-row > .btn,
+  .d-flex.flex-row > a.btn {
+    align-items: center;
+    display: inline-flex;
+    height: 1.8rem;
+    justify-content: center;
+    line-height: 1;
+    margin-bottom: 0;
+    padding: 0 0.6rem !important;
+  }
+
+  .entity-card-dates {
+    font-size: 0.75rem;
+    margin-top: 0.35rem;
+  }
+}
+
+// Dashboard stat tiles: flat, the --fx look (large number, muted label); each tile links to the matching list
+.dashboard-stats {
+  --fx-muted: color-mix(in srgb, currentColor 62%, transparent);
+  --fx-hover: color-mix(in srgb, currentColor 7%, transparent);
+
+  align-items: stretch;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+
+  .dashboard-stat {
+    background: var(--fx-hover);
+    border-radius: 6px;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 3.2rem;
+    padding: 0.35rem 0.8rem;
+    text-decoration: none;
+
+    &:hover,
+    &:focus-visible {
+      background: color-mix(in srgb, currentColor 12%, transparent);
+      color: inherit;
+    }
+  }
+
+  .dashboard-stat-button {
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .dashboard-stat-wide {
+    flex: 1 1 18rem;
+  }
+
+  .dashboard-stat-number {
+    font-size: 1.5rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    line-height: 1.1;
+  }
+
+  .dashboard-stat-label {
+    color: var(--fx-muted);
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  .dashboard-stat-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.7rem;
+    margin-top: 0.15rem;
+  }
+
+  .dashboard-stat-chip {
+    color: inherit;
+    font-size: 0.82rem;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+// Dashboard category and status chips on the --fx look: one height, medium weight, a thin left accent (the category colour or the
+// status dot) on a light tint of the colour, hover a little stronger; the count is a quiet pill at the right end, zero muted.
+.dashboard-grid a.catstat-btn {
+  --chip-tint: color-mix(in srgb, var(--bg) 12%, var(--mainbackground, #fff));
+
+  align-items: center;
+  background: var(--chip-tint);
+  border: 0;
+  border-left: 3px solid var(--bg);
+  border-radius: 0.4rem;
+  color: inherit;
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 500;
+  height: 1.6rem;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  margin: 0 0.35rem 0.35rem 0 !important;
+  max-width: 100%;
+  padding: 0 0.45rem 0 0.5rem;
+  text-transform: none;
+
+  &:hover {
+    background: color-mix(in srgb, var(--bg) 20%, var(--mainbackground, #fff));
+    color: inherit;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 1px;
+  }
+
+  // a status shows its colour as the dot, not as a bar
+  &.status-btn {
+    border-left: 0;
+    padding-left: 0.55rem;
+
+    .fa-circle {
+      color: var(--bg);
+      font-size: 0.55rem;
+      margin-right: 0.15rem;
+    }
+  }
+
+  .catstat-count {
+    align-items: center;
+    background: color-mix(in srgb, var(--bg) 20%, transparent);
+    border: 0;
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: 0.68rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    height: 1.1rem;
+    justify-content: center;
+    line-height: 1;
+    margin-left: 0.45rem;
+    min-width: 1.2rem;
+    padding: 0 0.3rem;
+    vertical-align: baseline;
+
+    &.is-zero {
+      opacity: 0.5;
+    }
+  }
+}
+
+.dashboard-grid h4 {
+  color: color-mix(in srgb, currentColor 62%, transparent);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  margin: 0.6rem 0 0.3rem;
+  text-transform: uppercase;
+}
+
+// the View button of the edit toolbar: icon and label, the label goes on narrow widths
+.toolbar-view-btn .toolbar-view-label {
+  margin-left: 0.35rem;
+}
+
+@media (max-width: 52rem) {
+  .toolbar-view-btn .toolbar-view-label {
+    display: none;
+  }
+}
+
+// ---- Experiment / resource / template pages: view and edit on the --fx look ----
+// A flat sticky bar of quiet icon buttons (the one action is highlighted), a calm header, three soft summary tiles, comfortable
+// body typography. Markup and behaviour are unchanged.
+#entityToolbar {
+  --fx-muted: color-mix(in srgb, currentColor 62%, transparent);
+  --fx-hover: color-mix(in srgb, currentColor 8%, transparent);
+
+  #topToolbar {
+    gap: 0.15rem;
+    padding: 0.2rem 0;
+
+    align-items: center;
+
+    .btn {
+      align-items: center;
+      border-radius: 4px;
+      display: inline-flex;
+      font-size: 0.8rem;
+      height: 1.7rem;
+      justify-content: center;
+      margin: 0 !important;
+      min-height: 1.7rem;
+      min-width: 1.7rem;
+      padding: 0 0.45rem;
+
+      .fas,
+      .far {
+        font-size: 0.82rem;
+        width: 1rem;
+      }
+    }
+
+    // Save: a quiet icon like the others; it takes the accent only while there are unsaved changes
+    [data-action='update-entity-body']:not([data-redirect]) {
+      background: transparent;
+      border-color: transparent;
+      color: var(--fx-muted);
+    }
+
+    &:has(#entitySaveState[data-state='unsaved']) [data-action='update-entity-body']:not([data-redirect]),
+    &:has(#entitySaveState[data-state='error']) [data-action='update-entity-body']:not([data-redirect]) {
+      background: var(--primary);
+      color: var(--primary-fg, #fff);
+    }
+
+    // the right-hand group (rating, pin, lock, info, menu): equal gaps, centred on the same line
+    > .ml-auto,
+    > .d-flex:last-child {
+      align-items: center;
+      gap: 0.15rem;
+    }
+
+    // the icons follow the button's colour (the plain .btn-secondary ones were white on the quiet background)
+    .btn .fas,
+    .btn .far {
+      color: inherit;
+    }
+
+    // everything but the highlighted action is quiet: no fill, muted icon, a tint on hover
+    .btn-secondary,
+    .btn-transparent,
+    .btn-ghost {
+      background: transparent;
+      border-color: transparent;
+      color: var(--fx-muted);
+
+      &:hover,
+      &:focus-visible {
+        background: var(--fx-hover);
+        color: inherit;
+      }
+    }
+
+    .vertical-separator {
+      margin: 0 0.3rem;
+    }
+
+    .entity-save-state {
+      color: var(--fx-muted);
+      font-size: 0.72rem;
+    }
+  }
+}
+
+// The fields under the bar (Started on, Custom ID, Tags, Folder): one label column, controls of one height, sensible widths
+#main_section {
+  .edit-mode-label,
+  & + .edit-mode-label {
+    color: color-mix(in srgb, currentColor 62%, transparent);
+    font-size: 0.8rem;
+    min-width: 6rem;
+    width: 6rem;
+  }
+
+  .form-control,
+  .input-group .btn {
+    font-size: 0.85rem;
+    height: 1.75rem;
+    min-height: 1.75rem;
+    padding-bottom: 0;
+    padding-top: 0;
+  }
+
+  #date_input {
+    width: 11rem;
+  }
+
+  // Custom ID: the input with a small secondary "Get next" attached, no spinner
+  #custom_id_input {
+    width: 8rem;
+    -moz-appearance: textfield;
+    appearance: textfield;
+
+    &::-webkit-inner-spin-button,
+    &::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+  }
+
+  .input-group-prepend .btn-secondary {
+    background: color-mix(in srgb, currentColor 8%, transparent);
+    border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+    color: inherit;
+    font-size: 0.75rem;
+    padding: 0 0.6rem;
+
+    &:hover {
+      background: color-mix(in srgb, currentColor 14%, transparent);
+    }
+  }
+
+  #createTagInput {
+    width: 14rem;
+  }
+
+  // "Suggested tags" directly under the tags input, not floating at the far right
+  .mathjax-ignore.d-flex {
+    flex-wrap: wrap;
+
+    > .ml-auto {
+      flex: 0 0 100%;
+      margin-left: 0 !important;
+      padding-left: 7rem;
+    }
+  }
+
+  .suggested-tags summary {
+    color: color-mix(in srgb, currentColor 62%, transparent);
+    font-size: 0.75rem;
+  }
+}
+
+// the folder row: a compact segmented control and a select of the same width as the other fields
+.d-flex > label.edit-mode-label {
+  color: color-mix(in srgb, currentColor 62%, transparent);
+  font-size: 0.8rem;
+  min-width: 6rem;
+  width: 6rem;
+}
+
+.btn-group:has(> [data-edit-folder-scope]) {
+  display: inline-flex !important;
+  margin-bottom: 0.3rem !important;
+  width: auto;
+
+  > .btn {
+    align-items: center;
+    background: transparent;
+    border-color: color-mix(in srgb, currentColor 22%, transparent);
+    color: inherit;
+    display: inline-flex;
+    flex: 0 0 auto !important;
+    font-size: 0.75rem;
+    height: var(--fx-ctl, 1.4rem);
+    padding: 0 0.6rem;
+
+    .fas {
+      color: inherit;
+    }
+
+    &.active {
+      background: color-mix(in srgb, var(--primary) 20%, transparent);
+      border-color: var(--primary);
+      color: inherit;
+      font-weight: 600;
+    }
+  }
+}
+
+#folderSelect {
+  font-size: 0.85rem;
+  height: 1.75rem;
+  max-width: 24rem;
+  padding-bottom: 0;
+  padding-top: 0;
+}
+
+// Goals / Conclusion / Notes as three soft tiles above the body
+.entity-summary-tiles {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  margin: 0 0 0.8rem;
+
+  .entity-summary-tile {
+    background: color-mix(in srgb, currentColor 5%, transparent);
+    border-radius: 6px;
+    min-width: 0;
+    padding: 0.45rem 0.7rem 0.2rem;
+  }
+
+  .fx-field {
+    display: block;
+    margin: 0 0 0.25rem;
+
+    .fx-field-label {
+      font-size: 0.68rem;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+  }
+
+  .fx-field-empty {
+    color: color-mix(in srgb, currentColor 50%, transparent);
+    font-style: italic;
+  }
+}
+
+// editing: the same three as editable tiles
+.entity-summary-edit > div {
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+
+  textarea {
+    background: transparent;
+    border-color: transparent;
+
+    &:hover,
+    &:focus {
+      background: var(--mainbackground, #fff);
+      border-color: var(--primary);
+    }
+  }
+}
+
+// the body: calm reading typography (view mode); tables and images keep their own sizes
+#body_view {
+  line-height: 1.7;
+
+  > p,
+  > ul,
+  > ol,
+  > blockquote {
+    max-width: 75ch;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    line-height: 1.3;
+    margin-bottom: 0.4rem;
+    margin-top: 1.4rem;
+  }
+
+  table,
+  img,
+  figure {
+    margin-bottom: 0.8rem;
+    margin-top: 0.8rem;
+  }
+}
+
+// the editor: a thin frame, muted icon-only toolbar buttons, a hover tint
+.tox.tox-tinymce {
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 6px;
+}
+
+.tox .tox-tbtn {
+  border-radius: 4px;
+  margin: 0 1px;
+
+  svg {
+    opacity: 0.72;
+  }
+
+  &:hover svg,
+  &--enabled svg {
+    opacity: 1;
+  }
+}
+
+// Notifications of the editor and the page stay inside the viewport and above the side rail (a toast was cut off behind it)
+.tox .tox-notifications-container {
+  margin-left: 3rem;
+  max-width: calc(100vw - 4rem);
+}
+
+.tox-tinymce-aux,
+.tox-silver-sink {
+  z-index: 20050;
+}
+
+// Pin button of the row and board layouts: muted, small, shown a little stronger when pinned
+.entity-row-pin {
+  background: none;
+  border: 0;
+  color: color-mix(in srgb, currentColor 55%, transparent);
+  flex: 0 0 auto;
+  height: 1.4rem;
+  padding: 0;
+  width: 1.4rem;
+
+  &.is-pinned {
+    color: var(--primary);
+  }
+
+  &:hover,
+  &:focus-visible {
+    color: var(--primary);
+  }
+}
+
+.entity-rows .entity-row-pin {
+  margin-left: -0.2rem;
+}
+
+.entity-rows .entity-row:focus-within,
+.entity-rows-with-preview:focus-visible {
+  outline: 0;
+}
+
+.entity-rows-with-preview:focus-visible .entity-row.is-previewed {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.entity-rows .entity-preview-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0 0 0.4rem;
+
+  .tag {
+    background: color-mix(in srgb, currentColor 10%, transparent);
+    border-radius: 3px;
+    font-size: 0.72rem;
+    padding: 0 0.35rem;
+  }
+}
+
+// Board by status: one column per status, columns scroll vertically, the board scrolls sideways on narrow widths.
+.entity-board {
+  --fx-muted: color-mix(in srgb, currentColor 62%, transparent);
+  --fx-hover: color-mix(in srgb, currentColor 7%, transparent);
+
+  align-items: flex-start;
+  display: flex;
+  gap: 0.6rem;
+  overflow-x: auto;
+  padding-bottom: 0.4rem;
+
+  .entity-board-column {
+    background: var(--fx-hover);
+    border-radius: 6px;
+    display: flex;
+    flex: 0 0 15.5rem;
+    flex-direction: column;
+    max-height: calc(100vh - 11rem);
+    min-width: 0;
+    padding: 0.35rem;
+
+    &.is-drop {
+      outline: 2px dashed var(--primary);
+      outline-offset: -2px;
+    }
+  }
+
+  .entity-board-title {
+    align-items: center;
+    display: flex;
+    font-size: 0.78rem;
+    font-weight: 600;
+    gap: 0.35rem;
+    letter-spacing: 0.02em;
+    margin: 0 0 0.3rem;
+    min-height: 1.5rem;
+    padding: 0 0.15rem;
+    text-transform: uppercase;
+
+    .fas {
+      font-size: 0.6rem;
+    }
+  }
+
+  .entity-board-count {
+    color: var(--fx-muted);
+    font-weight: 400;
+    margin-left: auto;
+  }
+
+  .entity-board-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-height: 2rem;
+    overflow-y: auto;
+  }
+
+  .entity-board-card {
+    background: var(--white, #fff);
+    border-left: 3px solid var(--left-color);
+    border-radius: 4px;
+    cursor: grab;
+    padding: 0.3rem 0.4rem 0.2rem 0.5rem;
+
+    &:hover {
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    &[draggable='false'] {
+      cursor: default;
+    }
+  }
+
+  .entity-board-card-title {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .entity-board-card-meta {
+    align-items: center;
+    color: var(--fx-muted);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.7rem;
+    gap: 0 0.5rem;
+    min-height: 1.4rem;
+  }
+
+  .entity-board-card-owner {
+    max-width: 6rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.entity-board-footer {
+  color: color-mix(in srgb, currentColor 60%, transparent);
+  font-size: 0.72rem;
+  margin: 0.2rem 0 0;
+}
+
+// Compact rows and rows with a preview (display modes cr and pv). Sizes follow the shared --fx-* look:
+// 1.5rem rows, a muted second colour, one hover tint, the primary colour for the selected row.
+.entity-rows {
+  --fx-row: 1.5rem;
+  --fx-muted: color-mix(in srgb, currentColor 62%, transparent);
+  --fx-hover: color-mix(in srgb, currentColor 8%, transparent);
+
+  display: block;
+
+  &.entity-rows-with-preview {
+    align-items: start;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(0, 3fr) minmax(16rem, 2fr);
+  }
+
+  @media (max-width: 62rem) {
+    &.entity-rows-with-preview {
+      grid-template-columns: minmax(0, 1fr);
+
+      .entity-preview {
+        display: none;
+      }
+    }
+  }
+
+  .entity-group-title {
+    border-bottom: 1px solid var(--fx-hover);
+    color: var(--fx-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    margin: 0.9rem 0 0.2rem;
+    padding: 0 0.35rem 0.15rem;
+    text-transform: uppercase;
+  }
+
+  .entity-group-count {
+    font-weight: 400;
+    margin-left: 0.3rem;
+  }
+
+  .entity.entity-row {
+    background: transparent;
+    border: 0;
+    border-left: 3px solid var(--left-color);
+    border-radius: 3px;
+    gap: 0.5rem;
+    margin: 0;
+    min-height: var(--fx-row);
+    padding: 0 0.35rem;
+
+    &:hover {
+      background: var(--fx-hover);
+    }
+
+    &.is-previewed {
+      background: color-mix(in srgb, var(--primary) 16%, transparent);
+    }
+  }
+
+  .entity-row-check {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+
+  .entity-row-title {
+    background: none;
+    border: 0;
+    color: inherit;
+    flex: 1 1 auto;
+    font-size: 0.85rem;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .entity-row-meta {
+    color: var(--fx-muted);
+    flex: 0 0 auto;
+    font-size: 0.72rem;
+    max-width: 9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .entity-row-date {
+    font-variant-numeric: tabular-nums;
+    min-width: 4.8rem;
+    text-align: right;
+  }
+
+  .entity-preview {
+    border-left: 1px solid var(--fx-hover);
+    max-height: calc(100vh - 7rem);
+    overflow-y: auto;
+    padding: 0 0 0 1rem;
+    position: sticky;
+    top: 4rem;
+  }
+
+  .entity-preview-title {
+    font-size: 1rem;
+    margin: 0 0 0.15rem;
+  }
+
+  .entity-preview-meta {
+    font-size: 0.75rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .entity-preview-label {
+    color: var(--fx-muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    margin: 0.7rem 0 0.15rem;
+    text-transform: uppercase;
+  }
+
+  .entity-preview-text {
+    font-size: 0.82rem;
+    white-space: pre-wrap;
+  }
+}
+
+// Experiment page header: a smaller title, and Goals / Conclusion / Notes side by side as one strip
+// (the --fx-* look: muted uppercase label, one hover-free tint, no extra boxes).
+h1:has(> #documentTitle) {
+  font-size: 1.45rem;
+  margin-bottom: 0.4rem;
+}
+
+.entity-summary-edit {
+  --fx-muted: color-mix(in srgb, currentColor 62%, transparent);
+
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  margin-bottom: 0.5rem;
+
+  label {
+    color: var(--fx-muted);
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    margin: 0 0 0.1rem;
+    text-transform: uppercase;
+  }
+
+  textarea {
+    font-size: 0.85rem;
+    min-height: 3.6rem;
+    padding: 0.3rem 0.5rem;
+    resize: vertical;
+  }
+}
+
+.entity-summary-strip {
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  border-left: 3px solid var(--primary);
+  border-radius: 4px;
+  margin-bottom: 0.6rem;
+  padding: 0.4rem 0.7rem 0.15rem;
+}
+
+// Started on / Owner / Team / Tags: label column with the icon, value column; one left edge with the title.
+.entity-meta-grid {
+  align-items: baseline;
+  column-gap: 0.5rem;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  margin-bottom: 0.5rem;
+  row-gap: 0.3rem;
+
+  .entity-meta-label {
+    color: color-mix(in srgb, currentColor 62%, transparent);
+    font-size: 0.82rem;
+    white-space: nowrap;
+
+    .fas {
+      margin-right: 0.35rem;
+      text-align: center;
+      width: 1rem;
+    }
+  }
+
+  .entity-meta-value {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.layout-switch .btn.active {
+  background: var(--primary);
+  color: var(--primary-fg, #fff);
+}
+
 .entity-template {
   border: 1px dashed var(--firstlevel);
 }
@@ -1606,6 +2694,26 @@ tr:first-child td {
   border: 1px solid var(--thirdlevel);
 }
 
+/* The sidebar's shared grid: every panel and the rail of buttons read these, so controls, rows and colours match everywhere.
+ *  - controls are --fx-ctl high with --fx-icon-size icons; rows are --fx-row high and start and end at --fx-pad;
+ *  - text is the chrome's light colour, icons and secondary text its muted one, hover one tint, selected the primary colour. */
+.side-panel,
+#sidepanel-buttons,
+.command-palette-overlay {
+    --fx-ctl: 1.4rem;
+    --fx-row: 1.5rem;
+    --fx-pad: 0.35rem;
+    --fx-lead: 1.25rem;
+    --fx-gap: 0.35rem;
+    --fx-icon-size: 0.78rem;
+    --fx-icon-col: 1rem;
+    --fx-fg: var(--chrome-fg);
+    --fx-muted: var(--chrome-muted);
+    --fx-hover: rgba(255, 255, 255, 0.09);
+    --fx-line: rgba(255, 255, 255, 0.12);
+    --fx-star: #f0ad4e;
+}
+
 .side-panel {
   --side-panel-danger: #ff8a7a;
   --side-panel-warning: #ffd166;
@@ -1793,7 +2901,7 @@ tr:first-child td {
     padding-left: 0.35rem;
   }
 
-  // flat views of the folders (folder-views.ts): list and details
+  // flat views of the folders (folder-views.ts): list and cards
   .folder-flat-body {
     max-height: min(46vh, 34rem);
     min-height: 3rem;
@@ -1868,190 +2976,7 @@ tr:first-child td {
     white-space: nowrap;
   }
 
-  // details view: a table of folders, one row each, with sortable column headings. Columns appear as the panel allows:
-  // name, experiments, resources, last modified and the buttons always; the path from 26rem, the description from 40rem
-  // (below that the path and description sit under the name).
-  .folder-flat-body {
-    container-type: inline-size;
-  }
-
-  // four buttons of 1.5rem (star, notes, three dots, step in), always the same slots so the stars line up
-  $folder-actions-column: 6rem;
-
-  .folder-column-heads,
-  .folder-details-card {
-    column-gap: 0.25rem;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 1.6rem 1.6rem $folder-actions-column;
-  }
-
-  .folder-col-wide,
-  .folder-col-wider {
-    display: none;
-  }
-
-  @container (min-width: 26rem) {
-    .folder-column-heads,
-    .folder-details-card {
-      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 2.2rem 2.2rem 3.9rem $folder-actions-column;
-    }
-
-    .folder-col-wide {
-      display: block;
-    }
-
-    .folder-col-narrow-only {
-      display: none;
-    }
-  }
-
-  @container (min-width: 40rem) {
-    .folder-column-heads,
-    .folder-details-card {
-      grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) 2.2rem 2.2rem 3.9rem $folder-actions-column;
-    }
-
-    .folder-col-wider {
-      display: block;
-    }
-  }
-
-  // a very narrow panel (under 18rem): the fixed columns would leave the name no room at all, so the name takes a line of its
-  // own and the counts and buttons sit on the line under it
-  @container (max-width: 18rem) {
-    .folder-column-heads,
-    .folder-details-card {
-      grid-template-columns: 1.6rem 1.6rem minmax(0, 1fr);
-    }
-
-    .folder-column-head-name,
-    .folder-details-text {
-      grid-column: 1 / -1;
-    }
-
-    .folder-details-card > .folder-actions,
-    .folder-column-heads > span:last-child {
-      justify-self: end;
-    }
-  }
-
-  .folder-column-heads {
-    align-items: center;
-    border-bottom: 2px solid var(--chrome-muted);
-    margin-bottom: 0.15rem;
-    padding: 0 0.35rem 0.3rem 0.5rem;
-  }
-
-  .folder-column-head-name {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.1rem 0.25rem;
-  }
-
-  .folder-sort-chip {
-    background: transparent;
-    border: 0;
-    border-radius: 4px;
-    color: var(--chrome-muted);
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    line-height: 1.2;
-    padding: 0.15rem 0.3rem;
-    text-transform: uppercase;
-
-    &:hover {
-      background: rgba(127, 127, 127, 0.18);
-      color: var(--chrome-fg);
-    }
-
-    &.active {
-      color: var(--chrome-fg);
-    }
-  }
-
-  .folder-col-description > .folder-sort-label {
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    padding: 0 0.3rem;
-    text-transform: uppercase;
-  }
-
-  .folder-details-card {
-    align-items: center;
-    border-bottom: 1px solid var(--chrome-muted);
-    border-left: 3px solid transparent;
-    padding: 0.4rem 0.35rem 0.4rem 0.15rem;
-
-    &:hover {
-      background: rgba(127, 127, 127, 0.12);
-    }
-
-    &.is-active {
-      border-left-color: var(--mediumstrong);
-    }
-
-    // the buttons sit at the far right, in a column of their own
-    > .folder-actions {
-      justify-content: flex-end;
-    }
-  }
-
-  .folder-details-text {
-    font-weight: 600;
-    min-width: 0;
-  }
-
-  .folder-count-cell,
-  .folder-modified-cell {
-    font-variant-numeric: tabular-nums;
-    text-align: center;
-
-    &.is-zero {
-      color: var(--chrome-muted);
-    }
-  }
-
-  .folder-modified-cell {
-    font-size: 0.72rem;
-    white-space: nowrap;
-  }
-
-  .folder-col-path,
-  .folder-col-description {
-    color: var(--chrome-muted);
-    font-size: 0.78rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .folder-enter-placeholder {
-    display: inline-block;
-    flex: 0 0 1.5rem;
-    width: 1.5rem;
-  }
-
-  .folder-details-path,
-  .folder-details-description,
-  .folder-details-card > .folder-flat-more-actions {
-    grid-column: 1 / -1;
-  }
-
-  .folder-details-path,
-  .folder-details-description {
-    color: var(--chrome-muted);
-    font-size: 0.75rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .folder-details-description {
-    font-style: italic;
-  }
-
-  // where the list and details views are in the folder structure
+  // where the list and cards views are in the folder structure
   .folder-level-bar {
     // the panel is dark: the bar takes the panel's own text colour instead of the page background that makes it pale
     background: rgba(255, 255, 255, 0.08);
@@ -2060,7 +2985,26 @@ tr:first-child td {
   }
 
   .folder-level-bar .folder-path-crumb {
+    align-items: center;
     color: inherit;
+    display: inline-flex;
+    gap: 0.35rem;
+  }
+
+  .folder-level-bar .folder-path-part {
+    align-items: center;
+    display: inline-flex;
+    gap: 0.25rem;
+    white-space: nowrap;
+  }
+
+  .folder-level-bar {
+    column-gap: 0.25rem;
+    row-gap: 0.15rem;
+  }
+
+  .folder-level-bar .folder-path-crumb .fa-folder {
+    margin-right: 0;
   }
 
   // the parts that move to another level are buttons: without this they keep the browser's pale button fill and border
@@ -2086,12 +3030,2703 @@ tr:first-child td {
     text-decoration: none;
   }
 
-  // bookmarked folders, a block of their own above the folders of the current level
-  .folder-flat-favorites {
-    border-bottom: 1px solid var(--chrome-muted);
-    margin-bottom: 0.75rem;
-    padding-bottom: 0.6rem;
+  // the explorer bar at the top of the Folders panel: favourites, the three views, options, close
+  .folder-explorer-bar {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.05rem;
+    margin-bottom: 0.5rem;
+    position: relative;
   }
+
+  .folder-bar-btn {
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    color: var(--chrome-muted);
+    cursor: pointer;
+    line-height: 1;
+    padding: 0.25rem;
+
+    // icons of one width, so the six buttons of the bar fit a 150 px strip on one row
+    .fas {
+      display: inline-block;
+      text-align: center;
+      width: 0.9rem;
+    }
+
+    &:hover,
+    &:focus-visible {
+      background: rgba(127, 127, 127, 0.22);
+      color: var(--chrome-fg);
+    }
+
+    &.active,
+    &[aria-expanded='true'] {
+      background: var(--primary);
+      color: var(--primary-fg, #fff);
+
+      .fas {
+        color: inherit;
+      }
+    }
+  }
+
+  .folder-view-switch {
+    border: 1px solid var(--chrome-muted);
+    border-radius: 6px;
+    display: inline-flex;
+    overflow: hidden;
+
+    .folder-bar-btn {
+      border-radius: 0;
+    }
+  }
+
+  .folder-bar-spacer {
+    flex: 1 1 0;
+  }
+
+  // lists that open under the bar (favourites, options)
+  .folder-popover {
+    background: var(--chrome-bg);
+    border: 1px solid var(--chrome-muted);
+    border-radius: 6px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+    left: 0;
+    margin-top: 0.2rem;
+    max-height: 18rem;
+    overflow: auto;
+    padding: 0.25rem;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    z-index: 6;
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  .folder-popover-label {
+    color: var(--chrome-muted);
+    font-size: 0.7rem;
+    letter-spacing: 0.02em;
+    padding: 0.1rem 0.3rem;
+    text-transform: uppercase;
+  }
+
+  .folder-popover-note {
+    color: var(--chrome-muted);
+    font-size: 0.8rem;
+    padding: 0.3rem;
+  }
+
+  .folder-popover-item {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    color: var(--chrome-fg);
+    cursor: pointer;
+    display: flex;
+    font-size: 0.85rem;
+    gap: 0.25rem;
+    min-width: 0;
+    padding: 0.25rem 0.3rem;
+    text-align: left;
+    width: 100%;
+
+    &:hover,
+    &:focus-visible {
+      background: rgba(127, 127, 127, 0.22);
+      color: var(--chrome-fg);
+      text-decoration: none;
+    }
+  }
+
+  .folder-popover-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-switch {
+    background: var(--chrome-muted);
+    border-radius: 0.5rem;
+    flex: 0 0 1.5rem;
+    height: 0.8rem;
+    position: relative;
+    width: 1.5rem;
+
+    &::after {
+      background: var(--chrome-bg);
+      border-radius: 50%;
+      content: '';
+      height: 0.6rem;
+      left: 0.1rem;
+      position: absolute;
+      top: 0.1rem;
+      transition: left 0.12s;
+      width: 0.6rem;
+    }
+  }
+
+  .is-on > .folder-switch {
+    background: var(--primary);
+
+    &::after {
+      left: 0.8rem;
+    }
+  }
+
+  // Experiments / Resources / All
+  .folder-type-switch {
+    border: 1px solid var(--chrome-muted);
+    border-radius: 6px;
+    display: flex;
+    margin-bottom: 0.4rem;
+    overflow: hidden;
+
+    button {
+      background: transparent;
+      border: 0;
+      color: var(--chrome-muted);
+      flex: 1 1 0;
+      font-size: 0.75rem;
+      min-width: 0;
+      overflow: hidden;
+      padding: 0.2rem 0;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+
+      &:hover,
+      &:focus-visible {
+        color: var(--chrome-fg);
+      }
+
+      &.active {
+        background: var(--primary);
+        color: var(--primary-fg, #fff);
+      }
+    }
+  }
+
+  // All / Unfiled
+  .folder-quick-row {
+    align-items: center;
+    border-radius: 4px;
+    color: var(--chrome-fg);
+    display: flex;
+    gap: 0.3rem;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0.15rem 0.3rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &:hover,
+    &:focus-visible {
+      background: rgba(127, 127, 127, 0.18);
+      color: var(--chrome-fg);
+      text-decoration: none;
+    }
+  }
+
+  // files (experiments and resources) in the list and cards views
+  .folder-file-row {
+    align-items: center;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    min-width: 0;
+    padding: 0.2rem 0.3rem;
+
+    &:hover {
+      background: rgba(127, 127, 127, 0.18);
+    }
+
+    &.is-selected {
+      background: var(--primary);
+      color: var(--primary-fg, #fff);
+
+      .fas {
+        color: inherit;
+      }
+    }
+  }
+
+  // a long title must not squeeze the icon: it would then sit further left than the icons of short titles
+  .folder-file-icon {
+    flex: 0 0 auto;
+  }
+
+  .folder-file-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-file-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin-top: 0.2rem;
+  }
+
+  .folder-file-card {
+    border: 1px solid var(--chrome-muted);
+    border-radius: 6px;
+    color: var(--chrome-fg);
+    display: block;
+    min-width: 0;
+    padding: 0.3rem 0.45rem;
+
+    &:hover,
+    &:focus-visible {
+      background: rgba(127, 127, 127, 0.18);
+      color: var(--chrome-fg);
+      text-decoration: none;
+    }
+  }
+
+  // a folder in the cards view
+  .folder-card {
+    border: 1px solid var(--chrome-muted);
+    border-left-width: 4px;
+    border-radius: 6px;
+    min-width: 0;
+    padding: 0.3rem 0.45rem;
+
+    &:hover {
+      background: rgba(127, 127, 127, 0.18);
+    }
+
+    &.is-active {
+      border-color: var(--primary);
+    }
+  }
+
+  .folder-card-title {
+    flex: 1 1 auto;
+    font-weight: 600;
+    min-width: 0;
+  }
+
+  .folder-card-counts {
+    white-space: nowrap;
+  }
+
+  .folder-card-description {
+    color: var(--chrome-muted);
+    font-size: 0.72rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-file-card-title {
+    display: block;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-file-card-meta {
+    align-items: center;
+    color: var(--chrome-muted);
+    display: flex;
+    font-size: 0.72rem;
+    gap: 0.3rem;
+    margin-top: 0.1rem;
+    min-width: 0;
+  }
+
+  .folder-file-card-when {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-file-tag {
+    background: rgba(127, 127, 127, 0.25);
+    border-radius: 999px;
+    flex: 0 1 auto;
+    max-width: 45%;
+    overflow: hidden;
+    padding: 0 0.45rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-status-dot {
+    background: var(--chrome-muted);
+    border-radius: 50%;
+    display: inline-block;
+    flex: 0 0 0.55rem;
+    height: 0.55rem;
+    width: 0.55rem;
+  }
+
+  // the picked file, under the list
+  .folder-preview {
+    border-top: 1px solid var(--chrome-muted);
+    font-size: 0.78rem;
+    margin-top: 0.5rem;
+    padding-top: 0.45rem;
+  }
+
+  .folder-preview-title {
+    color: var(--chrome-fg);
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .folder-preview-row {
+    display: flex;
+    gap: 0.4rem;
+    justify-content: space-between;
+    padding: 0.05rem 0;
+  }
+
+  .folder-preview-label,
+  .folder-preview-empty {
+    color: var(--chrome-muted);
+  }
+
+  .folder-preview-value {
+    min-width: 0;
+    overflow: hidden;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  // dragging a file or folder onto a folder (folder-dragdrop.ts)
+  .is-dragging {
+    opacity: 0.45;
+  }
+
+  .is-drop-target {
+    background: rgba(127, 127, 127, 0.28);
+    outline: 1.5px dashed var(--primary);
+  }
+
+  // a folder's buttons (bookmark, README, three dots) show while the pointer or the keyboard is on its row, so a narrow panel
+  // keeps its room for the name; a bookmarked folder keeps its star
+  .folder-row .folder-action-btn,
+  .folder-flat-row .folder-action-btn:not(.folder-up-button),
+  .folder-card .folder-action-btn {
+    display: none;
+  }
+
+  .folder-row:hover .folder-action-btn,
+  .folder-row:focus-within .folder-action-btn,
+  .folder-flat-row:hover .folder-action-btn,
+  .folder-flat-row:focus-within .folder-action-btn,
+  .folder-card:hover .folder-action-btn,
+  .folder-card:focus-within .folder-action-btn,
+  .folder-action-btn.favorite-folder-star:has(.fas) {
+    display: inline-flex;
+  }
+
+  // The Folders explorer, on one grid. Every size, gap and colour below comes from these few tokens, so a control or a row in
+  // any of the three views (tree, list, cards) lines up with every other one:
+  //  - controls (bar buttons, Exp/Res/All, My/Shared, +) are all --fx-ctl high with --fx-icon-size icons;
+  //  - rows are --fx-row high, start at --fx-pad, keep a --fx-lead column free for a caret (tree) so icons share a column,
+  //    and end at --fx-pad where counts and buttons sit on one right edge;
+  //  - text is the panel's light colour, icons and secondary text its muted one, hover one tint, selected the primary colour.
+  &#foldersPanel {
+    color: var(--fx-fg);
+    font-size: 0.78rem;
+    line-height: 1.3;
+
+    // no default link blue and no second white: names and links take the panel's text colour
+    a,
+    a:hover,
+    a:focus,
+    .color-medium,
+    .btn-link {
+      color: var(--fx-fg) !important;
+      text-decoration: none;
+    }
+
+    // every icon in a row or control: one size, one muted colour (inline colours of the tree's stars are overridden)
+    .folder-row .fas,
+    .folder-row .far,
+    .folder-flat-row .fas,
+    .folder-flat-row .far,
+    .folder-quick-row .fas,
+    .folder-file-row .fas,
+    .folder-card .fas,
+    .folder-file-card .fas,
+    .other-folders-header .fas,
+    .folder-bar-btn .fas,
+    .folder-scope-tabs .fas,
+    .folder-create-toggle .fas {
+      color: var(--fx-muted);
+      font-size: var(--fx-icon-size);
+    }
+
+    .folder-row .fas.fa-star,
+    .folder-flat-row .fas.fa-star,
+    .folder-card .fas.fa-star,
+    .folder-row .far.fa-star,
+    .folder-flat-row .far.fa-star {
+      color: var(--fx-muted) !important;
+    }
+
+    .folder-row .fas.fa-star,
+    .folder-flat-row .fas.fa-star,
+    .folder-card .fas.fa-star,
+    .bookmarked-folders-section .folder-tree-section-label .fas {
+      color: var(--fx-star) !important;
+    }
+
+    // ---- the bar ----
+    .folder-explorer-bar {
+      gap: 0.2rem;
+      margin-bottom: 0.3rem;
+    }
+
+    .folder-bar-group {
+      align-items: center;
+      background: var(--fx-hover);
+      border-radius: 6px;
+      display: inline-flex;
+      gap: 0;
+      padding: 0.1rem;
+    }
+
+    .folder-view-switch {
+      border: 0;
+      border-radius: 0;
+      display: inline-flex;
+    }
+
+    .folder-bar-btn {
+      align-items: center;
+      border-radius: 4px;
+      display: inline-flex;
+      height: var(--fx-ctl);
+      justify-content: center;
+      padding: 0;
+      width: var(--fx-ctl);
+
+      .fas {
+        text-align: center;
+        width: var(--fx-icon-col);
+      }
+    }
+
+    .folder-bar-btn:hover,
+    .folder-bar-btn:focus-visible,
+    .folder-quick-row:hover,
+    .folder-quick-row:focus-visible,
+    .folder-row:hover,
+    .folder-flat-row:hover,
+    .folder-file-row:hover,
+    .other-folders-header:hover,
+    .folder-card:hover,
+    .folder-file-card:hover {
+      background: var(--fx-hover);
+      color: var(--fx-fg);
+    }
+
+    .folder-bar-btn.active,
+    .folder-bar-btn[aria-expanded='true'] {
+      background: var(--primary);
+      color: var(--primary-fg, #fff);
+
+      .fas {
+        color: inherit;
+      }
+    }
+
+    // the Favourites switch in the options hides the star button and the stars of the rows (the display set above must not win)
+    &.folders-no-favorites [data-popover='folderFavoritesMenu'],
+    &.folders-no-favorites .favorite-folder-star {
+      display: none;
+    }
+
+    // the selected folder as a path, with an x that shows everything again; the same row height as the folders
+    .folder-crumb {
+      align-items: center;
+      background: var(--fx-hover);
+      border-radius: 4px;
+      display: flex;
+      font-size: 0.72rem;
+      gap: 0.25rem;
+      margin-bottom: 0.3rem;
+      min-height: var(--fx-row);
+      min-width: 0;
+      padding: 0 var(--fx-pad);
+
+      &[hidden] {
+        display: none;
+      }
+    }
+
+    .folder-crumb-part {
+      color: var(--fx-muted) !important;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+
+      &:hover {
+        color: var(--fx-fg) !important;
+      }
+
+      &.is-current {
+        color: var(--fx-fg) !important;
+        font-weight: 600;
+      }
+    }
+
+    .folder-crumb-sep {
+      color: var(--fx-muted);
+      flex: 0 0 auto;
+    }
+
+    .folder-crumb-clear {
+      align-items: center;
+      border-radius: 4px;
+      color: var(--fx-muted) !important;
+      display: inline-flex;
+      flex: 0 0 1.25rem;
+      font-size: 0.9rem;
+      height: 1.25rem;
+      justify-content: center;
+      line-height: 1;
+      margin-left: auto;
+
+      &:hover,
+      &:focus-visible {
+        background: var(--fx-hover);
+        color: var(--fx-fg) !important;
+      }
+    }
+
+    // Unfiled: the first row of the folder list, under a thin divider
+    .folder-unfiled-wrap {
+      border-top: 1px solid var(--fx-line);
+      margin-top: 0.1rem;
+      padding-top: 0.2rem;
+    }
+
+    // ---- Exp / Res / All and My / Shared ----
+    .folder-type-switch {
+      border: 0;
+      border-radius: 6px;
+      background: var(--fx-hover);
+      gap: 0.1rem;
+      height: var(--fx-ctl);
+      margin-bottom: 0.3rem;
+      padding: 0.1rem;
+
+      button {
+        border-radius: 4px;
+        color: var(--fx-muted);
+        font-size: 0.72rem;
+        line-height: 1;
+        padding: 0;
+      }
+
+      button:hover {
+        color: var(--fx-fg);
+      }
+
+      button.active {
+        background: var(--primary);
+        color: var(--primary-fg, #fff);
+      }
+    }
+
+    .folder-scope-tabs {
+      background: var(--fx-hover);
+      border: 0;
+      border-radius: 6px;
+      gap: 0.1rem;
+      height: var(--fx-ctl);
+      margin-bottom: 0.3rem !important;
+      padding: 0.1rem;
+
+      .nav-item {
+        margin: 0;
+      }
+
+      .nav-link {
+        align-items: center;
+        border: 0;
+        border-radius: 4px;
+        display: flex;
+        font-size: 0.72rem;
+        height: calc(var(--fx-ctl) - 0.2rem);
+        justify-content: center;
+        line-height: 1;
+        margin: 0;
+        padding: 0 !important;
+      }
+
+      .nav-link:hover {
+        background: var(--fx-hover);
+      }
+
+      .nav-link.active {
+        background: var(--primary);
+        color: var(--primary-fg, #fff);
+
+        .fas {
+          color: inherit;
+        }
+      }
+    }
+
+    // ---- rows: one height, one left edge, one right edge ----
+    .folder-quick-row,
+    .folder-row,
+    .folder-flat-row,
+    .folder-file-row,
+    .other-folders-header {
+      align-items: center;
+      border-radius: 4px;
+      display: flex;
+      gap: var(--fx-gap);
+      min-height: var(--fx-row);
+      padding: 0 var(--fx-pad);
+    }
+
+    .folder-row .folder-toggle,
+    .folder-row > span:first-child {
+      flex: 0 0 var(--fx-lead);
+      margin: 0 !important;
+      width: var(--fx-lead) !important;
+    }
+
+    .other-folders-header {
+      color: var(--fx-muted);
+      font-size: inherit;
+      width: 100%;
+    }
+
+    // names fill the row; counts and buttons end on the right edge
+    .folder-row > [data-folder-entity-link],
+    .folder-flat-link {
+      align-items: center;
+      display: flex;
+      flex: 1 1 auto;
+      gap: var(--fx-gap);
+      min-width: 0;
+    }
+
+    .folder-row .folder-name,
+    .folder-flat-link .folder-name,
+    .folder-file-title {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .folder-row .fa-fw,
+    .folder-flat-row .fa-fw,
+    .folder-quick-row .fa-fw,
+    .folder-file-row .fa-fw {
+      flex: 0 0 var(--fx-icon-col);
+      margin: 0 !important;
+      text-align: center;
+      width: var(--fx-icon-col);
+    }
+
+    .folder-entity-count,
+    .folder-entity-count.badge {
+      background: transparent;
+      color: var(--fx-muted);
+      font-size: 0.68rem;
+      font-weight: 400;
+      margin: 0 0 0 auto !important;
+      padding: 0;
+    }
+
+    .folder-actions {
+      gap: 0.05rem;
+      padding-left: 0.2rem;
+    }
+
+    // (shown or hidden by the hover rules further down; only the size is set here)
+    .folder-action-btn {
+      align-items: center;
+      height: 1.25rem;
+      justify-content: center;
+      padding: 0;
+      width: 1.25rem;
+    }
+
+    .folder-up-button {
+      font-size: inherit;
+      padding: 0;
+    }
+
+    .folder-up-row .folder-up-button .fas {
+      margin: 0 var(--fx-gap) 0 0 !important;
+    }
+
+    #folderFlatFilter {
+      background: var(--fx-hover);
+      border: 0;
+      color: var(--fx-fg);
+      font-size: inherit;
+      height: var(--fx-ctl);
+      margin-bottom: 0.3rem !important;
+      padding: 0 var(--fx-pad);
+    }
+
+    #folderFlatFilter::placeholder {
+      color: var(--fx-muted);
+    }
+
+    .folder-path-crumb .fas {
+      color: var(--fx-muted);
+    }
+
+    .folder-node {
+      margin-bottom: 0 !important;
+    }
+
+    .folder-tree-list {
+      min-height: 0;
+    }
+
+    .folder-tree-section-label {
+      font-size: 0.66rem;
+      margin-bottom: 0 !important;
+      padding: 0.15rem var(--fx-pad);
+    }
+
+    .bookmarked-folders-section {
+      border-bottom-color: var(--fx-line);
+      margin-bottom: 0.25rem !important;
+      padding-bottom: 0.2rem;
+    }
+
+    // ---- New folder and the "+" ----
+    .folder-create-section {
+      border-color: var(--fx-line) !important;
+      margin-top: 0.3rem !important;
+      padding-top: 0.25rem !important;
+    }
+
+    .folder-create-section summary {
+      align-items: center;
+      display: flex;
+      font-size: inherit;
+      font-weight: 400;
+      gap: var(--fx-gap);
+      margin: 0 !important;
+      min-height: var(--fx-row);
+      padding: 0 var(--fx-pad);
+
+      .fa-fw {
+        flex: 0 0 var(--fx-icon-col);
+        margin: 0 !important;
+        text-align: center;
+      }
+    }
+
+    .folder-create-section[data-folder-create='flat'] {
+      border-top: 0 !important;
+      margin-top: 0.1rem !important;
+      padding-top: 0 !important;
+    }
+
+    .folder-create-toggle {
+      align-items: center;
+      background: transparent;
+      border: 0;
+      display: inline-flex;
+      height: var(--fx-ctl);
+      justify-content: center;
+      margin-left: 0;
+      padding: 0;
+      width: var(--fx-ctl);
+    }
+
+    // ---- path bar, cards, preview ----
+    .folder-path-bar,
+    .folder-level-bar {
+      background: transparent;
+      border-top: 1px solid var(--fx-line);
+      font-size: 0.72rem;
+      margin-top: 0.3rem;
+      padding: 0.2rem var(--fx-pad);
+      position: static;
+    }
+
+    .folder-level-bar .folder-path-crumb {
+      padding: 0.05rem 0.2rem;
+    }
+
+    .folder-file-cards {
+      gap: 0.2rem;
+    }
+
+    .folder-card,
+    .folder-file-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 0;
+      border-radius: 4px;
+      color: var(--fx-fg);
+      padding: 0.25rem var(--fx-pad);
+    }
+
+    .folder-card.is-active {
+      box-shadow: inset 2px 0 0 var(--primary);
+    }
+
+    // a card's own first line is a row: same icon column and height as the rows
+    .folder-card > .d-flex {
+      min-height: var(--fx-row);
+    }
+
+    .folder-file-row.is-selected {
+      background: var(--primary);
+      color: var(--primary-fg, #fff);
+
+      .fas {
+        color: inherit;
+      }
+    }
+
+    .folder-preview {
+      border-top-color: var(--fx-line);
+      margin-top: 0.3rem;
+      padding-top: 0.3rem;
+    }
+  }
+
+  // the switches that hide parts of the explorer
+  &.folders-no-favorites .favorite-folder-star,
+  &.folders-no-favorites [data-popover='folderFavoritesMenu'] {
+    display: none;
+  }
+
+  &.folders-no-counts .folder-entity-count {
+    display: none;
+  }
+}
+
+// Shared look of every side panel (to-do, activity calendar, search, contents, folders): header, close button, buttons, inputs.
+// Panel-specific rules come after this, per panel. Sizes and colours are the tokens declared above.
+.side-panel {
+  font-size: 0.78rem;
+  line-height: 1.3;
+
+  // the close button in the top right corner
+  > .btn.float-right[data-purpose='hide'] {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    color: var(--fx-muted);
+    display: inline-flex;
+    height: var(--fx-ctl);
+    justify-content: center;
+    // in the top right corner, over the same right edge as the content (the panel's p-3 padding); positioned, not floated, so
+    // it does not squeeze the rows beside it (the refresh button sat left of it because of the float)
+    float: none;
+    margin: 0 !important;
+    position: absolute;
+    right: 1rem;
+    top: 0.25rem;
+    z-index: 2;
+    padding: 0;
+    width: var(--fx-ctl);
+
+    .fas {
+      color: inherit;
+      font-size: 0.9rem;
+    }
+
+    &:hover,
+    &:focus-visible {
+      background: var(--fx-hover);
+      color: var(--fx-fg);
+    }
+  }
+
+  // the panel's title, and the sub-headings inside it
+  h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 0.4rem !important;
+    padding: 0 !important;
+  }
+
+  h3.h5,
+  h4,
+  .h5 {
+    color: var(--fx-muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    margin-bottom: 0.3rem !important;
+    text-transform: uppercase;
+  }
+
+  // buttons: one height, one icon size
+  .btn-sm,
+  .btn.btn-sm {
+    align-items: center;
+    border-radius: 4px;
+    display: inline-flex;
+    font-size: inherit;
+    height: var(--fx-ctl);
+    justify-content: center;
+    line-height: 1;
+    min-width: var(--fx-ctl);
+    padding: 0 0.5rem;
+
+    .fas,
+    .far {
+      font-size: var(--fx-icon-size);
+    }
+  }
+
+  .btn-secondary,
+  .btn-outline-secondary,
+  .btn-light {
+    background: var(--fx-hover);
+    border: 0;
+    color: var(--fx-fg);
+
+    &:hover,
+    &:focus-visible {
+      background: rgba(255, 255, 255, 0.16);
+      color: var(--fx-fg);
+    }
+  }
+
+  .btn-primary {
+    border: 0;
+  }
+
+  // inputs
+  input.form-control,
+  select.form-control,
+  input[type='search'],
+  input[type='text'] {
+    background: var(--fx-hover);
+    border: 0;
+    border-radius: 4px;
+    color: var(--fx-fg);
+    font-size: inherit;
+    height: var(--fx-ctl);
+    padding: 0 var(--fx-pad);
+
+    &::placeholder {
+      color: var(--fx-muted);
+    }
+  }
+
+  hr {
+    border-color: var(--fx-line);
+    margin: 0.4rem 0;
+  }
+
+  .badge {
+    font-size: 0.68rem;
+    font-weight: 600;
+  }
+}
+
+// the rail of buttons that open the panels: one size, even spacing, the open one in the primary colour
+#sidepanel-buttons {
+  gap: 0.3rem;
+
+  .sidepanel-btn {
+    align-items: center;
+    border-radius: 0 6px 6px 0;
+    display: flex;
+    height: 1.9rem;
+    justify-content: center;
+    padding: 0;
+    width: 1.9rem;
+
+    i,
+    .fas,
+    .far {
+      font-size: 0.85rem;
+      line-height: 1;
+    }
+
+    &.sidepanel-opened {
+      background-color: var(--primary);
+      box-shadow: -1rem 0 0 var(--primary);
+
+      i {
+        color: var(--primary-fg, #fff);
+      }
+    }
+  }
+}
+
+// a row of buttons drawn as one segmented control (the same look as Exp / Res / All in the folders panel)
+@mixin fx-segmented {
+  background: var(--fx-hover);
+  border-radius: 6px;
+  display: flex;
+  gap: 0.1rem;
+  min-height: var(--fx-ctl);
+  padding: 0.1rem;
+
+  .btn {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    color: var(--fx-muted);
+    display: inline-flex;
+    flex: 1 1 0;
+    height: calc(var(--fx-ctl) - 0.2rem);
+    justify-content: center;
+    min-width: 0;
+    padding: 0 0.4rem;
+
+    .fas,
+    .far {
+      color: inherit;
+    }
+
+    &:hover {
+      color: var(--fx-fg);
+    }
+
+    &.active,
+    &.btn-secondary.active,
+    &[aria-pressed='true'] {
+      background: var(--primary);
+      color: var(--primary-fg, #fff);
+    }
+  }
+}
+
+// ---- To-do panel ----
+#todolistPanel {
+  .todo-view-toggle {
+    @include fx-segmented;
+  }
+
+  .todo-create {
+    margin-bottom: 0.4rem !important;
+
+    .btn {
+      height: var(--fx-ctl);
+      min-width: var(--fx-ctl);
+      padding: 0;
+    }
+  }
+
+  .todo-due-heading {
+    align-items: center;
+    color: var(--fx-muted);
+    display: flex;
+    font-size: 0.68rem;
+    font-weight: 600;
+    justify-content: space-between;
+    letter-spacing: 0.03em;
+    margin: 0.4rem 0 0.2rem;
+    min-height: var(--fx-row);
+    padding: 0 var(--fx-pad);
+    text-transform: uppercase;
+  }
+
+  .list-group {
+    gap: 0.2rem;
+  }
+
+  // tasks and steps: flat tiles instead of bordered boxes
+  .list-group-item {
+    background: rgba(255, 255, 255, 0.05);
+    border: 0;
+    border-radius: 4px;
+    color: var(--fx-fg);
+    margin: 0 0 0.2rem;
+    padding: 0.3rem var(--fx-pad);
+  }
+
+  .todo-entry-overdue {
+    box-shadow: inset 2px 0 0 var(--side-panel-danger);
+  }
+
+  // header rows: the title and the refresh button, the label and the three view buttons, each on one centre line and one grid
+  > .p-3 > .d-flex {
+    align-items: center !important;
+    margin-bottom: 0.4rem !important;
+    min-height: var(--fx-ctl);
+
+    > h3,
+    > h3.h5 {
+      margin: 0 !important;
+    }
+  }
+
+  // the quick add box is only as tall as its input; the gap to the form below belongs to the form
+  .todo-create {
+    > .input-group {
+      margin-bottom: 0 !important;
+    }
+
+    > .input-group ~ * {
+      margin-top: 0.4rem;
+    }
+  }
+
+  // the loading text starts on the same left edge as the box above it
+  #todolist > p {
+    margin: 0 0 0.4rem;
+    padding: 0;
+  }
+
+  // the check, edit and drag buttons of a tile are fixed squares of the shared control size, so the titles share one left edge
+  .todo-group-entry .btn-group {
+    flex: none;
+  }
+
+  .todo-group-entry .btn-group .btn {
+    flex: none;
+    height: var(--fx-ctl);
+    min-width: var(--fx-ctl);
+    padding: 0;
+    width: var(--fx-ctl);
+  }
+
+  .todo-group-entry .todo-drag-handle {
+    flex: none;
+    height: var(--fx-ctl);
+    padding: 0;
+    width: 1rem;
+  }
+
+  // group headings (overdue, today, a date): flat muted rows with one left edge and a small count at the right edge
+  .todo-due-heading,
+  .todo-due-heading.overdue-heading {
+    background: transparent;
+    border: 0;
+    border-left: 3px solid transparent;
+    border-radius: 0;
+    padding: 0 var(--fx-pad) 0 0.3rem;
+  }
+
+  .todo-due-heading .badge {
+    background: transparent;
+    color: var(--fx-muted);
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 0;
+  }
+
+  .todo-due-heading.overdue-heading .badge {
+    background: transparent;
+    color: var(--side-panel-danger);
+  }
+
+  // ---- the "Add task" form ----
+  .todo-create {
+    .input-group {
+      border-radius: 4px;
+      flex-wrap: nowrap;
+      overflow: hidden;
+    }
+
+    .input-group .form-control {
+      background: var(--fx-hover);
+      border-radius: 0;
+      height: var(--fx-ctl);
+    }
+
+    .input-group-prepend .btn {
+      background: rgba(255, 255, 255, 0.16);
+      border-radius: 0;
+      color: var(--fx-fg);
+    }
+
+    .input-group-append .btn {
+      border-radius: 0;
+    }
+  }
+
+  // labels, fields and gaps of the full form: one control height, one gap, one left and right edge
+  .todo-create-options {
+    gap: 0.4rem;
+
+    label {
+      display: block;
+      margin: 0;
+      min-width: 0;
+      width: 100%;
+    }
+
+    label > .small {
+      color: var(--fx-muted);
+      display: block;
+      font-size: 0.68rem;
+      line-height: 1.2;
+      margin-bottom: 0.15rem;
+    }
+
+    .form-control,
+    select.form-control,
+    input.form-control {
+      background: var(--fx-hover);
+      border: 0;
+      color: var(--fx-fg);
+      height: var(--fx-ctl);
+      line-height: 1.2;
+      min-height: var(--fx-ctl);
+      padding: 0 var(--fx-pad);
+      width: 100%;
+    }
+
+    // the notes box is taller, in the same tint as the other fields
+    textarea.form-control {
+      height: auto;
+      padding: 0.25rem var(--fx-pad);
+    }
+  }
+
+  // date and today, begin and end side by side, the reminder across the whole width
+  .todo-date-time-row {
+    column-gap: 0.4rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    row-gap: 0.4rem;
+
+    > label {
+      flex: none;
+    }
+
+    > .btn {
+      align-self: end;
+      justify-self: start;
+    }
+
+    // the reminder is the last field of the row
+    > label:last-child {
+      grid-column: 1 / -1;
+    }
+  }
+
+  // in a narrow panel the date takes the whole width and "Today" sits across under it
+  .todo-create-options {
+    container-type: inline-size;
+  }
+
+  @container (max-width: 17rem) {
+    .todo-date-time-row > label:has(input[type='date']) {
+      grid-column: 1 / -1;
+    }
+
+    .todo-date-time-row > .btn {
+      grid-column: 1 / -1;
+      justify-self: stretch;
+    }
+  }
+
+  textarea.form-control {
+    background: var(--fx-hover);
+    border: 0;
+    color: var(--fx-fg);
+    font-size: inherit;
+  }
+
+  // "Add task" and "Clear": one size, left aligned, the first one in the primary colour
+  .todo-create-options > .d-flex {
+    gap: 0.4rem !important;
+
+    .btn {
+      flex: 0 0 auto;
+      min-width: 5.5rem;
+    }
+  }
+
+  .todo-drag-handle,
+  .todo-secondary-text,
+  .todo-item-deadline {
+    color: var(--fx-muted);
+  }
+
+  .todo-item-deadline {
+    font-size: 0.72rem;
+  }
+}
+
+// ---- Activity calendar panel ----
+#calendarActivityPanel {
+  .calendar-activity-picker,
+  .calendar-todo-month {
+    background: rgba(255, 255, 255, 0.05);
+    border: 0;
+    border-radius: 6px;
+  }
+
+  .calendar-view-toggle,
+  .calendar-activity-toggles {
+    @include fx-segmented;
+  }
+
+  .calendar-view-controls {
+    gap: 0.3rem;
+  }
+
+  .calendar-month-actions .btn {
+    height: var(--fx-ctl);
+  }
+
+  .calendar-agenda-eyebrow {
+    color: var(--fx-muted);
+    font-size: 0.68rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  .calendar-legend {
+    color: var(--fx-muted);
+    font-size: 0.7rem;
+  }
+}
+
+// ---- Task rows of the Activity calendar's agenda ----
+// One line per task: the check button, the title (cut with an ellipsis) and a short due label at the right edge. Everything else
+// (notes, reminder, entry) is in the row's tooltip; the drag handle shows only on hover or focus.
+// Overdue is a red bar and red due text, nothing else. Flat rows with a thin divider, no boxes.
+#calendarActivityPanel .calendar-todo-entry {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--fx-line);
+  border-left: 3px solid var(--primary);
+  border-radius: 0 !important;
+  color: var(--fx-fg);
+  margin: 0;
+  min-height: 1.9rem;
+  padding: 0 var(--fx-pad) 0 0.3rem;
+  position: relative;
+
+  > .d-flex {
+    align-items: center !important;
+    flex-wrap: nowrap;
+    gap: 0.2rem;
+    min-height: 1.9rem;
+  }
+
+  &:hover {
+    background: var(--fx-hover);
+  }
+
+  .btn-ghost {
+    padding: 0 0.3rem;
+  }
+
+  // the check button is the shared control size
+  .btn:has(.fa-check) {
+    padding: 0;
+    width: var(--fx-ctl);
+  }
+
+  // the small "task" icon in front of the title is not needed on a one-line row
+  > .d-flex > .fa-list-check {
+    display: none;
+  }
+}
+
+#calendarActivityPanel .calendar-todo-entry.calendar-todo-overdue {
+  background: transparent;
+  border-left-color: var(--side-panel-danger);
+
+  &:hover {
+    background: var(--fx-hover);
+  }
+}
+
+#calendarActivityPanel .calendar-todo-entry {
+  > .d-flex > .flex-grow-1 {
+    align-items: center;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.4rem;
+
+    // the "Task" label and the lines the row does not show (see the tooltip)
+    > .calendar-entry-source,
+    > :not(strong):not(.calendar-todo-deadline) {
+      display: none;
+    }
+
+    > strong {
+      flex: 1 1 0;
+      font-weight: 600;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    > .calendar-todo-deadline {
+      color: var(--fx-muted);
+      flex: 0 0 auto;
+      font-size: 0.68rem;
+      margin-left: auto;
+      white-space: nowrap;
+
+      .fa-clock {
+        display: none;
+      }
+    }
+  }
+
+  &.calendar-todo-overdue .calendar-todo-deadline {
+    color: var(--side-panel-danger);
+  }
+
+  // the check button first; the drag handle only on hover or focus
+  > .d-flex > .btn:has(.fa-check) {
+    order: -1;
+  }
+
+  .calendar-task-drag-handle {
+    display: none;
+    order: 5;
+  }
+
+  &:hover .calendar-task-drag-handle:not([disabled]),
+  &:focus-within .calendar-task-drag-handle:not([disabled]) {
+    display: inline-flex;
+  }
+
+  .calendar-completed-icon {
+    margin: 0 !important;
+  }
+}
+
+// the agenda's stacked boxes (the agenda, each group, its list, each entry card) are flattened into plain rows
+#calendarActivityPanel {
+  .calendar-todo-agenda {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    margin-top: 0.4rem !important;
+    padding: 0;
+  }
+
+  .calendar-activity-group {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    margin-bottom: 0.2rem;
+  }
+
+  .calendar-activity-group > summary {
+    background: transparent;
+  }
+
+  .calendar-activity-tree,
+  .calendar-entity-list {
+    margin: 0;
+    padding: 0;
+  }
+
+  .calendar-entity-node {
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--fx-line);
+    border-left: 3px solid #1677b8;
+    border-radius: 0;
+    margin: 0;
+  }
+
+  .calendar-activity-group-items .calendar-entity-node {
+    border-left-color: #2e8b57;
+  }
+
+  .calendar-entity-summary {
+    font-size: inherit;
+    font-weight: 600;
+    min-height: 1.9rem;
+    padding: 0 var(--fx-pad) 0 0.3rem;
+
+    a {
+      color: var(--fx-fg);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .fas {
+      color: var(--fx-muted);
+      margin: 0 var(--fx-gap) 0 0 !important;
+    }
+  }
+
+  .calendar-entity-date {
+    background: transparent;
+    color: var(--fx-muted);
+    font-size: 0.68rem;
+    font-weight: 400;
+    padding: 0;
+  }
+
+  .calendar-entity-no-headings {
+    display: none;
+  }
+
+  .calendar-heading-tree {
+    border-top: 0;
+    padding: 0 0 0.2rem;
+  }
+
+  .calendar-heading-node {
+    min-height: 1.5rem;
+    padding-bottom: 0;
+    padding-top: 0;
+  }
+}
+
+// day groups of the agenda: one small muted heading row each
+#calendarActivityPanel .calendar-activity-group > summary {
+  align-items: center;
+  color: var(--fx-muted);
+  display: flex;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  min-height: var(--fx-row);
+  padding: 0 var(--fx-pad);
+  text-transform: uppercase;
+
+  .fas {
+    color: inherit;
+    margin: 0 var(--fx-gap) 0 0 !important;
+  }
+}
+
+// ---- Search panel (favourite filters and the results) ----
+// One row (search box plus two small icon buttons), the type tabs, the chips, one muted results line, a divider, then the results.
+#favoritesPanel {
+  .input-group-text {
+    background: transparent;
+    border: 0;
+    color: var(--fx-muted);
+    padding: 0 0.3rem;
+  }
+
+  .favorite-filter-text-group {
+    background: var(--fx-hover);
+    border-radius: 4px;
+    flex-wrap: nowrap;
+    min-width: 0;
+
+    .form-control {
+      background: transparent;
+      min-width: 0;
+    }
+  }
+
+  .favorite-filter-toolbar {
+    gap: 0;
+  }
+
+  .favorite-icon-btn {
+    height: var(--fx-ctl);
+    min-width: var(--fx-ctl);
+    padding: 0;
+    width: var(--fx-ctl);
+  }
+
+  // All / Exp / Res / templates: the same segmented look as Exp / Res / All in the folders panel
+  .favorite-target-tabs {
+    background: var(--fx-hover);
+    border: 0;
+    border-radius: 6px;
+    display: flex;
+    gap: 0.1rem;
+    height: var(--fx-ctl);
+    padding: 0.1rem;
+
+    button {
+      background: transparent;
+      border: 0;
+      border-radius: 4px;
+      color: var(--fx-muted);
+      flex: 1 1 0;
+      font-size: 0.7rem;
+      line-height: 1;
+      min-width: 0;
+      overflow: hidden;
+      padding: 0;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+
+      &:hover {
+        color: var(--fx-fg);
+      }
+
+      &.active {
+        background: var(--primary);
+        color: var(--primary-fg, #fff);
+      }
+    }
+  }
+
+  // the results line: label and count on the left, "Full list ›" on the right edge
+  .favorite-results-line {
+    align-items: center;
+    display: flex;
+    gap: 0.35rem;
+    min-height: var(--fx-row);
+    padding: 0 var(--fx-pad);
+  }
+
+  .favorite-results-label {
+    color: var(--fx-muted);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    margin: 0 !important;
+    text-transform: uppercase;
+  }
+
+  .favorite-results-line .badge {
+    background: transparent;
+    color: var(--fx-muted);
+    padding: 0;
+  }
+
+  .favorite-full-list {
+    color: var(--fx-fg) !important;
+    font-size: 0.72rem;
+    margin-left: auto;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  .favorite-results-status {
+    color: var(--fx-muted) !important;
+    font-size: 0.68rem;
+    margin: 0 0 0.2rem;
+    overflow: hidden;
+    padding: 0 var(--fx-pad);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .favorite-filter-results {
+    border-top: 1px solid var(--fx-line);
+    padding-top: 0.2rem;
+  }
+
+  .favorite-filter-section-summary {
+    align-items: center;
+    display: flex;
+    min-height: var(--fx-row);
+    padding: 0 var(--fx-pad);
+  }
+
+  .unified-search-group-title {
+    align-items: center;
+    color: var(--fx-muted);
+    display: flex;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    min-height: var(--fx-row);
+    padding: 0 var(--fx-pad);
+    text-transform: uppercase;
+  }
+
+  // a result: the title on one line and one muted line under it
+  .favorite-filter-result {
+    border: 0;
+    border-radius: 4px;
+    min-height: var(--fx-row);
+    padding: 0.15rem var(--fx-pad);
+
+    &:hover {
+      background: var(--fx-hover);
+    }
+  }
+
+  .favorite-filter-result-link {
+    color: var(--fx-fg) !important;
+    display: block;
+    font-size: inherit;
+    font-weight: 600;
+    overflow: hidden;
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .favorite-filter-result-meta {
+    color: var(--fx-muted);
+    font-size: 0.7rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+// Search RESULTS, strictly on one grid (the Activity agenda's look: muted uppercase headers, a thin colour bar, 0.78rem
+// semibold titles, small muted dates). Every result row is the same grid, so the columns line up across all groups:
+//   [colour bar] | icon column | title and muted line (1fr, ellipsis) | date column | action column
+// The group header uses the same icon column on its left edge and puts its count on the dates' right edge.
+#favoritesPanel .favorite-filter-results {
+  container-type: inline-size;
+  --sr-bar: 3px;
+  --sr-pad: 0.55rem;
+  --sr-icon-col: 1.2rem;
+  --sr-date-col: 3.9rem;
+  --sr-action-col: 1.5rem;
+  --sr-gap: 0.3rem;
+
+  .favorite-filter-section {
+    border: 0;
+    margin: 0 0 0.25rem !important;
+    padding: 0;
+  }
+
+  .favorite-filter-section-body {
+    padding: 0;
+  }
+
+  // header: [chevron][icon column][title][count]; the icon column starts where the rows' icon column starts
+  .favorite-filter-section-summary {
+    align-items: center;
+    column-gap: 0;
+    display: grid;
+    grid-template-columns: calc(var(--sr-bar) + var(--sr-pad)) var(--sr-icon-col) minmax(0, 1fr) auto;
+    min-height: var(--fx-row);
+    padding: 0 var(--fx-pad) 0 0;
+
+    .favorite-filter-section-chevron {
+      color: var(--fx-muted) !important;
+      font-size: 0.55rem;
+      margin: 0;
+      text-align: center;
+      width: auto;
+    }
+
+    .favorite-group-icon {
+      color: var(--fx-muted) !important;
+      font-size: var(--fx-icon-size);
+      margin: 0;
+      text-align: center;
+      width: var(--sr-icon-col);
+    }
+
+    .unified-search-group-title {
+      color: var(--fx-muted);
+      display: block;
+      font-size: 0.68rem;
+      font-weight: 600;
+      min-height: 0;
+      overflow: hidden;
+      padding: 0 0 0 var(--sr-gap);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    // the count is the same small badge as the agenda's group headers (badge badge-secondary)
+    .favorite-group-count {
+      margin: 0;
+    }
+  }
+
+  // a result: one grid
+  .favorite-filter-result {
+    align-items: center;
+    border: 0;
+    border-bottom: 1px solid var(--fx-line);
+    border-left: var(--sr-bar) solid var(--left-color, #1677b8);
+    border-radius: 0;
+    column-gap: var(--sr-gap);
+    display: grid !important;
+    grid-auto-columns: var(--sr-action-col);
+    grid-template-columns: var(--sr-icon-col) minmax(0, 1fr) var(--sr-date-col);
+    grid-template-rows: 1.9rem;
+    margin: 0;
+    min-height: 0;
+    padding: 0 var(--fx-pad) 0 var(--sr-pad);
+
+    &:last-child {
+      border-bottom: 1px solid var(--fx-line);
+    }
+
+    &:hover {
+      background: var(--fx-hover);
+    }
+
+    // the first line (icon, title, date, buttons) takes part in the row's grid directly
+    > .d-flex {
+      display: contents !important;
+    }
+
+    .favorite-filter-result-icon {
+      color: var(--fx-muted) !important;
+      font-size: var(--fx-icon-size);
+      grid-column: 1;
+      grid-row: 1;
+      text-align: center;
+      width: var(--sr-icon-col);
+    }
+
+    .favorite-filter-result-link {
+      color: var(--fx-fg) !important;
+      display: block;
+      font-size: inherit;
+      font-weight: 600;
+      grid-column: 2;
+      grid-row: 1;
+      line-height: 1.9rem;
+      margin: 0;
+      min-width: 0;
+      overflow: hidden;
+      text-decoration: none;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .favorite-filter-result-date {
+      color: var(--fx-muted);
+      font-size: 0.68rem;
+      font-variant-numeric: tabular-nums;
+      font-weight: 400;
+      grid-column: 3;
+      grid-row: 1;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    // buttons (link / add to text / step): their own fixed columns after the date
+    .favorite-filter-result-insert {
+      grid-row: 1;
+      height: 1.3rem;
+      margin: 0 !important;
+      padding: 0;
+      width: var(--sr-action-col);
+    }
+
+    // the muted line sits in the title column, under the title
+    .favorite-filter-result-meta {
+      color: var(--fx-muted) !important;
+      font-size: 0.68rem;
+      font-weight: 400;
+      grid-column: 2 / -1;
+      grid-row: 2;
+      line-height: 1.1rem;
+      margin: 0 0 0.1rem;
+      overflow: hidden;
+      padding: 0;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  // folders and other plain entries: the same grid, one line; the star sits in the action column right after the date column
+  .favorite-filter-result.unified-search-result {
+    grid-template-rows: 1.9rem;
+
+    > button,
+    > .btn {
+      align-items: center;
+      display: inline-flex;
+      grid-column: 3;
+      grid-row: 1;
+      height: 1.3rem;
+      justify-content: flex-end;
+      justify-self: end;
+      margin: 0 !important;
+      padding: 0;
+      width: var(--sr-action-col);
+    }
+  }
+
+  // a narrow panel (about 210 px) has no room for a date column: the title takes it
+  @container (max-width: 170px) {
+    .favorite-filter-result {
+      grid-template-columns: var(--sr-icon-col) minmax(0, 1fr) 0;
+
+      .favorite-filter-result-date {
+        display: none;
+      }
+    }
+
+    .favorite-filter-result.unified-search-result > button,
+    .favorite-filter-result.unified-search-result > .btn {
+      grid-column: 3;
+    }
+  }
+}
+
+// ---- Contents panel (entry pages) ----
+#tocPanel {
+  // the filter row is one input group: one height, one tint, square buttons of equal width, a proper focus ring only from the keyboard
+  .input-group {
+    background: var(--fx-hover);
+    border-radius: 4px;
+    flex-wrap: nowrap;
+    margin-bottom: 0.4rem !important;
+    overflow: hidden;
+
+    .form-control {
+      background: transparent;
+      border-radius: 0;
+    }
+
+    .btn {
+      align-items: center;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+      color: var(--fx-muted);
+      display: inline-flex;
+      flex: 0 0 var(--fx-ctl);
+      height: var(--fx-ctl);
+      justify-content: center;
+      min-width: var(--fx-ctl);
+      outline: 0;
+      padding: 0;
+      width: var(--fx-ctl);
+
+      .fas {
+        color: inherit;
+      }
+
+      &:hover {
+        background: var(--fx-hover);
+        color: var(--fx-fg);
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: -2px;
+      }
+    }
+
+    #tocSearchAdd {
+      color: var(--fx-fg);
+    }
+  }
+
+  // "Match" and its select: one row of the control height, on the same left and right edges
+  .p-3 > .d-flex.align-items-center {
+    margin-bottom: 0.4rem !important;
+    min-height: var(--fx-ctl);
+
+    > label {
+      color: var(--fx-muted);
+      font-size: 0.68rem !important;
+      margin: 0 0.4rem 0 0 !important;
+      white-space: nowrap;
+    }
+
+    > .form-control {
+      flex: 1 1 auto;
+    }
+  }
+
+  // no empty spacing: containers with nothing in them take no room
+  .toc-search-filters {
+    margin: 0 !important;
+
+    &:empty,
+    &:not(:has(*)) {
+      display: none;
+    }
+
+    &:has(*) {
+      margin-bottom: 0.4rem !important;
+    }
+  }
+
+  // "Select headings to filter or print": a small muted line that opens the list, not a boxed heading
+  .toc-section-filter-picker {
+    border: 0;
+    margin-bottom: 0.4rem !important;
+    padding: 0;
+
+    > summary {
+      align-items: center;
+      color: var(--fx-muted);
+      display: flex;
+      font-size: 0.72rem;
+      font-weight: 400;
+      margin: 0;
+      min-height: var(--fx-row);
+      padding: 0 var(--fx-pad);
+    }
+
+    &[open] > summary {
+      color: var(--fx-fg);
+    }
+  }
+
+  .toc-section-filter-tree {
+    border: 0;
+    border-top: 1px solid var(--fx-line);
+    border-radius: 0;
+    height: auto;
+    max-height: 14rem;
+  }
+
+  .toc-section-filter-option {
+    border-bottom: 0;
+    min-height: var(--fx-row);
+    padding-bottom: 0;
+    padding-top: 0;
+
+    &.selected {
+      background: color-mix(in srgb, var(--primary) 22%, transparent);
+    }
+
+    &:hover {
+      background: var(--fx-hover);
+    }
+  }
+
+  .toc-section-filter-label {
+    font-size: inherit;
+  }
+
+  // the "Show spreadsheets / pictures" toggles: the shared checkbox size, one row, the label centred and in the list's text size
+  .toc-leaf-toggle.custom-control {
+    align-items: center;
+    display: flex;
+    min-height: var(--fx-row);
+    padding-left: 1.4rem;
+
+    .custom-control-label {
+      align-items: center;
+      display: flex;
+      font-size: inherit !important;
+      line-height: 1.3;
+      margin: 0;
+      min-height: var(--fx-row);
+    }
+
+    .custom-control-label::before,
+    .custom-control-label::after {
+      height: 0.9rem;
+      left: -1.4rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 0.9rem;
+    }
+
+    .custom-control-input:focus ~ .custom-control-label::before {
+      box-shadow: none;
+    }
+
+    .custom-control-input:focus-visible ~ .custom-control-label::before {
+      box-shadow: 0 0 0 2px var(--primary);
+    }
+  }
+
+  // the heading list: one row height, one selected tint, one hover tint, equal indent steps, icons in one right-hand column
+  .toc-items-container {
+    .toc-entry {
+      min-height: var(--fx-row);
+    }
+
+    .toc-link {
+      border-radius: 4px;
+      font-size: inherit !important;
+      font-weight: 400;
+      padding: 0 var(--fx-pad) !important;
+
+      &.font-weight-bold {
+        font-weight: 600;
+      }
+
+      &:hover {
+        background: var(--fx-hover);
+      }
+
+      &.active {
+        background: color-mix(in srgb, var(--primary) 22%, transparent);
+        color: var(--fx-fg);
+        font-weight: 600;
+      }
+    }
+
+    .toc-entry-action {
+      align-items: center;
+      color: var(--fx-muted);
+      display: inline-flex;
+      height: 1.25rem;
+      justify-content: center;
+      padding: 0;
+      width: 1.25rem;
+
+      .fas {
+        color: inherit;
+        font-size: 0.7rem;
+      }
+
+      &:focus,
+      &:hover {
+        color: var(--fx-fg);
+      }
+    }
+  }
+}
+
+// ---- Contents panel, redesigned: a rail with an active marker, one list in page order, one filter row, a Select mode ----
+// Rail (1px muted line) with indentation per heading level; the section being read has a 2px accent marker on the rail and
+// brighter, medium-weight text; rows are --fx-row high with a small icon column (H1..H6, table, photo with a tiny thumbnail);
+// tables, pictures and spreadsheets are smaller muted rows under their heading. Select mode shows a checkbox column and a bar
+// at the bottom (count, Print, Copy, clear). Everything reads the shared --fx tokens.
+#tocPanel {
+  // the bar of select mode sticks to the bottom of the panel
+  &:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .toc-panel-inner {
+    flex: 1 1 auto;
+  }
+
+  .toc-heading {
+    align-items: center;
+    color: var(--fx-muted);
+    display: flex;
+    font-size: 0.68rem;
+    font-weight: 600;
+    justify-content: space-between;
+    letter-spacing: 0.03em;
+    margin: 0 0 0.3rem;
+    min-height: var(--fx-row);
+    text-transform: uppercase;
+  }
+
+  .toc-count {
+    background: var(--fx-hover);
+    border-radius: 999px;
+    font-weight: 600;
+    margin-left: 0.3rem;
+    padding: 0 0.4rem;
+  }
+
+  .toc-heading-actions {
+    align-items: center;
+    display: inline-flex;
+    gap: 0.1rem;
+  }
+
+  .toc-icon-btn,
+  .toc-icon-toggle {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    color: var(--fx-muted);
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: var(--fx-ctl);
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    width: var(--fx-ctl);
+
+    .fas {
+      color: inherit;
+      font-size: var(--fx-icon-size);
+    }
+
+    &:hover,
+    &:focus-visible {
+      background: var(--fx-hover);
+      color: var(--fx-fg);
+    }
+
+    &[aria-pressed='true'] {
+      background: var(--primary);
+      color: var(--primary-fg, #fff);
+    }
+  }
+
+  .toc-toggle-input:checked + .toc-icon-toggle {
+    background: var(--primary);
+    color: var(--primary-fg, #fff);
+  }
+
+  .toc-toggle-input:focus-visible + .toc-icon-toggle {
+    outline: 2px solid var(--primary);
+  }
+
+  .toc-leaf-toggle {
+    display: inline-flex;
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  .toc-filter-row {
+    align-items: center;
+    display: flex;
+    gap: 0.15rem;
+    margin-bottom: 0.3rem;
+
+    .toc-icon-btn,
+    .toc-icon-toggle {
+      height: var(--fx-ctl);
+      width: var(--fx-ctl);
+    }
+  }
+
+  .toc-filter-field {
+    align-items: center;
+    background: var(--fx-hover);
+    border-radius: 4px;
+    display: flex;
+    flex: 1 1 auto;
+    height: var(--fx-ctl);
+    min-width: 0;
+  }
+
+  .toc-filter-input {
+    background: transparent;
+    border: 0;
+    color: var(--fx-fg);
+    flex: 1 1 auto;
+    font-size: inherit;
+    height: 100%;
+    min-width: 0;
+    outline: 0;
+    padding: 0;
+  }
+
+  .toc-search-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem;
+    margin-bottom: 0.3rem;
+
+    &:empty {
+      display: none;
+    }
+
+    .toc-search-filter {
+      background: var(--fx-hover);
+      border-radius: 999px;
+      color: var(--fx-fg);
+      font-size: 0.68rem;
+      font-weight: 500;
+      padding: 0.05rem 0.45rem;
+    }
+  }
+
+  .toc-mode-switch {
+    align-items: center;
+    display: inline-flex;
+    gap: 0.1rem;
+    margin-bottom: 0.3rem;
+
+    &[hidden] {
+      display: none;
+    }
+
+    .toc-mode-label {
+      color: var(--fx-muted);
+      font-size: 0.68rem;
+      margin-right: 0.3rem;
+    }
+
+    button {
+      background: var(--fx-hover);
+      border: 0;
+      border-radius: 4px;
+      color: var(--fx-muted);
+      font-size: 0.68rem;
+      height: 1.2rem;
+      padding: 0 0.5rem;
+
+      &[aria-pressed='true'] {
+        background: var(--primary);
+        color: var(--primary-fg, #fff);
+      }
+    }
+  }
+
+  // Select all / None: two small ghost text buttons on one line, no wrapping, the same height as the other controls
+  .toc-select-strip {
+    align-items: center;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.15rem;
+    margin-bottom: 0.3rem;
+
+    &[hidden] {
+      display: none;
+    }
+
+    button {
+      background: transparent;
+      border: 0;
+      border-radius: 4px;
+      color: var(--fx-muted);
+      flex: 0 0 auto;
+      font-size: 0.72rem;
+      height: var(--fx-ctl);
+      padding: 0 0.5rem;
+      white-space: nowrap;
+
+      &:hover,
+      &:focus-visible {
+        background: var(--fx-hover);
+        color: var(--fx-fg);
+      }
+    }
+  }
+
+  // select mode: the whole heading row is the toggle, so the pointer says so; the go-to arrow shows on the row
+  &.toc-select-mode .toc-items-container .toc-item-section .toc-entry {
+    cursor: pointer;
+  }
+
+  .toc-goto {
+    display: none;
+  }
+
+  &.toc-select-mode .toc-items-container .toc-goto {
+    display: inline-flex;
+  }
+
+  .toc-empty {
+    color: var(--fx-muted);
+    font-size: 0.72rem;
+    margin: 0;
+    padding: 0.3rem var(--fx-pad);
+  }
+
+  // the rail
+  .toc-items-container .toc-list {
+    border-left: 1px solid var(--fx-line);
+    margin: 0 0 0 0.45rem;
+    padding: 0;
+  }
+
+  .toc-items-container .toc-item {
+    padding-left: calc(var(--toc-indent, 0rem) + 0.3rem);
+    position: relative;
+
+    // the active marker: 2px on the rail
+    &:has(.toc-link.active)::before {
+      background: var(--primary);
+      bottom: 0.15rem;
+      content: '';
+      left: -1.5px;
+      position: absolute;
+      top: 0.15rem;
+      width: 2px;
+    }
+  }
+
+  .toc-items-container .toc-entry {
+    align-items: center;
+    border-radius: 3px;
+    display: flex;
+    gap: 0.2rem;
+    min-height: var(--fx-row);
+    position: relative;
+
+    &:hover {
+      background: var(--fx-hover);
+    }
+
+    &:hover .toc-entry-action,
+    &:focus-within .toc-entry-action {
+      opacity: 1;
+    }
+  }
+
+  .toc-items-container .toc-kind {
+    color: var(--fx-muted) !important;
+    flex: 0 0 1.5rem;
+    font-size: 0.6rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    text-align: center;
+
+    .fas {
+      font-size: 0.62rem;
+    }
+
+    .toc-thumb {
+      border-radius: 2px;
+      height: 18px;
+      object-fit: cover;
+      vertical-align: middle;
+      width: 26px;
+    }
+  }
+
+  .toc-items-container .toc-item-image .toc-kind {
+    flex-basis: 26px;
+  }
+
+  .toc-items-container .toc-link {
+    background: transparent;
+    color: var(--fx-muted) !important;
+    flex: 1 1 auto;
+    font-size: inherit;
+    font-weight: 400;
+    line-height: var(--fx-row);
+    min-width: 0;
+    overflow: hidden;
+    padding: 0 0.15rem;
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--fx-fg) !important;
+    }
+
+    &.active {
+      color: var(--fx-fg) !important;
+      font-weight: 600;
+    }
+  }
+
+  .toc-items-container .toc-item-section .toc-link {
+    color: color-mix(in srgb, var(--fx-fg) 78%, transparent) !important;
+    font-weight: 500;
+  }
+
+  .toc-items-container .toc-item-table .toc-link,
+  .toc-items-container .toc-item-image .toc-link {
+    font-size: 0.72rem;
+  }
+
+  .toc-items-container .toc-entry-action {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    color: var(--fx-muted);
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 1.25rem;
+    justify-content: center;
+    opacity: 0;
+    padding: 0;
+    width: 1.25rem;
+
+    .fas {
+      font-size: 0.65rem;
+    }
+
+    &:hover,
+    &:focus-visible {
+      color: var(--fx-fg);
+    }
+  }
+
+  // select mode: a checkbox column in front of the rows of the sections
+  .toc-items-container .toc-row-check {
+    accent-color: var(--primary);
+    display: none;
+    flex: 0 0 0.9rem;
+    height: 0.9rem !important;
+    margin: 0 !important;
+    min-height: 0;
+    width: 0.9rem !important;
+  }
+
+  &.toc-select-mode .toc-items-container .toc-row-check {
+    display: block;
+  }
+
+  // a ticked row: the same tint for every one (headings, and the tables and pictures under a ticked heading)
+  .toc-items-container .toc-item.selected > .toc-entry {
+    background: color-mix(in srgb, var(--primary) 18%, transparent);
+  }
+
+  // tables and pictures: rows like the others, no box of their own
+  .toc-items-container .toc-item-table > .toc-entry,
+  .toc-items-container .toc-item-image > .toc-entry {
+    background-clip: border-box;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  .toc-items-container .toc-item-table.selected > .toc-entry,
+  .toc-items-container .toc-item-image.selected > .toc-entry {
+    background: color-mix(in srgb, var(--primary) 18%, transparent);
+  }
+
+  .toc-only-mark {
+    border: 1px solid currentcolor;
+    border-radius: 999px;
+    color: var(--fx-muted);
+    flex: 0 0 auto;
+    font-size: 0.55rem;
+    height: 0.9rem;
+    line-height: 0.8rem;
+    text-align: center;
+    width: 0.9rem;
+  }
+
+  .toc-row-menu {
+    background: var(--chrome-bg, #222);
+    border: 1px solid var(--fx-line);
+    border-radius: 6px;
+    box-shadow: 0 0.3rem 1rem rgba(0, 0, 0, 0.35);
+    display: flex;
+    flex-direction: column;
+    padding: 0.2rem;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    z-index: 10;
+
+    button {
+      background: transparent;
+      border: 0;
+      border-radius: 4px;
+      color: var(--fx-fg);
+      font-size: 0.72rem;
+      padding: 0.2rem 0.5rem;
+      text-align: left;
+      white-space: nowrap;
+
+      &:hover,
+      &:focus-visible {
+        background: var(--fx-hover);
+      }
+    }
+  }
+
+  // the bar at the bottom while sections are ticked
+  .toc-select-bar {
+    align-items: center;
+    background: var(--chrome-bg, #222);
+    border-top: 1px solid var(--fx-line);
+    bottom: 0;
+    display: flex;
+    gap: 0.3rem;
+    padding: 0.3rem 1rem;
+    position: sticky;
+
+    &[hidden] {
+      display: none;
+    }
+
+    .toc-select-count {
+      background: var(--primary);
+      border-radius: 999px;
+      color: var(--primary-fg, #fff);
+      font-size: 0.68rem;
+      font-weight: 600;
+      min-width: 1.2rem;
+      padding: 0 0.35rem;
+      text-align: center;
+    }
+
+    .toc-select-text {
+      display: flex;
+      flex: 1 1 auto;
+      flex-direction: column;
+      font-size: 0.72rem;
+      line-height: 1.2;
+      min-width: 0;
+    }
+
+    .toc-showing {
+      color: var(--fx-muted);
+      font-size: 0.65rem;
+
+      &:empty {
+        display: none;
+      }
+    }
+
+    .toc-bar-btn {
+      align-items: center;
+      background: var(--fx-hover);
+      border: 0;
+      border-radius: 4px;
+      color: var(--fx-fg);
+      display: inline-flex;
+      font-size: 0.72rem;
+      gap: 0.25rem;
+      height: var(--fx-ctl);
+      padding: 0 0.45rem;
+
+      &:hover:not(:disabled),
+      &:focus-visible {
+        background: var(--primary);
+        color: var(--primary-fg, #fff);
+      }
+
+      &:disabled {
+        opacity: 0.45;
+      }
+    }
+  }
+}
+
+// the message after a file or folder was moved by dragging (folder-dragdrop.ts): on the page, not in the panel
+.folder-move-toast {
+  align-items: center;
+  background: var(--chrome-bg, #2b2f36);
+  border: 1px solid var(--chrome-muted, #888);
+  border-radius: 6px;
+  bottom: 1rem;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  color: var(--chrome-fg, #fff);
+  display: flex;
+  gap: 0.75rem;
+  left: 1rem;
+  max-width: min(26rem, calc(100vw - 2rem));
+  padding: 0.5rem 0.75rem;
+  position: fixed;
+  z-index: 1060;
+}
+
+.folder-move-toast-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-move-toast-undo {
+  background: transparent;
+  border: 0;
+  color: var(--primary-fg, #8ec5ff);
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0;
 }
 
 .folder-action-btn {
@@ -3715,9 +7350,121 @@ body.html-tool-workspace-open:not(.html-tool-workspace-is-maximized) .inline-spr
   max-width: 100%;
   min-height: 220px;
   min-width: min(320px, 100%);
-  overflow: auto;
+  // The grid (.jss_content below) is the one that scrolls, both ways; this box only holds it and takes the resize handle. With
+  // overflow: auto here too the box grew scroll bars of its own for the few pixels of the grid's border (a second, useless pair).
+  overflow: hidden;
   resize: both;
   width: 100%;
+}
+
+// Our own scroll bars of the popup (see installOverlayScrollbars): used when the browser only has overlay bars that hide until you
+// scroll. The room for them is reserved from the start, so nothing moves when they appear.
+.inline-spreadsheet-container.has-own-scrollbars {
+  --own-bar: 12px;
+
+  position: relative;
+
+  > .jss_container {
+    height: calc(100% - var(--own-bar)) !important;
+    width: calc(100% - var(--own-bar)) !important;
+  }
+
+  .jss_content {
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .elabftw-own-scrollbar {
+    background: var(--firstlevel);
+    border-radius: 6px;
+    position: absolute;
+    z-index: 3;
+
+    &:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: -2px;
+    }
+  }
+
+  .elabftw-own-scrollbar-x {
+    bottom: 0;
+    height: var(--own-bar);
+    left: 0;
+    right: var(--own-bar);
+  }
+
+  .elabftw-own-scrollbar-y {
+    bottom: var(--own-bar);
+    right: 0;
+    top: 0;
+    width: var(--own-bar);
+  }
+
+  .elabftw-own-scrollbar-thumb {
+    background: var(--secondary);
+    border-radius: 6px;
+    cursor: grab;
+    height: 100%;
+    touch-action: none;
+    width: 100%;
+
+    &:hover,
+    &.is-dragging {
+      background: var(--primary);
+    }
+
+    &.is-dragging {
+      cursor: grabbing;
+    }
+  }
+
+  .elabftw-own-scrollbar-x .elabftw-own-scrollbar-thumb {
+    height: calc(var(--own-bar) - 4px);
+    margin: 2px 0;
+    width: auto;
+  }
+
+  .elabftw-own-scrollbar-y .elabftw-own-scrollbar-thumb {
+    margin: 0 2px;
+    width: calc(var(--own-bar) - 4px);
+  }
+}
+
+// Always-visible, thin scroll bars in the theme colours on the scrolling grid of the popup. Setting scrollbar-width/-color (and the
+// webkit pseudo-elements for Safari) turns the overlay bars of macOS, which only show while scrolling, into real ones, so a sheet
+// wider than the popup always shows its horizontal bar at the bottom of the grid, inside the dialog.
+.inline-spreadsheet-container .jss_content {
+  overflow: auto !important;
+  scrollbar-color: var(--secondary) var(--firstlevel);
+  scrollbar-width: thin;
+
+  &::-webkit-scrollbar {
+    height: 12px;
+    width: 12px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: var(--firstlevel);
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--secondary);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+    border-radius: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: var(--primary);
+    background-clip: padding-box;
+  }
+
+  &::-webkit-scrollbar-corner {
+    background: var(--firstlevel);
+  }
 }
 
 /* The library's own scroll viewport must follow the user-resizable host rather
@@ -4470,11 +8217,154 @@ the form-control fails to do that so we do the border ourselves */
 
 }
 
-/* COMMENTS */
+/* COMMENTS: a thin thread. One muted header line, the text under it, a hover tint; no heavy box. */
 .comment-header {
-  background-color: var(--firstlevel);
+  background-color: transparent;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem !important;
+}
+
+#commentsDiv .box {
+  background: transparent;
+  border: 0;
+  border-left: 3px solid color-mix(in srgb, var(--primary) 55%, transparent);
+  border-radius: 3px;
+  margin-bottom: 0.35rem;
+  padding: 0;
+
+  &:hover {
+    background: color-mix(in srgb, currentColor 5%, transparent);
+  }
+
+  p.comment {
+    font-size: 0.88rem;
+    margin: 0 0.5rem 0.3rem !important;
+    padding: 0.1rem 0.25rem !important;
+  }
 }
 /* END COMMENTS */
+
+/* NEW ENTRY DIALOG: entry type as a segmented control, compact template rows (the --fx look; markup and JS unchanged) */
+#createModal {
+  --fx-muted: color-mix(in srgb, currentColor 62%, transparent);
+  --fx-hover: color-mix(in srgb, currentColor 8%, transparent);
+
+  #createNewForm > .modal-body > div:first-child {
+    align-items: center;
+    background: var(--fx-hover);
+    border-radius: 6px;
+    display: inline-flex;
+    gap: 0.1rem;
+    padding: 0.15rem;
+
+    > label {
+      display: none !important;
+    }
+
+    .form-check-inline {
+      margin: 0;
+      padding: 0;
+      position: relative;
+    }
+
+    .form-check-input {
+      inset: 0;
+      margin: 0;
+      opacity: 0;
+      position: absolute;
+    }
+
+    .form-check-label {
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      margin: 0;
+      padding: 0.2rem 0.7rem;
+    }
+
+    .form-check-inline:has(input:checked) .form-check-label {
+      background: var(--primary);
+      color: var(--primary-fg, #fff);
+    }
+
+    .form-check-inline:has(input:focus-visible) .form-check-label {
+      outline: 2px solid var(--primary);
+    }
+  }
+
+  #createNewFormTitle {
+    font-size: 1rem;
+  }
+
+  #tplCreateNewDiv {
+    .table {
+      font-size: 0.82rem;
+      margin-bottom: 0;
+    }
+
+    td,
+    th {
+      border-top: 0;
+      padding: 0.15rem 0.4rem;
+      vertical-align: middle;
+    }
+
+    th {
+      color: var(--fx-muted);
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    tbody tr:hover {
+      background: var(--fx-hover);
+    }
+
+    .btn {
+      height: 1.5rem;
+      padding: 0 0.45rem;
+    }
+  }
+}
+
+/* STEPS (view): 1.5rem rows, muted details on one line, done steps struck through and muted */
+#stepsDivContent [id^='step_view_'] {
+  align-items: center;
+  border-radius: 3px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.5rem;
+  margin-bottom: 0 !important;
+  min-height: 1.5rem;
+  padding: 0.1rem 0.35rem !important;
+
+  &:hover {
+    background: color-mix(in srgb, currentColor 6%, transparent);
+  }
+
+  input[type='checkbox'] {
+    margin: 0;
+  }
+
+  .text-muted {
+    font-size: 0.72rem;
+    margin-right: 0 !important;
+  }
+
+  &.finished {
+    color: color-mix(in srgb, currentColor 55%, transparent);
+
+    .step-static,
+    .text-muted + .text-muted,
+    label {
+      text-decoration: line-through;
+    }
+  }
+
+  &.highlighted {
+    box-shadow: inset 3px 0 0 var(--primary);
+  }
+}
 
 @mixin breakable {
   hyphens: auto;
@@ -5311,6 +9201,69 @@ input[type='color'] {
   }
 }
 
+/* Notifications panel density (bell dropdown and history): tighter rows and smaller icons, one muted
+   second colour, the same hover tint as the other lists. Unread keeps its primary left rule. */
+#navbar-notif-dropdown,
+.card > .notification {
+  --fx-muted: color-mix(in srgb, currentColor 62%, transparent);
+}
+
+#navbar-notif-dropdown .notif-list .notification,
+.card > .notification {
+  font-size: 0.82rem;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+
+  &[data-ack='0'] {
+    padding-left: calc(0.75rem - 3px);
+  }
+
+  /* Revision diff: readable text with struck-through deletions and underlined insertions */
+.revision-diff-summary {
+  color: color-mix(in srgb, currentColor 62%, transparent);
+  font-size: 0.78rem;
+  margin: 0.6rem 0 0.2rem;
+}
+
+.revision-diff {
+  border-left: 3px solid color-mix(in srgb, currentColor 20%, transparent);
+  font-size: 0.88rem;
+  padding: 0.3rem 0.7rem;
+  white-space: pre-wrap;
+
+  del {
+    background: color-mix(in srgb, var(--dangerred, #dd1e00) 16%, transparent);
+    color: inherit;
+    text-decoration: line-through;
+  }
+
+  ins {
+    background: color-mix(in srgb, var(--green, #54aa08) 18%, transparent);
+    color: inherit;
+    text-decoration: underline;
+  }
+}
+
+.notif-icon {
+    height: 1.5rem;
+    margin-top: 0;
+    width: 1.5rem;
+
+    i {
+      font-size: 0.7rem;
+    }
+  }
+
+  .relative-moment {
+    color: var(--fx-muted);
+  }
+}
+
+#navbar-notif-dropdown .notif-list {
+  max-height: min(60vh, 26rem);
+  overflow-y: auto;
+}
+
 .notif-icon {
   align-items: center;
   border-radius: 50%;
@@ -5457,7 +9410,55 @@ input:user-invalid {
 }
 
 .section-title {
-  background-color: var(--firstlevel);
+  background-color: transparent;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  color: color-mix(in srgb, currentColor 62%, transparent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 0.3rem 0.5rem !important;
+  text-transform: uppercase;
+}
+
+/* Account / settings pages: the tab strip is compact, setting rows get the shared hover tint and
+   a 1.5rem-ish rhythm; the login card is one narrow centered column (the --fx look). */
+.tabbed-menu {
+  margin-bottom: 0.75rem;
+
+  li button {
+    font-size: 0.78rem;
+    line-height: 1.5;
+    padding: 0.2rem 0.75rem;
+  }
+}
+
+[data-tabcontent] > div > .d-flex.justify-content-between {
+  align-items: center;
+  border-radius: 3px;
+  min-height: 1.9rem;
+  padding: 0 0.35rem;
+
+  &:hover {
+    background: color-mix(in srgb, currentColor 5%, transparent);
+  }
+
+  .col-form-label {
+    font-size: 0.85rem;
+    padding: 0.2rem 0;
+  }
+}
+
+section.text-center > form,
+section.text-center form#login,
+section.text-center .col-md-4.mx-auto {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 24rem;
+  width: 100%;
+}
+
+section.text-center .form-control {
+  font-size: 0.9rem;
 }
 
 /* PROFILE page */
@@ -7946,6 +11947,33 @@ button.wp-legend-item {
   #body_view table.elabftw-spreadsheet[data-spreadsheet-style='well-plate']:not([data-spreadsheet*='"plateView":"sheet"']) {
     visibility: hidden;
   }
+
+  // wells, rows, columns, well size in px
+  $plate-placeholders: (6, 2, 3, 156), (12, 3, 4, 116), (24, 4, 6, 76), (48, 6, 8, 56), (96, 8, 12, 36), (384, 16, 24, 21);
+
+  @each $wells, $rows, $cols, $size in $plate-placeholders {
+    #body_view table.elabftw-spreadsheet[data-spreadsheet-style='well-plate'][data-well-plate='#{$wells}']:not([data-spreadsheet*='"plateView":"sheet"']) {
+      background-clip: content-box;
+      background-image: radial-gradient(circle at center, transparent calc(#{$size * 0.5}px - 2px), rgba(128, 128, 128, 0.55) calc(#{$size * 0.5}px - 1px), rgba(128, 128, 128, 0.55) #{$size * 0.5}px, transparent calc(#{$size * 0.5}px + 0.5px));
+      background-origin: content-box;
+      background-size: #{$size + 4}px #{$size + 4}px;
+      border: 0 !important;
+      box-sizing: content-box;
+      display: block;
+      // room for the plate's title bar, the column numbers and the row letters (as in the real plate, measured)
+      height: #{$rows * ($size + 4) - 4}px !important;
+      max-height: none !important;
+      min-height: 0 !important;
+      margin: 0 0 8px !important;
+      padding: 55px 0 18px 22px;
+      visibility: visible;
+      width: #{$cols * ($size + 4) - 4}px !important;
+
+      > * {
+        display: none;
+      }
+    }
+  }
 }
 
 /* The folder an entry is filed in, as a path under the entry; every part opens that folder. */
@@ -8007,4 +12035,688 @@ button.wp-legend-item {
 
 .folder-path-bar .folder-path-menu .fa-folder {
   color: #3d9be9;
+}
+
+// The Calendars page's month and year jump (CalendarPage.svelte): the two selects fit their content ("September", a four-digit year
+// and the arrow) instead of shrinking inside the flex popover, which grows to hold them and wraps on a narrow window.
+.cal-jump-panel {
+  flex-wrap: wrap;
+  max-width: calc(100vw - 2rem);
+  width: max-content;
+
+  select.form-control {
+    flex: 0 0 auto;
+    height: 2rem;
+    line-height: 1.2;
+    min-width: 6.5rem;
+    padding-bottom: 0;
+    padding-right: 1.75rem;
+    padding-top: 0;
+    width: auto;
+  }
+
+  select.form-control:first-child {
+    min-width: 9.5rem;
+  }
+}
+
+// ---- Dashboard: flat cards on the shared sizes ----
+// The sizes of the sidebar grid, for pages outside the side panels (the colours stay with the panels' own chrome theme).
+:root {
+  --fx-ctl: 1.4rem;
+  --fx-row: 1.5rem;
+  --fx-pad: 0.35rem;
+  --fx-gap: 0.35rem;
+}
+
+.dashboard-welcome {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0.2rem 0 0.4rem;
+}
+
+.dashboard-grid {
+  row-gap: 0.75rem;
+
+  > [class*='col-'] {
+    display: flex;
+  }
+
+  --dashboard-line: rgba(128, 128, 128, 0.25);
+  // follows the page's text colour (a fixed grey would fail contrast on the dark themes)
+  --dashboard-muted: color-mix(in srgb, currentColor 72%, transparent);
+}
+
+// a card: one thin muted border, one radius, one padding; the heading row, small muted sub-headings and compact list rows inside
+.dashboard-card {
+  border: 1px solid var(--dashboard-line);
+  border-radius: 6px;
+  flex: 1 1 auto;
+  font-size: 0.82rem;
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+
+  .dashboard-heading {
+    align-items: center;
+    margin-bottom: 0.25rem;
+    min-height: var(--fx-ctl);
+
+    h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin: 0;
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .fas,
+      .far {
+        color: var(--dashboard-muted);
+        font-size: 0.8rem;
+        text-align: center;
+        width: 1rem;
+      }
+    }
+  }
+
+  h4 {
+    color: var(--dashboard-muted);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    margin: 0.5rem 0 0.25rem;
+    text-transform: uppercase;
+
+    &.mb-0 {
+      margin-bottom: 0 !important;
+    }
+  }
+
+  hr {
+    border-color: var(--dashboard-line);
+    margin: 0.45rem 0;
+  }
+
+  .input-group .form-control {
+    font-size: inherit;
+    height: var(--fx-ctl);
+    padding: 0 var(--fx-pad);
+  }
+
+  .btn,
+  .btn-sm {
+    font-size: 0.75rem;
+  }
+
+  .catstat-btn {
+    font-size: 0.72rem;
+    line-height: 1.4;
+    margin-bottom: 0.2rem !important;
+    padding: 0.1rem 0.5rem;
+  }
+
+  .list-group-item {
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--dashboard-line);
+    border-radius: 0;
+    color: inherit;
+    font-size: 0.8rem;
+    padding: 0.28rem 0.2rem;
+
+    &:last-child {
+      border-bottom: 0;
+    }
+  }
+
+  // announcements: tighter cards, titles in the page's text colour
+  .announcement-card {
+    margin-bottom: 0.35rem;
+    padding: 0.4rem 0.5rem;
+  }
+
+  .announcement-card-title {
+    color: inherit;
+  }
+}
+
+// when the three columns do not fit side by side, the announcements come first so the pinned and unread ones stay on the first screen
+@media (max-width: 62rem) {
+  .dashboard-grid > .dashboard-announcements-col {
+    order: -1;
+  }
+}
+
+// ---- Boards: the board's bands become one toolbar row ----
+// The page is a wrapping row: the project tabs, the project description and the subprojects, then ONE toolbar row (search and priority,
+// the card scope, "+ Add card" at the right end), then the bulk bar and the columns. Everything else takes a whole line.
+.pm-board {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.5rem;
+
+  > * {
+    flex: 0 0 100%;
+    margin: 0 !important;
+    order: 8;
+  }
+
+  > .pm-project-row {
+    order: 1;
+  }
+
+  > .pm-project-description {
+    order: 2;
+  }
+
+  > .pm-subproject-row {
+    order: 3;
+  }
+
+  > .pm-subproject-description {
+    order: 4;
+  }
+
+  > .pm-toolbar-search {
+    flex: 1 1 16rem;
+    order: 5;
+  }
+
+  > .pm-toolbar-scope {
+    flex: 0 0 auto;
+    order: 6;
+  }
+
+  > .pm-toolbar-add {
+    flex: 0 0 auto;
+    margin-left: auto !important;
+    order: 7;
+  }
+
+  > .pm-progress {
+    order: 9;
+  }
+
+  > .pm-bulk-bar {
+    order: 10;
+  }
+
+  > .pm-columns,
+  > .pm-load-more {
+    order: 11;
+  }
+
+  .pm-toolbar-search .form-control {
+    height: var(--fx-ctl, 1.4rem);
+    min-height: 1.75rem;
+  }
+
+  .pm-toolbar-search .pm-priority-filter {
+    width: auto;
+  }
+
+  .pm-toolbar-add .btn,
+  .pm-toolbar-scope .btn {
+    align-items: center;
+    display: inline-flex;
+    min-height: 1.75rem;
+  }
+
+  // the archived button is just its icon (its label is the tooltip)
+  .pm-archived-btn .pm-btn-label {
+    display: none;
+  }
+}
+
+// the project line: name, a progress chip, the target date and the "Goals / description" toggle, all on one line
+.pm-board {
+  .pm-project-line {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .pm-progress-chip {
+    background: rgba(128, 128, 128, 0.18);
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.05rem 0.5rem;
+  }
+
+  .pm-desc-toggle {
+    background: transparent;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.75rem;
+    margin-left: auto;
+    opacity: 0.75;
+    padding: 0.1rem 0.3rem;
+
+    &:hover,
+    &:focus-visible {
+      opacity: 1;
+    }
+  }
+
+  .pm-project-description {
+    padding-bottom: 0.3rem;
+    padding-top: 0.3rem;
+  }
+}
+
+// Project header: a flat line on the Boards grid (one left edge, a hairline below, no box). The "..." menu and the
+// guide button sit at its right end on the shared control size; the subproject row only exists when there are subprojects.
+.pm-board {
+  .pm-project-description {
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+    border-radius: 0;
+    padding: 0.3rem 0;
+  }
+
+  .pm-project-name-heading {
+    font-size: 1rem;
+  }
+
+  .pm-desc-toggle {
+    font-size: 0.72rem;
+    opacity: 0.6;
+  }
+
+  .pm-project-actions {
+    align-items: center;
+    display: inline-flex;
+    gap: 0.1rem;
+
+    .pm-more-menu {
+      position: relative;
+    }
+
+    .pm-manage-btn,
+    .guide-info-btn {
+      align-items: center;
+      display: inline-flex;
+      height: var(--fx-ctl, 1.4rem);
+      justify-content: center;
+      margin: 0;
+      padding: 0;
+      width: var(--fx-ctl, 1.4rem);
+    }
+
+    .pm-more-pop {
+      left: auto;
+      right: 0;
+    }
+  }
+
+  .pm-desc-add {
+    background: none;
+    border: 0;
+    color: color-mix(in srgb, currentColor 60%, transparent);
+    font-size: 0.75rem;
+    padding: 0.1rem 0;
+    text-decoration: underline;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--primary);
+    }
+  }
+}
+
+// subprojects as chips, and a "..." menu for the secondary actions
+.pm-board {
+  .pm-subproject-row {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .pm-subproject-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+
+  .pm-chip {
+    background: rgba(128, 128, 128, 0.15);
+    border: 0;
+    border-radius: 999px;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 0.15rem 0.65rem;
+
+    &:hover {
+      background: rgba(128, 128, 128, 0.28);
+    }
+
+    &.active {
+      background: var(--primary);
+      color: var(--primary-fg, #fff);
+    }
+  }
+
+  .pm-more-menu {
+    position: relative;
+
+    > summary {
+      cursor: pointer;
+      list-style: none;
+
+      &::-webkit-details-marker {
+        display: none;
+      }
+    }
+  }
+
+  .pm-more-pop {
+    background: var(--mainbackground, #fff);
+    border: 1px solid rgba(128, 128, 128, 0.35);
+    border-radius: 6px;
+    box-shadow: 0 0.3rem 1rem rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+    left: 0;
+    min-width: 12rem;
+    padding: 0.25rem;
+    position: absolute;
+    top: 100%;
+    z-index: 30;
+  }
+
+  .pm-more-item {
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 0.3rem 0.5rem;
+    text-align: left;
+
+    &:hover,
+    &:focus-visible {
+      background: rgba(128, 128, 128, 0.2);
+    }
+  }
+}
+
+// compact cards: one row each, the priority as a dot, details on one meta line, the buttons only on hover or focus
+.pm-board .pm-card.pm-card-compact {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.4rem;
+  padding: 0.35rem 0.5rem;
+  position: relative;
+
+  > .d-flex:first-child {
+    align-items: center !important;
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .pm-task-title-btn {
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pm-task-actions {
+    background: var(--mainbackground, #fff);
+    border-radius: 4px;
+    box-shadow: 0 0.1rem 0.5rem rgba(0, 0, 0, 0.25);
+    display: none;
+    padding: 0.1rem;
+    position: absolute;
+    right: 0.25rem;
+    top: 0.2rem;
+    z-index: 3;
+  }
+
+  &:hover .pm-task-actions,
+  &:focus-within .pm-task-actions {
+    display: flex;
+  }
+
+  .pm-priority {
+    border-radius: 50%;
+    font-size: 0;
+    height: 0.55rem;
+    margin: 0 !important;
+    padding: 0;
+    width: 0.55rem;
+  }
+
+  .pm-task-meta {
+    font-size: 0.72rem;
+    margin: 0 !important;
+  }
+
+  .pm-task-updated {
+    display: none;
+  }
+
+  .pm-task-meta.d-flex {
+    margin-left: auto !important;
+  }
+}
+
+// lighter columns: a quiet sticky header with a thin colour bar and the count; an empty column folds into a narrow strip
+.pm-board .pm-column {
+  --pm-column-color: rgba(128, 128, 128, 0.55);
+
+  &[data-kind='todo'] {
+    --pm-column-color: #6c757d;
+  }
+
+  &[data-kind='in_progress'] {
+    --pm-column-color: #2f7fd1;
+  }
+
+  &[data-kind='done'] {
+    --pm-column-color: #2e8b57;
+  }
+
+  .pm-column-header {
+    background: var(--mainbackground, #fff);
+    border-top: 3px solid var(--pm-column-color);
+    margin-bottom: 0.4rem;
+    padding: 0.3rem 0.1rem 0.2rem;
+  }
+
+  .pm-column-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  .pm-column-title .badge {
+    background: transparent;
+    color: inherit;
+    font-weight: 600;
+    opacity: 0.7;
+  }
+
+  &.pm-column-collapsed {
+    flex: 0 0 2.6rem;
+    min-width: 2.6rem;
+  }
+
+  .pm-column-strip {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-top: 3px solid var(--pm-column-color);
+    color: inherit;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-height: 8rem;
+    padding: 0.4rem 0;
+    width: 100%;
+
+    &:hover,
+    &:focus-visible {
+      background: rgba(128, 128, 128, 0.12);
+    }
+  }
+
+  .pm-column-strip-name {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-orientation: mixed;
+    text-transform: uppercase;
+    writing-mode: vertical-rl;
+  }
+}
+
+// the project tabs stay on one row; a long list scrolls sideways instead of wrapping
+.pm-board > .pm-project-row {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+
+  > * {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}
+
+// the command palette and the shortcuts list on the shared grid: compact rows, one icon column, one hover tint
+.command-palette {
+  font-size: 0.82rem;
+
+  .command-palette-header {
+    padding: 0.5rem 0.75rem;
+
+    input {
+      font-size: 0.95rem;
+    }
+  }
+
+  .command-palette-result {
+    gap: var(--fx-gap);
+    min-height: var(--fx-row);
+    padding: 0.3rem 0.5rem;
+
+    > i {
+      color: var(--fx-muted);
+      font-size: var(--fx-icon-size);
+      text-align: center;
+      width: var(--fx-icon-col);
+    }
+
+    &[aria-selected='true'],
+    &:hover,
+    &:focus-visible {
+      background: var(--fx-hover);
+      outline: 2px solid var(--primary);
+      outline-offset: -2px;
+    }
+  }
+
+  footer {
+    font-size: 0.7rem;
+    padding: 0.35rem 0.75rem;
+  }
+}
+
+.shortcuts-dialog {
+  max-width: 28rem;
+
+  .shortcuts-close {
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    color: var(--fx-muted);
+    cursor: pointer;
+    font-size: 1.1rem;
+    height: var(--fx-ctl);
+    line-height: 1;
+    margin-left: auto;
+    width: var(--fx-ctl);
+
+    &:hover,
+    &:focus-visible {
+      background: var(--fx-hover);
+      color: var(--fx-fg);
+    }
+  }
+
+  .shortcuts-list {
+    display: grid;
+    gap: 0.35rem 0.75rem;
+    grid-template-columns: max-content 1fr;
+    margin: 0;
+    padding: 0.75rem;
+
+    dd {
+      color: var(--fx-fg);
+      margin: 0;
+    }
+
+    kbd {
+      background: var(--fx-hover);
+      border: 1px solid var(--fx-line);
+      border-radius: 4px;
+      color: var(--fx-fg);
+      font-size: 0.72rem;
+      padding: 0.05rem 0.4rem;
+    }
+  }
+}
+
+// loading and empty states of the side panels: a few greyed rows of the real row height with a soft pulse, and one short muted line
+.fx-skeleton {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.2rem 0;
+
+  > span:not(.sr-only) {
+    animation: fx-pulse 1.4s ease-in-out infinite;
+    background: var(--fx-hover, rgba(128, 128, 128, 0.2));
+    border-radius: 4px;
+    display: block;
+    height: 1.9rem;
+
+    &:nth-child(3) {
+      opacity: 0.7;
+    }
+
+    &:nth-child(4) {
+      opacity: 0.45;
+    }
+  }
+}
+
+@keyframes fx-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-skeleton > span {
+    animation: none !important;
+  }
+}
+
+.side-panel .fx-empty {
+  color: var(--fx-muted) !important;
+  font-size: 0.75rem;
+  padding: 0.3rem var(--fx-pad);
 }

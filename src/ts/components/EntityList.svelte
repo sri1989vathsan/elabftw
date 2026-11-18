@@ -62,6 +62,8 @@
     next_step?: string | null;
     locked?: boolean;
     modified_at?: string | null;
+    steps_done?: number | string | null;
+    steps_total?: number | string | null;
     date?: string | null;
     created_at?: string | null;
     is_pinned?: boolean;
@@ -80,6 +82,7 @@
     searchQuery,
     queryPending,
     selectedEntities = [],
+    layout,
     currentUserId = null,
     currentTeam = null,
     isAdmin = false,
@@ -93,12 +96,99 @@
     searchQuery: Writable<string>;
     queryPending?: Writable<boolean>;
     selectedEntities: Writable<string[]>;
+    layout?: Writable<string>;
     currentUserId?: number | null;
     currentTeam?: number | null;
     isAdmin?: boolean;
     isAnon?: boolean;
     onInitialLoadDone?: () => void;
   }>();
+
+  // 'it' cards, 'cr' grouped compact rows, 'pv' compact rows with a preview pane of the selected entry
+  let layoutMode = $state('it');
+  let previewId = $state<number | null>(null);
+
+  const previewEntity = $derived(entities.find(item => item.id === previewId) ?? entities[0] ?? null);
+
+  // ---- board by status (experiments): one column per status of the team, in their configured order ----
+  type StatusColumn = { id: string | null; title: string; color: string };
+  let statusColumns = $state<StatusColumn[]>([]);
+  let statusesLoaded = false;
+  let draggedId = $state<number | null>(null);
+  let dropColumn = $state<string | null>(null);
+
+  async function loadStatuses(): Promise<void> {
+    if (statusesLoaded) return;
+    statusesLoaded = true;
+    try {
+      const list = await ApiC.getJson('teams/current/experiments_status?limit=9000') as Array<{ id: number; title: string; color: string }>;
+      statusColumns = [
+        { id: null, title: t('not-set'), color: 'bdbdbd' },
+        ...(Array.isArray(list) ? list : []).map(status => ({ id: String(status.id), title: status.title, color: status.color || 'bdbdbd' })),
+      ];
+    } catch {
+      statusesLoaded = false;
+    }
+  }
+
+  $effect(() => {
+    if (layoutMode === 'bd') void loadStatuses();
+  });
+
+  function columnEntities(column: StatusColumn): EntityListItem[] {
+    return entities.filter(item => (item.status == null || item.status === '' ? null : String(item.status)) === column.id);
+  }
+
+  async function moveToStatus(item: EntityListItem, column: StatusColumn): Promise<void> {
+    const previous = { status: item.status, status_title: item.status_title, status_color: item.status_color };
+    // shown at once; put back when the server refuses
+    item.status = column.id;
+    item.status_title = column.id === null ? null : column.title;
+    item.status_color = column.id === null ? null : column.color;
+    entities = [...entities];
+    try {
+      await ApiC.patch(`${entityType}/${item.id}`, { status: column.id === null ? null : Number(column.id), notifOnSaved: 0 });
+    } catch {
+      Object.assign(item, previous);
+      entities = [...entities];
+    }
+  }
+
+  function stepsLabel(item: EntityListItem): string {
+    const total = Number(item.steps_total ?? 0);
+    return total > 0 ? `${Number(item.steps_done ?? 0)}/${total}` : '';
+  }
+
+  // arrow keys move the selection of the preview list
+  function onPreviewKeydown(event: KeyboardEvent): void {
+    if (layoutMode !== 'pv' || (event.key !== 'ArrowDown' && event.key !== 'ArrowUp')) return;
+    if ((event.target as HTMLElement | null)?.closest('input, textarea, select')) return;
+    const index = Math.max(0, entities.findIndex(item => item.id === (previewEntity?.id ?? -1)));
+    const next = entities[Math.min(entities.length - 1, Math.max(0, index + (event.key === 'ArrowDown' ? 1 : -1)))];
+    if (!next) return;
+    event.preventDefault();
+    previewId = next.id;
+    void tick().then(() => document.querySelector(`.entity-rows [data-entity-id="${next.id}"]`)?.scrollIntoView({ block: 'nearest' }));
+  }
+
+  // rows are grouped by the month of their date (created for templates); order is kept
+  const groups = $derived.by(() => {
+    const result: Array<{ key: string; label: string; items: EntityListItem[] }> = [];
+    for (const item of entities) {
+      const raw = isTemplateType(entityType) ? item.created_at : item.date;
+      const key = raw && /^\d{4}-\d{2}/.test(String(raw)) ? String(raw).slice(0, 7) : '';
+      let group = result.find(candidate => candidate.key === key);
+      if (!group) {
+        const label = key === ''
+          ? t('No date')
+          : new Date(`${key}-01T12:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+        group = { key, label, items: [] };
+        result.push(group);
+      }
+      group.items.push(item);
+    }
+    return result;
+  });
 
   let hasReportedInitialLoad = false;
   let entities = $state<EntityListItem[]>([]);
@@ -142,6 +232,8 @@
     currentScope: string;
     currentBookable: string;
     currentFolder: string;
+    currentModifiedDays: string;
+    currentOpenSteps: string;
     currentOrder: string;
     currentSort: string;
     currentRelated: number | null;
@@ -307,6 +399,8 @@
       currentScope: getCurrentUrlParam('scope'),
       currentBookable: getCurrentUrlParam('bookable'),
       currentFolder: getCurrentUrlParam('folder'),
+      currentModifiedDays: getCurrentUrlParam('modified_days'),
+      currentOpenSteps: getCurrentUrlParam('open_steps'),
       currentOrder: getCurrentUrlParamOrFallback('order', order),
       currentSort: getCurrentUrlParamOrFallback('sort', sort),
       currentRelated: getCurrentUrlNumberParam('related'),
@@ -330,6 +424,8 @@
       context.currentScope,
       context.currentBookable,
       context.currentFolder,
+      context.currentModifiedDays,
+      context.currentOpenSteps,
       context.currentOrder,
       context.currentSort,
       context.currentRelated,
@@ -417,6 +513,8 @@
       currentScope,
       currentBookable,
       currentFolder,
+      currentModifiedDays,
+      currentOpenSteps,
       currentOrder,
       currentSort,
       currentRelated,
@@ -469,6 +567,14 @@
 
       if (currentBookable.length > 0) {
         params['bookable'] = currentBookable;
+      }
+
+      // dashboard tiles: modified in the last N days, and having an unfinished step
+      if (currentModifiedDays.length > 0) {
+        params['modified_days'] = currentModifiedDays;
+      }
+      if (currentOpenSteps.length > 0) {
+        params['open_steps'] = currentOpenSteps;
       }
 
       // Folder links reload the list page with ?folder=<id>. Keep that
@@ -581,6 +687,18 @@
     return date.toISOString().slice(0, 10);
   }
 
+  // One block for Goals, Conclusion and Notes (list card, preview pane): the label and icon in a fixed column, the text in
+  // a hanging indent next to it, every line of the value kept as its own line, numbered/bulleted lines indented as lists,
+  // and long values clamped with a small Show more that expands in place.
+  const LIST_MARKER = /^\s*(\d+[.)]|[-*\u2022])\s+/;
+  function fieldLines(value: string): Array<{ text: string; list: boolean }> {
+    return value.replace(/\r\n?/g, '\n').trim().split('\n').map(text => ({ text: text.trimEnd(), list: LIST_MARKER.test(text) }));
+  }
+  function fieldIsLong(value: string, clamp: number): boolean {
+    return fieldLines(value).length > clamp || value.trim().length > clamp * 70;
+  }
+  let expandedFields = $state<Record<string, boolean>>({});
+
   function getSummaryPreview(summary: string): string {
     const normalized = summary.replace(/\s+/g, ' ').trim();
     return normalized.length > GOAL_COLLAPSE_LENGTH
@@ -597,6 +715,7 @@
   }
 
   onMount(() => {
+    const unsubscribeLayout = layout?.subscribe(value => { layoutMode = value; });
     nonSearchFilterSignature = getCurrentNonSearchFilterSignature();
 
     window.addEventListener('popstate', bumpUrlVersion);
@@ -605,6 +724,7 @@
     return () => {
       window.removeEventListener('popstate', bumpUrlVersion);
       window.removeEventListener('entity-filters-changed', bumpReloadVersionIfFiltersChanged);
+      unsubscribeLayout?.();
     };
   });
 </script>
@@ -612,6 +732,181 @@
 {#if error && entities.length === 0}
   <div class='alert alert-danger'>{error}</div>
 {:else}
+  {#snippet fieldBlock(key: string, label: string, icon: string, value: string | null | undefined, clamp: number)}
+    {#if value?.trim()}
+      {@const open = expandedFields[key] === true}
+      <div class={`fx-field ${open ? 'is-open' : ''}`} style={`--fx-clamp: ${clamp};`}>
+        <div class='fx-field-label'><i class={`fas ${icon} fa-fw`} aria-hidden='true'></i><span>{label}</span></div>
+        <div class='fx-field-body'>
+          <div class='fx-field-text'>
+            {#each fieldLines(value) as line}
+              {#if line.text === ''}
+                <div class='fx-line fx-line-gap'></div>
+              {:else}
+                <div class={`fx-line ${line.list ? 'fx-line-list' : ''}`}>{line.text}</div>
+              {/if}
+            {/each}
+          </div>
+          {#if fieldIsLong(value, clamp)}
+            <button type='button' class='fx-field-more' aria-expanded={open} onclick={() => { expandedFields[key] = !open; }}>
+              {open ? t('Show less') : t('Show more')}
+            </button>
+          {/if}
+        </div>
+      </div>
+    {/if}
+  {/snippet}
+
+  {#snippet compactRow(entity: EntityListItem, index: number)}
+    {@const rowId = `entity-body-${entity.id}-${index}`}
+    <section
+      class={`entity entity-row d-flex align-items-center ${layoutMode === 'pv' && previewEntity?.id === entity.id ? 'is-previewed' : ''}`}
+      id={`parent_${rowId}`}
+      data-entity-id={entity.id}
+      style={`--left-color: #${getLeftColor(entity)};`}
+      aria-label={`${t('Entry')}_${rowId}`}
+    >
+      <input
+        autocomplete='off'
+        type='checkbox'
+        data-action='checkbox-entity'
+        data-id={entity.id}
+        data-randomid={rowId}
+        data-type={entityType}
+        aria-label={t('Select')}
+        class='entity-row-check'
+      />
+      {#if layoutMode === 'pv'}
+        <button type='button' class='entity-row-title btn-link-plain' onclick={() => { previewId = entity.id; }}>
+          {entity.title || t('entity-default-title')}
+        </button>
+      {:else}
+        <a class='entity-row-title' href={`?mode=view&id=${entity.id}`}>{entity.title || t('entity-default-title')}</a>
+      {/if}
+      {#if entity.status_title}<span class='entity-row-meta' title={t('Status')}>{entity.status_title}</span>{/if}
+      {#if entity.category_title}<span class='entity-row-meta' title={t('Category')}>{entity.category_title}</span>{/if}
+      <span class='entity-row-meta entity-row-date'>{formatDate(isTemplateType(entityType) ? entity.created_at : entity.date)}</span>
+      <button
+        type='button'
+        title={t('toggle-pin')}
+        aria-label={t('toggle-pin')}
+        data-action='toggle-pin'
+        data-id={entity.id}
+        class={`entity-row-pin ${entity.is_pinned ? 'is-pinned' : ''}`}
+      ><i class={`fas fa-thumbtack fa-fw ${!entity.is_pinned ? 'color-weak' : ''}`} aria-hidden='true'></i></button>
+    </section>
+  {/snippet}
+
+  {#if layoutMode === 'bd'}
+    <div class='entity-board' id='itemList' role='group' aria-label={t('Board by status')}>
+      {#if isLoading && entities.length === 0}
+        {#each [0, 1, 2, 3] as column (column)}
+          <div class='entity-board-column'><div class='fx-skeleton'></div><div class='fx-skeleton'></div></div>
+        {/each}
+      {:else}
+        {#each statusColumns as column (column.id ?? 'none')}
+          {@const cards = columnEntities(column)}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class={`entity-board-column ${dropColumn === (column.id ?? 'none') ? 'is-drop' : ''}`}
+            ondragover={event => { if (draggedId !== null) { event.preventDefault(); dropColumn = column.id ?? 'none'; } }}
+            ondragleave={() => { if (dropColumn === (column.id ?? 'none')) dropColumn = null; }}
+            ondrop={event => {
+              event.preventDefault();
+              const moved = entities.find(item => item.id === draggedId);
+              draggedId = null;
+              dropColumn = null;
+              if (moved && (moved.status == null || moved.status === '' ? null : String(moved.status)) !== column.id) void moveToStatus(moved, column);
+            }}
+          >
+            <h3 class='entity-board-title'>
+              <i class='fas fa-circle fa-fw' style={`color: #${column.color}`} aria-hidden='true'></i>
+              <span>{column.title}</span>
+              <span class='entity-board-count'>{cards.length}</span>
+            </h3>
+            <div class='entity-board-cards'>
+              {#each cards as entity (entity.id)}
+                <article
+                  class='entity-board-card'
+                  style={`--left-color: #${getLeftColor(entity)};`}
+                  data-entity-id={entity.id}
+                  draggable={canEditEntity(entity)}
+                  ondragstart={event => { draggedId = entity.id; event.dataTransfer?.setData('text/plain', String(entity.id)); }}
+                  ondragend={() => { draggedId = null; dropColumn = null; }}
+                >
+                  <a class='entity-board-card-title' href={`?mode=view&id=${entity.id}`}>{entity.title || t('entity-default-title')}</a>
+                  <div class='entity-board-card-meta'>
+                    <span>{formatDate(entity.date)}</span>
+                    {#if entity.fullname}<span class='entity-board-card-owner'>{entity.fullname}</span>{/if}
+                    {#if stepsLabel(entity)}<span title={t('Steps')}><i class='fas fa-list-check fa-fw' aria-hidden='true'></i>{stepsLabel(entity)}</span>{/if}
+                    <button
+                      type='button'
+                      class={`entity-row-pin ml-auto ${entity.is_pinned ? 'is-pinned' : ''}`}
+                      title={t('toggle-pin')}
+                      aria-label={t('toggle-pin')}
+                      data-action='toggle-pin'
+                      data-id={entity.id}
+                    ><i class={`fas fa-thumbtack fa-fw ${!entity.is_pinned ? 'color-weak' : ''}`} aria-hidden='true'></i></button>
+                  </div>
+                </article>
+              {/each}
+            </div>
+          </div>
+        {/each}
+      {/if}
+    </div>
+    {#if hasMore}
+      <p class='entity-board-footer'>{t('Showing only the entries loaded so far. Switch to a list layout to load more.')}</p>
+    {/if}
+  {:else if layoutMode === 'cr' || layoutMode === 'pv'}
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions -->
+    <div class={`entity-rows ${layoutMode === 'pv' ? 'entity-rows-with-preview' : ''}`} id='itemList' tabindex={layoutMode === 'pv' ? 0 : -1} role={layoutMode === 'pv' ? 'listbox' : undefined} aria-label={t('Entries')} onkeydown={onPreviewKeydown}>
+      <div class='entity-rows-list'>
+        {#if isLoading && entities.length === 0}
+          {#each [0, 1, 2, 3, 4, 5] as row (row)}<div class='fx-skeleton'></div>{/each}
+        {:else if entities.length === 0}
+          <p class='fx-empty'>{t('No entries to show.')}</p>
+        {/if}
+        {#each groups as group (group.key)}
+          <h3 class='entity-group-title'>{group.label} <span class='entity-group-count'>{group.items.length}</span></h3>
+          {#each group.items as entity, index (`${entity.id}-${index}`)}
+            {@render compactRow(entity, index)}
+          {/each}
+        {/each}
+        {#if hasMore}
+          <div bind:this={sentinelEl} class='py-3 text-center color-medium'>
+            {#if isLoadingMore}{t('Loading...')}{/if}
+          </div>
+        {/if}
+      </div>
+      {#if layoutMode === 'pv'}
+        <aside class='entity-preview' aria-label={t('Preview')}>
+          {#if previewEntity}
+            <h3 class='entity-preview-title'>
+              <a href={`?mode=view&id=${previewEntity.id}`}>{previewEntity.title || t('entity-default-title')}</a>
+            </h3>
+            <div class='entity-preview-meta color-medium'>
+              {formatDate(previewEntity.date ?? previewEntity.created_at)}
+              {#if previewEntity.fullname} · {previewEntity.fullname}{/if}
+              {#if previewEntity.status_title} · {previewEntity.status_title}{/if}
+              {#if previewEntity.category_title} · {previewEntity.category_title}{/if}
+            </div>
+            {#if (previewEntity.tags_decoded?.length ?? 0) > 0}
+              <div class='entity-preview-tags'>
+                {#each previewEntity.tags_decoded ?? [] as tag (tag.id)}<span class='tag'>{tag.tag}</span>{/each}
+              </div>
+            {/if}
+            {@render fieldBlock(`pv-${previewEntity.id}-goal`, t('Goals'), 'fa-bullseye', previewEntity.experiment_goal, 6)}
+            {@render fieldBlock(`pv-${previewEntity.id}-concl`, t('Conclusion'), 'fa-clipboard-check', previewEntity.experiment_conclusion, 6)}
+            {@render fieldBlock(`pv-${previewEntity.id}-notes`, t('Notes'), 'fa-file-lines', previewEntity.experiment_notes, 6)}
+            {#if !previewEntity.experiment_goal?.trim() && !previewEntity.experiment_conclusion?.trim() && !previewEntity.experiment_notes?.trim()}
+              <p class='color-medium'>{t('Nothing to preview. Open the entry to read it.')}</p>
+            {/if}
+          {/if}
+        </aside>
+      {/if}
+    </div>
+  {:else}
   <div class='d-flex flex-column' id='itemList'>
     {#each entities as entity, index (`${entity.id}-${index}`)}
       {@const template = isTemplateType(entityType)}
@@ -628,21 +923,18 @@
         style={`--left-color: #${getLeftColor(entity)};`}
         aria-label={`${t('Entry')}_${bodyId}`}
       >
-        <div class='d-flex align-items-start mt-1'>
-          <input
-            autocomplete='off'
-            type='checkbox'
-            data-action='checkbox-entity'
-            data-id={entity.id}
-            data-randomid={bodyId}
-            data-type={entityType}
-            aria-label={t('Select')}
-            class='mr-3'
-          />
-        </div>
-
-        <div class='align-self-center'>
-          <div>
+        <div class='align-self-center entity-card-main'>
+          <div class='entity-card-pills'>
+            <input
+              autocomplete='off'
+              type='checkbox'
+              data-action='checkbox-entity'
+              data-id={entity.id}
+              data-randomid={bodyId}
+              data-type={entityType}
+              aria-label={t('Select')}
+              class='entity-card-check'
+            />
             {#if entity.timestamped}
               <div
                 class='infotip'
@@ -750,30 +1042,11 @@
             </a>
           </div>
 
-          {#each [
-            { value: entity.experiment_goal, label: t('Goals'), icon: 'fa-bullseye', css: 'experiment-goal' },
-            { value: entity.experiment_conclusion, label: t('Conclusion'), icon: 'fa-clipboard-check', css: 'experiment-conclusion' },
-            { value: entity.experiment_notes, label: t('Notes'), icon: 'fa-file-lines', css: 'experiment-notes' },
-          ] as summary}
-            {#if entityType === 'experiments' && summary.value?.trim()}
-              {#if summary.value.trim().length > GOAL_COLLAPSE_LENGTH}
-                <details class={`${summary.css} experiment-summary border rounded px-2 py-1 mb-2`}>
-                  <summary class='experiment-summary-toggle'>
-                    <i class={`fas ${summary.icon} fa-fw mr-1 color-medium`} aria-hidden='true'></i>
-                    <span class='font-weight-bold'>{summary.label}:</span>
-                    <span class='experiment-summary-preview color-medium ml-1'>{getSummaryPreview(summary.value)}</span>
-                  </summary>
-                  <div class='experiment-summary-text breakable mt-2'>{summary.value.trim()}</div>
-                </details>
-              {:else}
-                <p class='experiment-summary-text breakable my-2'>
-                  <i class={`fas ${summary.icon} fa-fw mr-1 color-medium`} aria-hidden='true'></i>
-                  <span class='font-weight-bold'>{summary.label}:</span>
-                  {summary.value.trim()}
-                </p>
-              {/if}
-            {/if}
-          {/each}
+          {#if entityType === 'experiments'}
+            {@render fieldBlock(`c-${entity.id}-goal`, t('Goals'), 'fa-bullseye', entity.experiment_goal, 3)}
+            {@render fieldBlock(`c-${entity.id}-concl`, t('Conclusion'), 'fa-clipboard-check', entity.experiment_conclusion, 3)}
+            {@render fieldBlock(`c-${entity.id}-notes`, t('Notes'), 'fa-file-lines', entity.experiment_notes, 3)}
+          {/if}
 
           <div class='owner'>
             {#if entity.userid != null && currentUserId !== entity.userid && !isAnon}
@@ -900,15 +1173,15 @@
               <i class='fas fa-caret-right color-medium'></i>
             </button>
 
-            <div class='d-flex flex-column color-medium small'>
-              <span class='item-date'>
-                {statusDateLabel} {formatDate(dateValue)}
-              </span>
-              <span class='item-date'>
-                {t('Last modified')}
-                <span title={entity.modified_at ?? ''} class='relative-moment'></span>
-              </span>
-            </div>
+          </div>
+
+          <div class='entity-card-dates color-medium'>
+            <span class='item-date'>{statusDateLabel} {formatDate(dateValue)}</span>
+            <span aria-hidden='true'> · </span>
+            <span class='item-date'>
+              {t('Last modified')}
+              <span title={entity.modified_at ?? ''} class='relative-moment'></span>
+            </span>
           </div>
 
           <div hidden id={bodyId} style='overflow:auto;margin: 10px 0 0 20px'>
@@ -940,6 +1213,7 @@
       </div>
     {/if}
   </div>
+  {/if}
 {/if}
 
 <style>

@@ -14,7 +14,7 @@ vm.runInNewContext(js, {
   module: mod, exports: mod.exports, Intl, Array, Number, document: {}, window: {},
   require: id => (id === './i18n' ? { default: { t: key => key } } : { on: () => {} }),
 });
-const { parseFolderView, sortFolderRows, filterFolderRows, rowsAtLevel, ancestorChain, initialFolderLevel } = mod.exports;
+const { parseFolderView, sortFolderRows, filterFolderRows, rowsAtLevel, ancestorChain, initialFolderLevel, shortAge, entryFromApi } = mod.exports;
 
 const row = (name, p, experiments = 0, resources = 0, description = '') => ({ name, path: p, experiments, resources, description });
 const rows = [row('Plate 10', 'Lab/Plate 10', 3, 1), row('Plate 2', 'Lab/Plate 2', 7, 0), row('Archive', 'Archive', 0, 5, 'old stuff')];
@@ -22,7 +22,8 @@ const rows = [row('Plate 10', 'Lab/Plate 10', 3, 1), row('Plate 2', 'Lab/Plate 2
 test('an unknown or missing stored view falls back to the tree', () => {
   assert.equal(parseFolderView(null), 'tree');
   assert.equal(parseFolderView('grid'), 'tree');
-  assert.equal(parseFolderView('details'), 'details');
+  assert.equal(parseFolderView('details'), 'cards');
+  assert.equal(parseFolderView('cards'), 'cards');
   assert.equal(parseFolderView('list'), 'list');
 });
 
@@ -91,4 +92,30 @@ test('sorting by last modified puts the newest first when descending and keeps u
   ];
   assert.deepEqual(Array.from(sortFolderRows(dated, 'modified', -1), r => r.name), ['New', 'Old', 'Unknown']);
   assert.deepEqual(Array.from(sortFolderRows(dated, 'modified', 1), r => r.name), ['Unknown', 'Old', 'New']);
+});
+
+test('how long ago something changed is shown in a few characters', () => {
+  const now = 1_000_000_000;
+  assert.equal(shortAge(0, now), '');
+  assert.equal(shortAge(now - 3600, now), 'today');
+  assert.equal(shortAge(now - 2 * 86400, now), '2d');
+  assert.equal(shortAge(now - 15 * 86400, now), '2w');
+  assert.equal(shortAge(now - 100 * 86400, now), '3mo');
+  assert.equal(shortAge(now - 800 * 86400, now), '2y');
+  assert.equal(shortAge(now + 500, now), 'today');
+});
+
+test('a file from the API keeps what the explorer shows and survives missing fields', () => {
+  const entry = entryFromApi('experiments', { id: '7', title: 'PCR', status_title: 'Done', status_color: '29aeb9', fullname: 'Maria K.', modified_at: '2026-11-15 10:00:00', tags: 'a|b|' });
+  assert.equal(entry.id, 7);
+  assert.equal(entry.type, 'experiments');
+  assert.equal(entry.statusColor, '#29aeb9');
+  assert.equal(entry.owner, 'Maria K.');
+  assert.deepEqual(Array.from(entry.tags), ['a', 'b']);
+  assert.ok(entry.changed > 0);
+  const bare = entryFromApi('items', { id: 3 });
+  assert.equal(bare.title, '');
+  assert.equal(bare.statusColor, '');
+  assert.equal(bare.changed, 0);
+  assert.equal(bare.tags.length, 0);
 });

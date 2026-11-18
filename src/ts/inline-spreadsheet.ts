@@ -128,6 +128,8 @@ interface ClipboardTable {
   data: AOA;
   cellStyles?: CellStyles;
   rowHeights?: RowHeights;
+  /** Column widths of a table copied from another eLabFTW spreadsheet (never read from Excel, Sheets or Word). */
+  colWidths?: ColWidths;
 }
 
 export interface FlattenedClipboardSuggestion {
@@ -301,6 +303,153 @@ function isCutKey(event: KeyboardEvent): boolean {
 }
 
 /**
+ * macOS (and some Linux/Android setups) draw overlay scroll bars: they are invisible until you scroll, so a sheet wider than the
+ * popup shows nothing to grab and its right columns cannot be reached with the mouse. When the browser uses them (a probe box with
+ * overflow:scroll has no bar width; window.__forceOverlayScrollbars = true forces this for tests), the popup draws its own thin bars,
+ * always visible, in the theme colours, pinned under and beside the grid, synced with the scrolling element (.jss_content): the
+ * thumb is the size of the visible part, it can be dragged, a click on the track pages, the arrow keys / Home / End work on the
+ * focused bar, and the wheel and trackpad still scroll natively. The room for the bars is reserved from the start (no layout shift).
+ */
+function usesOverlayScrollbars(): boolean {
+  if ((window as unknown as { __forceOverlayScrollbars?: boolean }).__forceOverlayScrollbars === true) return true;
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:absolute;top:-9999px;left:-9999px;width:60px;height:60px;overflow:scroll;visibility:hidden';
+  document.body.append(probe);
+  const overlay = probe.offsetWidth - probe.clientWidth === 0;
+  probe.remove();
+  return overlay;
+}
+
+function installOverlayScrollbars(host: HTMLElement): () => void {
+  if (!usesOverlayScrollbars()) return () => undefined;
+  host.classList.add('has-own-scrollbars');
+  let scroller: HTMLElement | null = null;
+  const bars: Array<{ el: HTMLElement; update: () => void }> = [];
+
+  const makeBar = (axis: 'x' | 'y'): { el: HTMLElement; update: () => void } => {
+    const horizontal = axis === 'x';
+    const el = document.createElement('div');
+    el.className = `elabftw-own-scrollbar elabftw-own-scrollbar-${axis}`;
+    el.setAttribute('role', 'scrollbar');
+    el.setAttribute('aria-orientation', horizontal ? 'horizontal' : 'vertical');
+    el.tabIndex = 0;
+    const thumb = document.createElement('div');
+    thumb.className = 'elabftw-own-scrollbar-thumb';
+    el.append(thumb);
+    host.append(el);
+
+    const metrics = (): { view: number; total: number; pos: number; track: number; thumbLen: number } | null => {
+      if (!scroller) return null;
+      const view = horizontal ? scroller.clientWidth : scroller.clientHeight;
+      const total = horizontal ? scroller.scrollWidth : scroller.scrollHeight;
+      const pos = horizontal ? scroller.scrollLeft : scroller.scrollTop;
+      const track = horizontal ? el.clientWidth : el.clientHeight;
+      const thumbLen = Math.min(track, Math.max(28, track * view / Math.max(total, 1)));
+      return { view, total, pos, track, thumbLen };
+    };
+    const update = (): void => {
+      const m = metrics();
+      const overflow = m !== null && m.total > m.view + 1;
+      el.style.visibility = overflow ? 'visible' : 'hidden';
+      if (!m || !overflow) return;
+      const room = m.total - m.view;
+      const offset = room > 0 ? m.pos / room * (m.track - m.thumbLen) : 0;
+      thumb.style[horizontal ? 'width' : 'height'] = `${m.thumbLen}px`;
+      thumb.style.transform = horizontal ? `translateX(${offset}px)` : `translateY(${offset}px)`;
+      el.setAttribute('aria-valuemin', '0');
+      el.setAttribute('aria-valuemax', String(Math.round(room)));
+      el.setAttribute('aria-valuenow', String(Math.round(m.pos)));
+    };
+    const scrollTo = (value: number): void => {
+      if (!scroller) return;
+      const room = (horizontal ? scroller.scrollWidth - scroller.clientWidth : scroller.scrollHeight - scroller.clientHeight);
+      const next = Math.max(0, Math.min(room, value));
+      if (horizontal) scroller.scrollLeft = next; else scroller.scrollTop = next;
+    };
+    thumb.addEventListener('pointerdown', event => {
+      const m = metrics();
+      if (!m) return;
+      event.preventDefault();
+      event.stopPropagation();
+      try {
+        thumb.setPointerCapture(event.pointerId);
+      } catch {
+        // a synthetic pointer (a test) has nothing to capture: the moves are sent to the thumb itself
+      }
+      const start = horizontal ? event.clientX : event.clientY;
+      const startPos = m.pos;
+      const ratio = (m.total - m.view) / Math.max(1, m.track - m.thumbLen);
+      thumb.classList.add('is-dragging');
+      const move = (ev: PointerEvent): void => scrollTo(startPos + ((horizontal ? ev.clientX : ev.clientY) - start) * ratio);
+      const up = (): void => {
+        thumb.classList.remove('is-dragging');
+        thumb.removeEventListener('pointermove', move);
+        thumb.removeEventListener('pointerup', up);
+        thumb.removeEventListener('pointercancel', up);
+      };
+      thumb.addEventListener('pointermove', move);
+      thumb.addEventListener('pointerup', up);
+      thumb.addEventListener('pointercancel', up);
+    });
+    el.addEventListener('pointerdown', event => {
+      if (event.target !== el) return;
+      const m = metrics();
+      if (!m) return;
+      const rect = el.getBoundingClientRect();
+      const at = horizontal ? event.clientX - rect.left : event.clientY - rect.top;
+      const thumbStart = m.total > m.view ? m.pos / (m.total - m.view) * (m.track - m.thumbLen) : 0;
+      scrollTo(m.pos + (at < thumbStart ? -1 : 1) * m.view * 0.9);
+    });
+    el.addEventListener('keydown', event => {
+      const m = metrics();
+      if (!m) return;
+      const back = horizontal ? 'ArrowLeft' : 'ArrowUp';
+      const forward = horizontal ? 'ArrowRight' : 'ArrowDown';
+      if (event.key === back) scrollTo(m.pos - 40);
+      else if (event.key === forward) scrollTo(m.pos + 40);
+      else if (event.key === 'PageUp') scrollTo(m.pos - m.view * 0.9);
+      else if (event.key === 'PageDown') scrollTo(m.pos + m.view * 0.9);
+      else if (event.key === 'Home') scrollTo(0);
+      else if (event.key === 'End') scrollTo(m.total);
+      else return;
+      event.preventDefault();
+    });
+    return { el, update };
+  };
+
+  bars.push(makeBar('x'), makeBar('y'));
+  const updateAll = (): void => bars.forEach(bar => bar.update());
+  const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(updateAll) : null;
+  const bind = (): void => {
+    const found = host.querySelector<HTMLElement>('.jss_content');
+    if (found === scroller) return;
+    scroller?.removeEventListener('scroll', updateAll);
+    resize?.disconnect();
+    scroller = found;
+    if (scroller) {
+      scroller.addEventListener('scroll', updateAll, { passive: true });
+      resize?.observe(scroller);
+      const table = scroller.querySelector('.jss_worksheet');
+      if (table) resize?.observe(table);
+      bars.forEach(bar => bar.el.setAttribute('aria-controls', scroller?.id || ''));
+    }
+    updateAll();
+  };
+  const mutation = new MutationObserver(() => { bind(); updateAll(); });
+  mutation.observe(host, { childList: true, subtree: true });
+  window.addEventListener('resize', updateAll);
+  bind();
+  return () => {
+    mutation.disconnect();
+    resize?.disconnect();
+    scroller?.removeEventListener('scroll', updateAll);
+    window.removeEventListener('resize', updateAll);
+    bars.forEach(bar => bar.el.remove());
+    host.classList.remove('has-own-scrollbars');
+  };
+}
+
+/**
  * Paste transposed from the keyboard: Ctrl/Cmd+Shift+V inside the grid. The browser then fires the usual paste event
  * (with the clipboard in it), which is taken over here instead of pasting as it is. Returns the function that removes it.
  */
@@ -345,6 +494,79 @@ function installTransposedPaste(
 }
 
 /**
+ * jspreadsheet-ce builds every new row with getNumberOfColumns(), which is the largest of the column list, the first data
+ * row and options.minDimensions[0] -- and never lowers minDimensions when columns are deleted (or rows are). After a
+ * column delete the next Insert row therefore built more cells than there are headers and threw "Cannot read properties of
+ * undefined (reading 'style')" in createCell (and 'records[t] is undefined' for rows), the visible grid doing nothing.
+ * Keeping minDimensions equal to the real size after every structure change (and just before an insert) avoids it.
+ */
+function syncMinDimensions(worksheet: JssInstance | null | undefined): void {
+  // window.__noMinDimSync: lets a soak run the same seeds with and without this sync
+  if ((window as unknown as { __noMinDimSync?: boolean }).__noMinDimSync === true) return;
+  const sheet = worksheet as unknown as { headers?: unknown[]; options?: { data?: unknown[]; minDimensions?: number[] } } | null | undefined;
+  if (!sheet?.options || !Array.isArray(sheet.headers) || sheet.headers.length === 0) return;
+  const rows = Array.isArray(sheet.options.data) ? sheet.options.data.length : 0;
+  sheet.options.minDimensions = [sheet.headers.length, rows];
+}
+
+/**
+ * The grid's own "Insert a new row/column before/after" run on whichever worksheet jspreadsheet believes is current. When
+ * that was not the sheet on screen (a replaced instance, or one still being built) the insert threw "Cannot read
+ * properties of undefined (reading 'style')" inside createCell and the visible grid did nothing. The insert now runs on
+ * the worksheet that owns the container, and is skipped (with a note in window.__jssMenuDiag for the soak) when that sheet
+ * has no headers, instead of throwing.
+ */
+function retargetInsertItems(
+  menuWorksheet: JssInstance,
+  x: unknown,
+  y: unknown,
+  items: JssMenuItem[],
+  ownWorksheet?: () => JssInstance | null | undefined,
+): void {
+  const col = Number.parseInt(String(x), 10);
+  const row = Number.parseInt(String(y), 10);
+  const patterns: Array<[RegExp, (target: JssInstance) => void]> = [
+    [/^Insert a new row before$/i, target => target.insertRow?.(1, row, true)],
+    [/^Insert a new row after$/i, target => target.insertRow?.(1, row, false)],
+    [/^Insert a new column before$/i, target => target.insertColumn?.(1, col, true)],
+    [/^Insert a new column after$/i, target => target.insertColumn?.(1, col, false)],
+  ];
+  const note = (what: string, target: JssInstance | null | undefined): void => {
+    const sheet = target as unknown as { headers?: unknown[]; options?: { data?: unknown[]; columns?: unknown[] } } | null | undefined;
+    const diag = ((window as unknown as { __jssMenuDiag?: unknown[] }).__jssMenuDiag ??= []);
+    if (diag.length < 20) {
+      diag.push({
+        what,
+        sameAsMenuSheet: target === menuWorksheet,
+        headers: sheet?.headers?.length ?? null,
+        data0: sheet?.options?.data?.[0] ? Object.keys(sheet.options.data[0] as object).length : null,
+        columns: sheet?.options?.columns?.length ?? null,
+        minDimensions: (sheet?.options as { minDimensions?: number[] } | undefined)?.minDimensions ?? null,
+      });
+    }
+  };
+  for (const item of items) {
+    const entry = patterns.find(([pattern]) => pattern.test(item.title ?? ''));
+    if (!entry) continue;
+    item.onclick = (): void => {
+      const target = ownWorksheet?.() ?? menuWorksheet;
+      const sheet = target as unknown as { headers?: unknown[] } | null | undefined;
+      if (target !== menuWorksheet) note('menu sheet is not the sheet on screen', target);
+      if (!sheet || !Array.isArray(sheet.headers) || sheet.headers.length === 0) {
+        note('sheet has no headers, insert skipped', target);
+        return;
+      }
+      syncMinDimensions(target);
+      try {
+        entry[1](target);
+      } catch (error) {
+        note(`insert threw: ${String(error)}`, target);
+      }
+    };
+  }
+}
+
+/**
  * The grid's own "Delete selected rows/columns" only removes the whole selection when
  * entire rows/columns were picked through their headers; a range of cells (what dragging
  * over the row numbers gives) fell back to deleting just the clicked row or column.
@@ -357,9 +579,11 @@ const deleteWholeSelectionMenu = (
   _event: unknown,
   items: JssMenuItem[],
   sizeLocked = false,
+  ownWorksheet?: () => JssInstance | null | undefined,
 ): JssMenuItem[] => {
   // A well plate has a fixed size: nothing that adds or removes rows or columns.
   if (sizeLocked) return items.filter(item => !/^(Insert|Delete)\b.*\b(row|column)s?\b/i.test(item.title ?? ''));
+  retargetInsertItems(worksheet, x, y, items, ownWorksheet);
   const range = worksheet?.selectedCell as number[] | null | undefined;
   if (!Array.isArray(range) || range.length < 4) return items;
   const clickedX = Number.parseInt(String(x), 10);
@@ -1695,10 +1919,65 @@ function parseClipboardHtmlTable(html: string): ClipboardTable | null {
     }));
   }
 
+  // A table copied from another eLabFTW spreadsheet carries its column widths as <col style="width:Xpx">. Those are the
+  // sheet's own layout, so they come along. The leading <col> is the row-number gutter when the table has one. The widths are used only when
+  // they line up with the copied columns: a partial copy keeps the default width.
+  let colWidths: ColWidths | undefined;
+  if (isFormulaSpreadsheet) {
+    const hasGutter = table.querySelector('.spreadsheet-coordinate') !== null;
+    const sourceCols = Array.from(table.querySelectorAll<HTMLTableColElement>('colgroup > col')).slice(hasGutter ? 1 : 0);
+    const copiedCols = rows.reduce((maximum, row) => Math.max(maximum, row.length), 0);
+    if (sourceCols.length === copiedCols) {
+      const widths: ColWidths = {};
+      sourceCols.forEach((col, colIndex) => {
+        const width = Number.parseFloat(col.style.width);
+        if (Number.isFinite(width)) widths[String(colIndex)] = Math.max(MIN_DATA_COL_WIDTH, Math.min(MAX_DATA_COL_WIDTH, Math.round(width)));
+      });
+      if (Object.keys(widths).length > 0) colWidths = widths;
+    }
+  } else {
+    // Excel, Sheets, LibreOffice and Word describe a column's width on the <col> (or on the first row's cells), as
+    // pixels or points, inline or through a class in the clipboard's <style> block. Those widths come along too, so a
+    // pasted table looks like its source. A column the source gives no width keeps the default width.
+    const lengthToPx = (value: string): number | null => {
+      const match = /^\s*(\d+(?:\.\d+)?)\s*(px|pt|cm|mm|in)?\s*$/i.exec(value);
+      if (!match) return null;
+      const factor = { px: 1, pt: 96 / 72, cm: 96 / 2.54, mm: 96 / 25.4, in: 96 }[(match[2] ?? 'px').toLowerCase()] ?? 1;
+      const px = Number.parseFloat(match[1]) * factor;
+      return px > 0 ? Math.max(MIN_DATA_COL_WIDTH, Math.min(MAX_DATA_COL_WIDTH, Math.round(px))) : null;
+    };
+    const elementWidth = (element: Element): number | null => {
+      const declared = getClipboardElementCandidateStyle(element, styleRules).getPropertyValue('width');
+      return lengthToPx(declared || element.getAttribute('width') || '');
+    };
+    const widths: ColWidths = {};
+    let colIndex = 0;
+    table.querySelectorAll<HTMLTableColElement>('colgroup > col').forEach(col => {
+      const span = Math.max(1, col.span || 1);
+      const width = elementWidth(col);
+      for (let offset = 0; offset < span; offset++) {
+        if (width !== null) widths[String(colIndex + offset)] = width;
+      }
+      colIndex += span;
+    });
+    if (Object.keys(widths).length === 0) {
+      const firstRow = Array.from(table.rows).find(row => row.cells.length > 0);
+      let cellCol = 0;
+      Array.from(firstRow?.cells ?? []).forEach(cell => {
+        const span = Math.max(1, cell.colSpan || 1);
+        const width = span === 1 ? elementWidth(cell) : null;
+        if (width !== null) widths[String(cellCol)] = width;
+        cellCol += span;
+      });
+    }
+    if (Object.keys(widths).length > 0) colWidths = widths;
+  }
+
   return {
     data: rows,
     cellStyles: Object.keys(cellStyles).length > 0 ? cellStyles : undefined,
     rowHeights: Object.keys(rowHeights).length > 0 ? rowHeights : undefined,
+    colWidths,
   };
 }
 
@@ -1752,6 +2031,7 @@ export function spreadsheetFromClipboard(html: string, plainText: string): Sprea
     caption: '',
     cellStyles: normalizeCellStyles(richTextStyles, rows, cols),
     rowHeights: normalizeRowHeights(clipboardTable?.rowHeights, rows),
+    colWidths: normalizeColWidths(clipboardTable?.colWidths, cols),
     appearance,
   };
 }
@@ -2605,6 +2885,33 @@ function startTrackingGlobalListeners(): () => () => void {
     libraryListenerCollectors.delete(collected);
     collected.splice(0).forEach(([target, type, listener, options]) => target.removeEventListener(type, listener, options));
   };
+}
+
+// jspreadsheet-ce keeps ONE global "current worksheet" (jspreadsheet.current) and builds its right-click menu and runs
+// every menu action (insert/delete row or column, ...) on it. After a remount or with several tables on the page it can
+// still point at an instance that was replaced or torn down; the menu action then ran on that dead sheet and threw
+// "Cannot read properties of undefined (reading 'style')" (headers empty) while the visible grid did nothing. So the
+// sheet under the pointer is pinned as current before a right-click is handled, and before any press when the current
+// one is gone (detached or without headers).
+const pinnedContainers = new WeakSet<HTMLElement>();
+
+function pinCurrentWorksheet(container: HTMLElement): void {
+  if (pinnedContainers.has(container)) return;
+  pinnedContainers.add(container);
+  const factory = jspreadsheet as unknown as { current?: { element?: Element; headers?: unknown[] } | null };
+  const ownWorksheet = (): { element?: Element; headers?: unknown[] } | null => {
+    const holder = container.matches('.jss_container') ? container : container.querySelector<HTMLElement>('.jss_container');
+    const candidate = (holder as (HTMLElement & { jssWorksheet?: { headers?: unknown[] } }) | null)?.jssWorksheet;
+    return candidate && Array.isArray(candidate.headers) && candidate.headers.length > 0 ? candidate : null;
+  };
+  const pin = (event: Event): void => {
+    const own = ownWorksheet();
+    if (!own) return;
+    const current = factory.current;
+    const stale = !current || !current.element?.isConnected || !Array.isArray(current.headers) || current.headers.length === 0;
+    if (event.type === 'contextmenu' || stale) factory.current = own;
+  };
+  for (const type of ['pointerdown', 'mousedown', 'contextmenu']) container.addEventListener(type, pin, true);
 }
 
 function getMountedWorksheet(
@@ -4586,18 +4893,9 @@ export function openSpreadsheetModal(
     // Page-level listeners of this popup, taken off again when it closes (they used to stay behind each time
     // a popup was opened, slowing every mouse event on the page down in a long session).
     const popupPageListenerRemovers: Array<() => void> = [];
-    // the empty lettered columns beside a narrow grid (see syncGridFiller)
-    let pendingFiller: { baseCols: number; timer: number } | null = null;
-    const settlePendingFiller = (): void => {
-      const pending = pendingFiller;
-      if (!pending) return;
-      if (rescueInputEl && !rescueInputEl.hidden) return;
-      const inNewColumns = !!selectedRange && Math.max(selectedRange[0], selectedRange[2]) >= pending.baseCols;
-      if (worksheet && inNewColumns && sheetContainer.contains(document.activeElement)) return;
-      window.clearInterval(pending.timer);
-      pendingFiller = null;
-      if (worksheet) dropEmptyColumnsFrom(worksheet, pending.baseCols, rawDataMirror);
-    };
+    // The empty lettered columns beside a narrow grid (see syncGridFiller): pressing a grey cell adds columns up to it.
+    // They stay while the popup is open; the ones still empty at the end are left out of what Update applies.
+    let pendingFiller: { baseCols: number } | null = null;
     const activateFillerCell = (targetCol: number, row: number): void => {
       if (!worksheet || working.kind === 'well-plate') return;
       commitRescueInput();
@@ -4606,15 +4904,17 @@ export function openSpreadsheetModal(
       if (missing > 0) {
         flushMirrorIntoWorksheet(worksheet);
         worksheet.insertColumn?.(missing, currentCols - 1, false);
-        // kept only if something is typed in them (see the grid in the text)
-        if (!pendingFiller) {
-          pendingFiller = { baseCols: currentCols, timer: window.setInterval(settlePendingFiller, 250) };
-          popupPageListenerRemovers.push(() => window.clearInterval(pendingFiller?.timer));
-        }
+        pendingFiller ??= { baseCols: currentCols };
       }
       const col = Math.min(targetCol, MAX_DIMENSION - 1);
       selectedRange = [col, row, col, row];
-      window.setTimeout(() => worksheet?.updateSelectionFromCoords?.(col, row, col, row), 0);
+      // focus goes into the grid too (the press on the filler does not move it)
+      const sink = sheetContainer?.querySelector<HTMLElement>('.jss_textarea');
+      window.setTimeout(() => {
+        worksheet?.updateSelectionFromCoords?.(col, row, col, row);
+        selectedRange = [col, row, col, row];
+        sink?.focus({ preventScroll: true });
+      }, 0);
     };
     const fillerTimer = window.setInterval(() => syncGridFiller(sheetContainer, true, activateFillerCell), 400);
     popupPageListenerRemovers.push(() => window.clearInterval(fillerTimer));
@@ -4635,6 +4935,8 @@ export function openSpreadsheetModal(
       const liveData = liveWorksheet?.getData?.();
       if (!liveWorksheet || !Array.isArray(liveData)) return;
       rawDataMirror.forEach((mirrorRow, rowIndex) => mirrorRow.forEach((value, colIndex) => {
+        // a cell past the grid's last column would widen the data without a header, and the next row insert then throws
+        if (Array.isArray(liveWorksheet.headers) && colIndex >= liveWorksheet.headers.length) return;
         if (String(liveData[rowIndex]?.[colIndex] ?? '') !== String(value ?? '')) {
           liveWorksheet.setValueFromCoords?.(colIndex, rowIndex, value, true);
         }
@@ -4680,6 +4982,7 @@ export function openSpreadsheetModal(
       pendingStructure = acceptsGridChanges ? beginStructure(target, axis, kind, arg, readPopupColWidths) : null;
     };
     const finishPopupStructure = (target: JssInstance): void => {
+    syncMinDimensions(target);
       if (!pendingStructure) return;
       const entry = finishStructure(target, pendingStructure, readPopupColWidths);
       lastPopupStructure = pendingStructure;
@@ -6085,6 +6388,7 @@ export function openSpreadsheetModal(
         changes => pushCellHistoryEntry(changes),
       );
       const stopTrackingJssListeners = startTrackingGlobalListeners();
+      pinCurrentWorksheet(sheetContainer);
       const instance = (jspreadsheet as unknown as JssFactory)(sheetContainer, {
         worksheets: [{
           data: mountedData,
@@ -6196,7 +6500,7 @@ export function openSpreadsheetModal(
           styleNewlyInsertedColumn(changedWorksheet, inserted);
         },
         contextMenu: (...menuArgs: Parameters<typeof deleteWholeSelectionMenu>) =>
-          deleteWholeSelectionMenu(menuArgs[0], menuArgs[1], menuArgs[2], menuArgs[3], menuArgs[4], plateLocked),
+          deleteWholeSelectionMenu(menuArgs[0], menuArgs[1], menuArgs[2], menuArgs[3], menuArgs[4], plateLocked, () => getMountedWorksheet(sheetContainer)),
         ondeleterow: (changedWorksheet: JssInstance): void => {
           if (acceptsGridChanges) hasChanges = true;
           finishPopupStructure(changedWorksheet);
@@ -6626,6 +6930,8 @@ export function openSpreadsheetModal(
       onSpreadsheetCopy(event as ClipboardEvent, true);
     }, true);
     ui.sheetHost.addEventListener('paste', onSpreadsheetPaste, true);
+    // always-visible scroll bars when the browser only draws overlay ones that hide until you scroll
+    popupPageListenerRemovers.push(installOverlayScrollbars(ui.sheetHost));
     // Ctrl/Cmd+Shift+V pastes the clipboard transposed, with its top-left cell at the selected cell
     popupPageListenerRemovers.push(installTransposedPaste(ui.sheetHost, () => {
       const selection = getSelectedRange();
@@ -7385,10 +7691,15 @@ export function openSpreadsheetModal(
     const buildResult = (): { result: SpreadsheetData; computed: () => AOA } => {
       const rawData = readRawData();
       const rows = clampDimension(rawData.length, working.rows);
-      const cols = clampDimension(
-        rawData.reduce((max, row) => Math.max(max, row.length), 0),
-        working.cols,
-      );
+      let width = rawData.reduce((max, row) => Math.max(max, row.length), 0);
+      // grey columns that were pressed but never typed in are not part of the table
+      if (pendingFiller) {
+        const baseCols = pendingFiller.baseCols;
+        let lastFilled = baseCols;
+        rawData.forEach(row => row.forEach((value, col) => { if (col >= baseCols && String(value ?? '') !== '') lastFilled = Math.max(lastFilled, col + 1); }));
+        width = Math.min(width, lastFilled);
+      }
+      const cols = clampDimension(width, working.cols);
       const result: SpreadsheetData = {
         data: resizeData(rawData, rows, cols),
         rows,
@@ -7863,6 +8174,8 @@ export function buildReadOnlySpreadsheetHost(
     const liveData = liveWorksheet?.getData?.();
     if (!liveWorksheet || !Array.isArray(liveData)) return;
     rawDataMirror.forEach((mirrorRow, rowIndex) => mirrorRow.forEach((value, colIndex) => {
+      // a cell past the grid's last column would widen the data without a header, and the next row insert then throws
+      if (Array.isArray(liveWorksheet.headers) && colIndex >= liveWorksheet.headers.length) return;
       if (String(liveData[rowIndex]?.[colIndex] ?? '') !== String(value ?? '')) {
         liveWorksheet.setValueFromCoords?.(colIndex, rowIndex, value, true);
       }
@@ -7911,6 +8224,7 @@ export function buildReadOnlySpreadsheetHost(
       : null;
   };
   const finishInlineStructure = (target: JssInstance): void => {
+    syncMinDimensions(target);
     if (!pendingStructure) return;
     const entry = finishStructure(target, pendingStructure, () => readRenderedColWidths(sheetContainer));
     lastInlineStructure = pendingStructure;
@@ -9826,19 +10140,24 @@ export function buildReadOnlySpreadsheetHost(
         : null;
     }));
   }
-  let pendingFiller: { baseCols: number; timer: number } | null = null;
+  // The empty lettered columns beside the grid: pressing a grey cell adds the columns up to it. They stay while the table
+  // is being worked in; the ones still empty are taken off once, when the next press lands outside the table.
+  let pendingFiller: { baseCols: number } | null = null;
   const settlePendingFiller = (): void => {
     const pending = pendingFiller;
     if (!pending) return;
-    const mounted = getMountedWorksheet(sheetContainer);
-    if (mounted && rescueInputEl && !rescueInputEl.hidden) return;
-    const selection = lastKnownSelection;
-    const inNewColumns = !!selection && Math.max(selection[0], selection[2]) >= pending.baseCols;
-    if (mounted && inNewColumns && sheetContainer.contains(document.activeElement)) return;
-    window.clearInterval(pending.timer);
     pendingFiller = null;
+    commitRescueInput();
+    commitFormulaInput();
+    const mounted = getMountedWorksheet(sheetContainer);
     if (mounted) dropEmptyColumnsFrom(mounted, pending.baseCols, rawDataMirror);
   };
+  listenOnDocument('pointerdown', event => {
+    if (!pendingFiller) return;
+    const scope = sheetContainer.closest<HTMLElement>('.elabftw-spreadsheet-editor-overlay, .elabftw-spreadsheet-readonly-view') ?? sheetContainer;
+    if (event.target instanceof Node && scope.contains(event.target)) return;
+    settlePendingFiller();
+  }, true);
   if (editable && !plateLocked) {
     // The empty lettered columns beside the grid: pressing one adds the columns up to it and selects that cell,
     // so typing there simply continues the sheet.
@@ -9853,11 +10172,7 @@ export function buildReadOnlySpreadsheetHost(
         // typed values live only in the mirror until the grid is redrawn; the insert re-reads the worksheet
         flushMirrorIntoWorksheet(mounted);
         mounted.insertColumn?.(missing, currentCols - 1, false);
-        // The columns only stay if something is typed in them: once the selection or the focus leaves them empty,
-        // they are taken off again and the grey columns are back.
-        if (!pendingFiller) {
-          pendingFiller = { baseCols: currentCols, timer: window.setInterval(settlePendingFiller, 250) };
-        }
+        pendingFiller ??= { baseCols: currentCols };
       }
       const col = Math.min(targetCol, MAX_DIMENSION - 1);
       const sink = sheetContainer.querySelector<HTMLElement>('.jss_textarea');
@@ -10371,6 +10686,7 @@ export function buildReadOnlySpreadsheetHost(
     },
   );
   const stopTrackingJssListeners = startTrackingGlobalListeners();
+  pinCurrentWorksheet(sheetContainer);
   (jspreadsheet as unknown as JssFactory)(sheetContainer, {
     worksheets: [{
       data: displayValues,
@@ -10609,7 +10925,7 @@ export function buildReadOnlySpreadsheetHost(
         styleNewlyInsertedColumn(changedWorksheet, inserted);
       },
       contextMenu: (...menuArgs: Parameters<typeof deleteWholeSelectionMenu>) =>
-        deleteWholeSelectionMenu(menuArgs[0], menuArgs[1], menuArgs[2], menuArgs[3], menuArgs[4], plateLocked),
+        deleteWholeSelectionMenu(menuArgs[0], menuArgs[1], menuArgs[2], menuArgs[3], menuArgs[4], plateLocked, () => getMountedWorksheet(sheetContainer)),
       ondeleterow: (changedWorksheet: JssInstance) => {
         finishInlineStructure(changedWorksheet);
         notifyStructuralChange(changedWorksheet);

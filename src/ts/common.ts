@@ -1045,6 +1045,14 @@ on('destroy-favtags', (el: HTMLElement) => {
   }
 });
 
+// the All / Exp / Res / templates tabs of the search panel set the (hidden) Type select, which FavoriteFilters reads
+on('select-favorite-target', (el: HTMLElement) => {
+  const select = document.getElementById('favoriteFilterTarget') as HTMLSelectElement | null;
+  if (!select || !el.dataset.targetValue || select.value === el.dataset.targetValue) return;
+  select.value = el.dataset.targetValue;
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+});
+
 // Categories and statuses are only listed once a specific Type is selected, so a
 // favourite added while "All" is selected would be saved but stay hidden. Switch to
 // its own type so it shows up right away.
@@ -1998,6 +2006,16 @@ on('update-entity-body', async (el: HTMLElement) => {
   }
 });
 
+// "View" in the edit toolbar: the same save as Save and go back (the editor is flushed, the saved indicator shows, a failed save
+// stays on the page), then the view page of this entry
+on('save-and-view', async () => {
+  const wasSaved = await updateEntityBody(true);
+  if (wasSaved) {
+    sessionStorage.setItem('flash_saved', i18next.t('saved'));
+    window.location.replace('?mode=view&id=' + entity.id);
+  }
+});
+
 on('search-pubchem', (el: HTMLElement) => {
   const inputEl = el.parentElement.parentElement.querySelector('input') as HTMLInputElement;
   if (!inputEl.checkValidity()) {
@@ -2228,6 +2246,13 @@ on('unack-notif', (el: HTMLElement) => {
 });
 
 // CREATE EXPERIMENT, TEMPLATE or DATABASE item: main create button in top right
+// Show more / Show less of a clamped Goals, Conclusion or Notes block (see fx-field.html)
+on('toggle-field-more', (el: HTMLElement) => {
+  const open = el.closest('.fx-field')?.classList.toggle('is-open') ?? false;
+  el.setAttribute('aria-expanded', open ? 'true' : 'false');
+  el.textContent = (open ? el.dataset.less : el.dataset.more) ?? '';
+});
+
 on('create-entity', async (el: HTMLElement, event: Event) => {
   event.preventDefault();
   const form = document.getElementById('createNewForm') as HTMLFormElement;

@@ -12,7 +12,9 @@ import { Model } from './interfaces';
 export default class SidePanel {
   private static readonly WIDTH_KEY = 'sidepanel-width';
   private static readonly WIDTH_PROPERTY = '--side-panel-width';
-  private static readonly MIN_WIDTH = 280;
+  // narrow enough for the Folders explorer to be kept as a slim strip beside the page: the page's left rail takes 52 px and the
+  // explorer bar needs about 150 px beside it
+  private static readonly MIN_WIDTH = 210;
   private static readonly MAX_WIDTH = 720;
   private static currentWidth = 0;
   private static widthInitialized = false;
@@ -171,6 +173,8 @@ export default class SidePanel {
         // may be open on top of the panel with its own Escape handling --
         // let it close first rather than also collapsing the whole panel.
         if (panel.querySelector('.favorite-filter-overlay:not([hidden])')) return;
+        // the Contents panel in select mode (or with a row menu open): Escape leaves that first
+        if (panel.classList.contains('toc-select-mode') || panel.querySelector('.toc-row-menu')) return;
         this.hide();
         return;
       }

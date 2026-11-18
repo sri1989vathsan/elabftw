@@ -126,14 +126,18 @@ body.mce-content-body {
 
 :where(#body_view, body.mce-content-body) a.elabftw-date-reference {
   align-items: center;
-  background-color: var(--firstlevel, #eef2f5);
-  border: 1px solid var(--secondary-muted, #ccd2d8);
+  background-color: color-mix(in srgb, var(--primary, #167b85) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary, #167b85) 22%, transparent);
   border-radius: 0.3rem;
-  color: var(--primary, #167b85);
+  color: inherit;
   display: inline-flex;
-  gap: 0.3rem;
-  padding: 0.08rem 0.35rem;
+  font-size: inherit;
+  font-weight: inherit;
+  gap: 0.25rem;
+  line-height: 1.2;
+  padding: 0.02rem 0.3rem;
   text-decoration: none;
+  vertical-align: baseline;
   white-space: nowrap;
 }
 
@@ -149,21 +153,21 @@ body.mce-content-body {
   display: inline-grid;
   flex: 0 0 auto;
   font-family: sans-serif;
-  grid-template-rows: 0.55rem 0.9rem;
-  height: 1.55rem;
+  grid-template-rows: 0.4rem 0.65rem;
+  height: 1.05rem;
   line-height: 1;
   overflow: hidden;
   text-align: center;
-  width: 1.6rem;
+  width: 1.1rem;
 }
 
 :where(#body_view, body.mce-content-body) .elabftw-date-icon-month {
   background-color: var(--primary, #167b85);
   color: var(--white, #fff);
-  font-size: 0.42rem;
+  font-size: 0.3rem;
   font-weight: 700;
   letter-spacing: 0.02em;
-  padding-top: 0.08rem;
+  padding-top: 0.04rem;
 }
 
 :where(#body_view, body.mce-content-body) .elabftw-date-icon-month::before {
@@ -172,9 +176,9 @@ body.mce-content-body {
 
 :where(#body_view, body.mce-content-body) .elabftw-date-icon-day {
   color: var(--strongest, #343a40);
-  font-size: 0.72rem;
+  font-size: 0.5rem;
   font-weight: 700;
-  padding-top: 0.1rem;
+  padding-top: 0.06rem;
 }
 
 :where(#body_view, body.mce-content-body) .elabftw-date-icon-day::before {

@@ -21,4 +21,10 @@ enum DisplayMode: string
     case Storage = 'st';
     case Activity = 'ac';
     case Expandable = 'ex';
+    // grouped compact rows
+    case Compact = 'cr';
+    // compact rows with a preview pane
+    case Preview = 'pv';
+    // board by status (experiments)
+    case Board = 'bd';
 }

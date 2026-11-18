@@ -238,6 +238,12 @@
     {% else %}
       {% include 'back-to-previous.html' %}
     {% endif %}
+    {# edit mode: save what was typed and go to the view page of this entry (the entry itself, not the folder or the previous page) #}
+    {% if mode == 'edit' %}
+      <button type='button' class='btn btn-secondary ml-2 toolbar-view-btn' data-action='save-and-view' title='{{ 'Back to view mode'|trans }}' aria-label='{{ 'Back to view mode'|trans }}'>
+        <i class='fas fa-eye fa-fw' aria-hidden='true'></i><span class='toolbar-view-label'>{{ 'View'|trans }}</span>
+      </button>
+    {% endif %}
     {# for templates: create from button #}
     {% if Entity.entityType.value == 'experiments_templates' or Entity.entityType.value == 'items_types' %}
       <a data-action='create-entity' data-type='{{ Entity.entityType.value == 'experiments_templates' ? 'experiments' : 'items' }}' data-tplid='{{ Entity.id }}' href='#' class='btn btn-primary ml-2' title='{{ 'Create entry from template'|trans }}' aria-label='{{ 'Create entry from template'|trans }}'>

@@ -491,10 +491,17 @@
       {# the Database lists are always the expandable table: no layout switch there #}
       {% if scriptName != 'registry.php' %}
       {# SWITCH LAYOUT #}
-      <button title='{{ 'Switch layout'|trans }}' aria-label='{{ 'Switch layout'|trans }}' type='button' class='btn btn-transparent mr-1' data-action='toggle-items-layout'>
-        <i class='fas fa-fw fa-list'></i>
-        <i class='fas fa-fw fa-table'></i>
-      </button>
+      <div class='btn-group layout-switch mr-1' role='group' aria-label='{{ 'Switch layout'|trans }}'>
+        {% set layoutModes = {'it': ['Cards', 'fa-list'], 'cr': ['Compact rows', 'fa-bars'], 'pv': ['Rows with preview', 'fa-table-columns'], 'bd': ['Board by status', 'fa-table-cells-large'], 'tb': ['Tabular', 'fa-table']} %}
+        {% set onExperiments = App.Request.getScriptName|split('/')|last == 'experiments.php' %}
+        {% for mode, def in layoutModes %}
+         {% if mode != 'bd' or onExperiments %}
+          <button title='{{ def[0]|trans }}' aria-label='{{ def[0]|trans }}' type='button' class='btn btn-transparent{{ App.Users.userData.display_mode == mode ? ' active' }}' data-action='set-items-layout' data-layout='{{ mode }}' aria-pressed='{{ App.Users.userData.display_mode == mode ? 'true' : 'false' }}'>
+            <i class='fas fa-fw {{ def[1] }}'></i>
+          </button>
+         {% endif %}
+        {% endfor %}
+      </div>
       {% endif %}
     <div class='vertical-separator'></div>
 

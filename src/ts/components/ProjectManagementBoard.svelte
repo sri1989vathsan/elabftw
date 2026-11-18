@@ -956,7 +956,26 @@
   // not one global switch -- a project used for quick scanning shouldn't
   // force the same density on one you actually work the detail of, and
   // vice versa. Per-browser (localStorage), not a synced team setting.
-  let cardDensity: 'compact' | 'expanded' = 'expanded';
+  // which projects have their "Goals / description" open (remembered in this browser, one flag per project)
+  const DESCRIPTION_OPEN_KEY = 'pm-description-open';
+  function readDescriptionOpen(): Record<string, boolean> {
+    try {
+      return JSON.parse(localStorage.getItem(DESCRIPTION_OPEN_KEY) || '{}') as Record<string, boolean>;
+    } catch {
+      return {};
+    }
+  }
+  let descriptionOpen: Record<string, boolean> = readDescriptionOpen();
+  function toggleDescription(projectId: number): void {
+    descriptionOpen = { ...descriptionOpen, [String(projectId)]: !descriptionOpen[String(projectId)] };
+    try {
+      localStorage.setItem(DESCRIPTION_OPEN_KEY, JSON.stringify(descriptionOpen));
+    } catch {
+      // the choice just is not remembered
+    }
+  }
+  let subprojectMenuOpen = false;
+  let cardDensity: 'compact' | 'expanded' = 'compact';
 
   // Board (columns) or canvas (free-form cards and arrows) -- remembered per browser.
   let canvasView = false;
@@ -981,9 +1000,10 @@
 
   function loadCardDensity(id: number | null | 'all'): 'compact' | 'expanded' {
     try {
-      return localStorage.getItem(cardDensityStorageKey(id)) === 'compact' ? 'compact' : 'expanded';
+      // compact unless the person chose the expanded cards for this board
+      return localStorage.getItem(cardDensityStorageKey(id)) === 'expanded' ? 'expanded' : 'compact';
     } catch {
-      return 'expanded';
+      return 'compact';
     }
   }
 
@@ -1188,6 +1208,8 @@
   let draggedTaskId: number | null = null;
   let draggedColumnId: number | null = null;
   let dragOverColumn: number | null = null;
+  // empty columns fold into a narrow strip; the ones the person opened stay open (until the page is reloaded)
+  let openEmptyColumns: Record<number, boolean> = {};
 
   function startTaskDrag(event: DragEvent, id: number): void {
     draggedTaskId = id;
@@ -2555,72 +2577,89 @@
   {#if typeof effectiveTopLevelId === 'number'}
     {@const topLevelProject = projects.find(p => p.id === effectiveTopLevelId) ?? null}
     {#if topLevelProject}
-      <div class="pm-project-description mt-2">
-        <div class="d-flex align-items-center flex-wrap" style="gap:0.4rem">
+      <div class="pm-project-description">
+        <div class="pm-project-line">
           <strong class="pm-project-name-heading">{topLevelProject.name}</strong>
+          {#if visibleTasks.length > 0}
+            <span class="pm-progress-chip" title={`${doneCount} / ${totalCount} ${progressScopeLabel}`}>{donePercent}% · {doneCount}/{totalCount}</span>
+          {/if}
           {#if topLevelProject.target_end_date}
             <span class="pm-muted small"><i class="fas fa-flag-checkered fa-fw mr-1" aria-hidden="true"></i>{t('Target')}: {formatDeadline(topLevelProject.target_end_date)}</span>
           {/if}
+          <button type="button" class="pm-desc-toggle" aria-expanded={!!descriptionOpen[String(topLevelProject.id)]} on:click={() => toggleDescription(topLevelProject.id)}>
+            {t('Goals / description')} <i class="fas {descriptionOpen[String(topLevelProject.id)] ? 'fa-caret-up' : 'fa-caret-down'}" aria-hidden="true"></i>
+          </button>
+          <span class="pm-project-actions">
+      <details class="pm-more-menu" bind:open={subprojectMenuOpen}>
+        <summary class="pm-manage-btn" title={t('More')} aria-label={t('More')}><i class="fas fa-ellipsis fa-fw" aria-hidden="true"></i></summary>
+        <div class="pm-more-pop">
+          <button type="button" class="pm-more-item" on:click={() => { subprojectMenuOpen = false; openProjectDialog(null, effectiveTopLevelId); }}>
+            <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add subproject')}
+          </button>
+          <button type="button" class="pm-more-item" on:click={() => { subprojectMenuOpen = false; openLinksSummary(); }}>
+            <i class="fas fa-link fa-fw mr-1" aria-hidden="true"></i>{t('All links')}
+          </button>
+          {#if subprojectsOfActive.length > 0 && !viewingAllSubprojects && activeProject}
+            <button type="button" class="pm-more-item" on:click={() => { subprojectMenuOpen = false; openProjectDialog(activeProject); }}>
+              <i class="fas fa-pen fa-fw mr-1" aria-hidden="true"></i>{t('Manage this subproject')}
+            </button>
+          {/if}
         </div>
-        <span class="pm-label mb-0 mt-2 d-block">{t('Goals / description')}</span>
-        {#if topLevelProject.description}
-          <div class="pm-project-description-body">{@html topLevelProject.description}</div>
-        {:else}
-          <p class="pm-muted small mb-0">{t('No description yet.')}</p>
+      </details>
+      <button type="button" class="btn btn-link guide-info-btn p-0" data-action="open-guide-card" data-card="guide-collaboration" title={t('About members, assignments and comments in the guide')} aria-label={t('About members, assignments and comments in the guide')}>
+        <i class="fas fa-circle-info" aria-hidden="true"></i>
+      </button>
+          </span>
+        </div>
+        {#if descriptionOpen[String(topLevelProject.id)]}
+          {#if topLevelProject.description}
+            <div class="pm-project-description-body">{@html topLevelProject.description}</div>
+          {:else}
+            <button type="button" class="pm-desc-add" on:click={() => openProjectDialog(topLevelProject)}>{t('Add description')}</button>
+          {/if}
         {/if}
       </div>
     {/if}
 
-    <div class="d-flex align-items-center mt-2" style="gap:0.5rem">
+    {#if subprojectsOfActive.length > 0}
+    <div class="pm-subproject-row">
       {#if subprojectsOfActive.length > 0}
-        <select
-          class="form-control form-control-sm"
-          style="width:auto"
-          value={activeProjectId}
-          on:change={(event) => selectProject(Number((event.target as HTMLSelectElement).value))}
-          title={t('Filter by subproject')}
-        >
-          <option value={effectiveTopLevelId}>{t('All')}</option>
+        <div class="pm-subproject-chips" role="group" aria-label={t('Filter by subproject')}>
+          <button type="button" class="pm-chip" class:active={activeProjectId === effectiveTopLevelId} aria-pressed={activeProjectId === effectiveTopLevelId} on:click={() => selectProject(effectiveTopLevelId)}>{t('All')}</button>
           {#each subprojectsOfActive as subproject (subproject.id)}
-            <option value={subproject.id}>{subproject.name}</option>
+            <button type="button" class="pm-chip" class:active={activeProjectId === subproject.id} aria-pressed={activeProjectId === subproject.id} on:click={() => selectProject(subproject.id)}>{subproject.name}</button>
           {/each}
-        </select>
-        {#if !viewingAllSubprojects && activeProject}
-          <button type="button" class="pm-manage-btn" title={t('Manage this subproject')} aria-label={t('Manage this subproject')} on:click={() => openProjectDialog(activeProject)}>
-            <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
-          </button>
-        {/if}
+        </div>
       {/if}
-      <button type="button" class="btn btn-ghost btn-sm" on:click={() => openProjectDialog(null, effectiveTopLevelId)}>
-        <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add subproject')}
-      </button>
-      <button type="button" class="btn btn-ghost btn-sm" on:click={openLinksSummary}>
-        <i class="fas fa-link fa-fw mr-1" aria-hidden="true"></i>{t('All links')}
-      </button>
-      <button type="button" class="btn btn-link guide-info-btn p-0 ml-1" data-action="open-guide-card" data-card="guide-collaboration" title={t('About members, assignments and comments in the guide')} aria-label={t('About members, assignments and comments in the guide')}>
-        <i class="fas fa-circle-info" aria-hidden="true"></i>
-      </button>
     </div>
+    {/if}
 
     {#if subprojectsOfActive.length > 0 && !viewingAllSubprojects && activeProject}
-      <div class="pm-project-description mt-2">
-        <div class="d-flex align-items-center flex-wrap" style="gap:0.4rem">
+      <div class="pm-project-description pm-subproject-description">
+        <div class="pm-project-line">
           <strong class="pm-project-name-heading">{activeProject.name}</strong>
+          {#if visibleTasks.length > 0}
+            <span class="pm-progress-chip" title={`${doneCount} / ${totalCount} ${progressScopeLabel}`}>{donePercent}% · {doneCount}/{totalCount}</span>
+          {/if}
           {#if activeProject.target_end_date}
             <span class="pm-muted small"><i class="fas fa-flag-checkered fa-fw mr-1" aria-hidden="true"></i>{t('Target')}: {formatDeadline(activeProject.target_end_date)}</span>
           {/if}
+          <button type="button" class="pm-desc-toggle" aria-expanded={!!descriptionOpen[String(activeProject.id)]} on:click={() => toggleDescription(activeProject.id)}>
+            {t('Goals / description')} <i class="fas {descriptionOpen[String(activeProject.id)] ? 'fa-caret-up' : 'fa-caret-down'}" aria-hidden="true"></i>
+          </button>
         </div>
-        <span class="pm-label mb-0 mt-2 d-block">{t('Goals / description')}</span>
-        {#if activeProject.description}
-          <div class="pm-project-description-body">{@html activeProject.description}</div>
-        {:else}
-          <p class="pm-muted small mb-0">{t('No description yet.')}</p>
+        {#if descriptionOpen[String(activeProject.id)]}
+          {#if activeProject.description}
+            <div class="pm-project-description-body">{@html activeProject.description}</div>
+          {:else}
+            <button type="button" class="pm-desc-add" on:click={() => openProjectDialog(activeProject)}>{t('Add description')}</button>
+          {/if}
         {/if}
       </div>
     {/if}
   {/if}
 
-  <div class="pm-search mt-2 d-flex align-items-start flex-wrap" style="gap:0.5rem">
+  <div class="pm-search pm-toolbar-search d-flex align-items-center" style="gap:0.5rem">
     <div class="flex-grow-1">
       <input
         class="form-control form-control-sm"
@@ -2630,7 +2669,6 @@
         bind:value={searchQuery}
         on:input={onSearchInput}
       />
-      <span class="pm-muted small">{t('Searches: title, notes, description, project, priority, people, links')}</span>
     </div>
     <select class="form-control form-control-sm pm-priority-filter" bind:value={priorityFilter} on:change={onPriorityFilterChange} aria-label={t('Filter by priority')}>
       <option value="all">{t('All priorities')}</option>
@@ -2639,7 +2677,7 @@
       <option value="high">{priorityLabel('high')}</option>
     </select>
   </div>
-  {#if visibleTasks.length > 0}
+  {#if visibleTasks.length > 0 && typeof effectiveTopLevelId !== 'number'}
     <div class="pm-progress mt-2" title={`${doneCount} / ${totalCount} ${progressScopeLabel}`}>
       <div class="pm-progress-bar" style={`width: ${donePercent}%`}></div>
       <span class="pm-progress-label">{donePercent}% {progressScopeLabel}</span>
@@ -2651,7 +2689,7 @@
     </button>
   {/if}
 
-  <div class="mb-3 mt-2">
+  <div class="pm-toolbar-add">
     <button
       type="button"
       class="btn btn-primary"
@@ -2662,7 +2700,7 @@
     </button>
   </div>
 
-  <div class="d-flex align-items-center my-3">
+  <div class="d-flex align-items-center pm-toolbar-scope">
     <div class="btn-group btn-group-sm" role="group" aria-label={t('Card view')}>
       <button type="button" class={scope === 'team' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectScope('team')}>
         <i class="fas fa-list fa-fw mr-1" aria-hidden="true"></i>{t('All')}
@@ -2674,8 +2712,8 @@
         <i class="fas fa-pen-to-square fa-fw mr-1" aria-hidden="true"></i>{t('Created by me')}
       </button>
     </div>
-    <button type="button" class="btn btn-sm btn-ghost ml-2" on:click={openArchivedModal}>
-      <i class="fas fa-box-archive fa-fw mr-1" aria-hidden="true"></i>{t('Archived')}
+    <button type="button" class="btn btn-sm btn-ghost ml-1 pm-archived-btn" title={t('Archived')} aria-label={t('Archived')} on:click={openArchivedModal}>
+      <i class="fas fa-box-archive fa-fw" aria-hidden="true"></i><span class="pm-btn-label ml-1">{t('Archived')}</span>
     </button>
   </div>
 
@@ -2726,13 +2764,21 @@
         {@const columnExpanded = !!expandedColumns[column.id]}
         {@const shownTasks = columnExpanded ? columnTasks : columnTasks.slice(0, COLUMN_TASK_LIMIT)}
         {@const hiddenCount = columnTasks.length - shownTasks.length}
+        {@const collapsedColumn = columnTasks.length === 0 && !openEmptyColumns[column.id] && dragOverColumn !== column.id}
         <div
           class="pm-column"
+          class:pm-column-collapsed={collapsedColumn}
+          data-kind={column.kind}
           class:pm-column-drag-over={dragOverColumn === column.id}
           on:dragover={(event) => allowColumnDrop(event, column.id)}
           on:dragleave={() => { if (dragOverColumn === column.id) dragOverColumn = null; }}
           on:drop={(event) => dropOnColumn(event, column.id)}
         >
+          {#if collapsedColumn}
+            <button type="button" class="pm-column-strip" title={`${t('Show')} ${column.name}`} aria-label={`${column.name}, 0 ${t('cards')}. ${t('Show')}`} on:click={() => { openEmptyColumns = { ...openEmptyColumns, [column.id]: true }; }}>
+              <span class="pm-column-strip-name">{column.name}</span><span class="badge badge-secondary">0</span>
+            </button>
+          {:else}
           <div class="d-flex align-items-center pm-column-header">
             <h3
               class="h6 pm-column-title"
@@ -2751,6 +2797,7 @@
           {#each shownTasks as task (task.id)}
             <div
               class="pm-card pm-task"
+              class:pm-card-compact={cardDensity === 'compact'}
               class:pm-task-done={column.kind === 'done'}
               class:pm-task-pinned={task.pinned}
               draggable={canManage(task)}
@@ -2831,7 +2878,7 @@
                 <span class="badge badge-info mt-1">{#if activeProjectId === 'all' && task.project_parent_name}{task.project_parent_name} › {/if}{task.project_name ?? t('Unfiled')}</span>
               {/if}
               {#if task.priority}
-                <span class="badge pm-priority pm-priority-{task.priority} mt-1">{priorityLabel(task.priority)}</span>
+                <span class="badge pm-priority pm-priority-{task.priority} mt-1" title={priorityLabel(task.priority)}>{priorityLabel(task.priority)}</span>
               {/if}
               {#if task.deadline}
                 {@const urgency = deadlineUrgency(task)}
@@ -2930,6 +2977,7 @@
             <button type="button" class="btn btn-link btn-sm pm-show-older" on:click={() => toggleColumnExpanded(column.id)}>
               {columnExpanded ? t('Show less') : `${t('Show')} ${hiddenCount} ${t('older')}`}
             </button>
+          {/if}
           {/if}
         </div>
       {/each}

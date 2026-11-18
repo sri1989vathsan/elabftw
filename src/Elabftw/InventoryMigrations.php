@@ -32,8 +32,7 @@ final class InventoryMigrations
         '119_registry_personal_ids.sql',
         '120_registry_order_link_field.sql',
         '121_registry_link_field_all.sql',
-        '122_registry_label_formats.sql',
-        '123_registry_label_bottom_margin.sql',
+        // 122 (label formats) and 123 (label bottom margin) are listed in CustomMigrationRunner::MIGRATIONS (label printing is shared with the orders branch)
         '124_registry_module_settings.sql',
         '125_registry_column_prefs.sql',
         '126_registry_entity_links.sql',

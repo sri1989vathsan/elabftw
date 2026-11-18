@@ -148,6 +148,9 @@ final class CustomMigrationRunner
         '107_orders_list_index.sql',
         '108_google_tasks_admin_setting.sql',
         '109_todolist_duration.sql',
+        // label printing (same files and numbers as on the database branch, which lists them in its own InventoryMigrations)
+        '122_registry_label_formats.sql',
+        '123_registry_label_bottom_margin.sql',
         '153_user_ui_prefs.sql',
     );
 

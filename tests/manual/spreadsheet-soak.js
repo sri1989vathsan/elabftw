@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -74,7 +74,23 @@ async function spreadsheetSoak(options = {}) {
   const opLog = [];
   const note = name => { counts[name] = (counts[name] || 0) + 1; opLog.push(name); if (opLog.length > 60) opLog.shift(); };
   const t0 = performance.now();
-  window.spreadsheetSoakLive = { dataLoss, failures, sizes, menus };
+  // Width desync diagnostic: the first time the live worksheet's first data row is wider (or narrower) than its header
+  // row / column list, with the operation, round and the ops before it. (jspreadsheet's createRow needs them equal.)
+  const desync = [];
+  const jssState = uid => {
+    const root = api.overlayElement(uid); const holder = root && [...root.querySelectorAll('.jss_container')].find(el => el.jssWorksheet);
+    const w = holder && holder.jssWorksheet;
+    if (!w) return null;
+    return { data0: w.options.data && w.options.data[0] ? Object.keys(w.options.data[0]).length : null, headers: w.headers ? w.headers.length : null, columns: w.options.columns ? w.options.columns.length : null, rows: w.options.data ? w.options.data.length : null, records0: w.records && w.records[0] ? w.records[0].length : null };
+  };
+  const checkDesync = (uid, when) => {
+    const st = jssState(uid);
+    if (!st) return;
+    if (st.data0 !== st.headers || (st.columns != null && st.columns !== st.headers) || (st.records0 != null && st.records0 !== st.headers)) {
+      if (desync.length < 6) desync.push({ when, context, state: st, previousOps: opLog.slice(-6) });
+    }
+  };
+  window.spreadsheetSoakLive = { dataLoss, failures, sizes, menus, desync };
   const baselineTables = api.snapshot(false).length;
   const baselineUids = new Set(api.snapshot(false).map(snap => snap.uid));
   let baselineGone = false;
@@ -565,6 +581,7 @@ async function spreadsheetSoak(options = {}) {
     if ((kind === 'del-row' && rows <= 2) || (kind === 'del-col' && cols <= 2)) return;
     if ((kind.startsWith('row') && rows >= 14) || (kind.startsWith('col') && cols >= 10)) return;
     const r = int(0, rows - 1); const c = int(0, cols - 1);
+    checkDesync(uid, `before menu-${kind}`);
     note(`menu-${kind}`);
     // Size of the stored table (it follows the live grid a moment after each change).
     const domSize = () => { const t = tableEl(uid); return [t.rows.length - 1, t.rows[0].cells.length - 1]; };
@@ -597,6 +614,7 @@ async function spreadsheetSoak(options = {}) {
       await sleep(700);
     });
     if (!clicked) return;
+    checkDesync(uid, `after menu-${kind}`);
     let sizeAfter = domSize();
     // the grid redraws a little after the menu click: wait for the expected change, up to 5 s
     const wanted = { 'row-after': [1, 0], 'row-before': [1, 0], 'col-after': [0, 1], 'col-before': [0, 1], 'del-row': [-1, 0], 'del-col': [0, -1] }[kind];
@@ -1152,6 +1170,45 @@ async function spreadsheetSoak(options = {}) {
   };
 
   // ---- scenarios ------------------------------------------------------------------------
+  const pasteCopyWidths = async rich => {
+      const original = await createTable('width source', { rows: 4, cols: 3 });
+      if (!original) return;
+      await typeInto(original, 0, 0, 'keep-me');
+      // the typed value reaches the table's own cells when the sheet is saved, and the table is what a copy reads
+      await save();
+      // what the browser puts on the clipboard when the whole table is selected: the table as it stands in the editor
+      const sourceTable = editor.getBody().querySelector(`table[data-elabftw-spreadsheet-uid="${original}"]`);
+      if (!sourceTable) { fail('could not find the spreadsheet to copy'); return; }
+      const copyTable = sourceTable.cloneNode(true);
+      const wanted = [210, 64, 150];
+      const gutter = copyTable.querySelector('.spreadsheet-coordinate') ? 1 : 0;
+      const sourceCols = [...copyTable.querySelectorAll('colgroup > col')].slice(gutter);
+      if (sourceCols.length !== wanted.length) { fail(`the copy has ${sourceCols.length} data columns, expected ${wanted.length}`); return; }
+      sourceCols.forEach((col, i) => { col.style.width = `${wanted[i]}px`; });
+      // plain: without the editor's own rich-selection marker (a copy of the table from the toolbar menu);
+      // rich: wrapped in it, as the editor's Ctrl+C writes a selection, which TinyMCE (not the sheet handler) pastes
+      const bare = copyTable.outerHTML.replace(/\sdata-elabftw-rich-selection(="[^"]*")?/g, '');
+      const html = rich ? `<div data-elabftw-rich-selection="true">${bare}</div>` : `<html><body>${bare}</body></html>`;
+      layoutDirty = true;
+      const before = new Set(api.snapshot(false).map(snap => snap.uid));
+      editor.selection.select(editor.getBody(), true); editor.selection.collapse(false);
+      const dt = new DataTransfer(); dt.setData('text/html', html); dt.setData('text/plain', 'keep-me\t\t\n\t\t');
+      editor.getDoc().dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+      await sleep(1200);
+      const added = api.snapshot(true).filter(snap => !before.has(snap.uid));
+      if (added.length !== 1) { fail(`pasting a copy made ${added.length} spreadsheets, expected 1`); return; }
+      const uid = added[0].uid;
+      const pasted = editor.getBody().querySelector(`table[data-elabftw-spreadsheet-uid="${uid}"]`);
+      let pastedGrid = models.get(original).grid.map(r => r.slice());
+      try { pastedGrid = JSON.parse(atob(pasted.getAttribute('data-spreadsheet'))).data; } catch { /* the model of the original is the fallback */ }
+      if (String(pastedGrid[0]?.[0]) !== 'keep-me') fail(`a pasted copy lost its cell contents (first cell is "${pastedGrid[0]?.[0]}")`);
+      models.set(uid, { label: 'width copy', grid: pastedGrid, plate: false });
+      const got = pasted ? [...pasted.querySelectorAll('colgroup > col')].slice(gutter).map(col => Math.round(Number.parseFloat(col.style.width))) : [];
+      if (got.join(',') !== wanted.join(',')) fail(`a pasted copy has column widths ${got.join(', ')}, the source had ${wanted.join(', ')}`);
+      await live(uid);
+      await consistency('paste-copy-widths: inline, popup and stored HTML agree', true);
+      await save();
+  };
   const scenarios = {
     async 'plate-day'() {
       const uid = await createTable('96-well plate', { plate: 96 });
@@ -1684,6 +1741,39 @@ async function spreadsheetSoak(options = {}) {
       await verify('paste-external: edited', true);
       await consistency('paste-external: inline, popup and stored HTML agree', true);
     },
+    // A table from Excel, Sheets or Word keeps its column widths: on a <col> in points, in a class of the <style> block,
+    // and on the first row's cells as a width attribute. A column without one keeps the default width.
+    async 'paste-outside-widths'() {
+      layoutDirty = true;
+      const cases = [
+        { name: 'col in points', css: '', colgroup: '<colgroup><col style="width:150pt"><col style="width:48pt"><col></colgroup>', cellAttr: ['', '', ''], want: [200, 64, 100] },
+        { name: 'class in style block', css: '<style>.xl1{width:180px}.xl2{width:60px}</style>', colgroup: '', cellAttr: [' class="xl1"', ' class="xl2"', ''], want: [180, 60, 100] },
+        { name: 'width attribute', css: '', colgroup: '', cellAttr: [' width="220"', ' width="90"', ' width="130"'], want: [220, 90, 130] },
+      ];
+      for (const item of cases) {
+        const before = new Set(api.snapshot(false).map(snap => snap.uid));
+        const rows = [['a', 'b', 'c'], ['d', 'e', 'f']];
+        const html = `${item.css}<table>${item.colgroup}<tbody>${rows.map((row, r) => `<tr>${row.map((v, c) => `<td${r === 0 ? item.cellAttr[c] : ''}>${v}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+        editor.selection.select(editor.getBody(), true); editor.selection.collapse(false);
+        const dt = new DataTransfer(); dt.setData('text/html', html); dt.setData('text/plain', rows.map(r => r.join('\t')).join('\n'));
+        editor.getDoc().dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+        await sleep(1200);
+        const added = api.snapshot(true).filter(snap => !before.has(snap.uid));
+        if (added.length !== 1) { fail(`${item.name}: an outside paste made ${added.length} spreadsheets, expected 1`); continue; }
+        const uid = added[0].uid;
+        const pasted = editor.getBody().querySelector(`table[data-elabftw-spreadsheet-uid="${uid}"]`);
+        const gutter = pasted?.querySelector('.spreadsheet-coordinate') ? 1 : 0;
+        const got = pasted ? [...pasted.querySelectorAll('colgroup > col')].slice(gutter).map(col => Math.round(Number.parseFloat(col.style.width))) : [];
+        if (got.join(',') !== item.want.join(',')) fail(`${item.name}: the pasted table has column widths ${got.join(', ')}, expected ${item.want.join(', ')}`);
+        models.set(uid, { label: `outside widths (${item.name})`, grid: rows.map(r => r.slice()), plate: false });
+        await live(uid);
+      }
+      await consistency('paste-outside-widths: inline, popup and stored HTML agree', true);
+    },
+    // A copy of one of our own spreadsheets, pasted through the editor's paste handler (not insertContent), must keep the
+    // source's column widths: the conversion to a new sheet used to read row heights but not the <colgroup>.
+    async 'paste-copy-widths'() { await pasteCopyWidths(false); },
+    async 'paste-copy-widths-rich'() { await pasteCopyWidths(true); },
     // After Tab (or Shift+Enter) the cursor is on another cell, and typing or Enter must act on that one.
     async 'tab-then-type'() {
       const uid = await createTable('tab then type', { rows: 5, cols: 5 });
@@ -2010,11 +2100,96 @@ async function spreadsheetSoak(options = {}) {
     },
     // The editor's Find and replace marks its matches in the stored table, hidden behind the grid: the grid cells that hold a match
     // must be marked too (the current one stronger), and the marks must go when the search is closed.
+    // A sheet wider than the popup must scroll sideways, with the scrollbar inside the visible dialog (not below the fold), and the
+    // last column must be reachable: the element that overflows has overflow-x auto/scroll, scrollLeft can be set, and the last
+    // column letter becomes visible. The vertical scroll bar and the toolbar stay where they are.
+    async 'popup-wide-scroll'() {
+      const uid = await createTable('wide popup sheet', { rows: 6, cols: 26 });
+      if (!uid) return;
+      await typeInto(uid, 1, 25, 'last');
+      const dialog = await openPopupFor(uid);
+      const container = dialog.querySelector('.inline-spreadsheet-container');
+      if (!container) { fail('popup-wide-scroll: no .inline-spreadsheet-container'); return; }
+      // the element that has the overflow: the first of the container and its descendants whose content is wider than its box
+      const candidates = [container, ...container.querySelectorAll('.jss_container, .jss_content')];
+      const scroller = candidates.find(el => el.scrollWidth > el.clientWidth + 1 && /auto|scroll/.test(getComputedStyle(el).overflowX));
+      const overflowing = candidates.filter(el => el.scrollWidth > el.clientWidth + 1);
+      const info = overflowing.map(el => `${el.className.split(' ')[0] || el.tagName}: overflow-x ${getComputedStyle(el).overflowX}, ${el.scrollWidth}>${el.clientWidth}`).join('; ');
+      window.__popupScrollInfo = { scroller: scroller ? scroller.className : null, info, container: { overflowX: getComputedStyle(container).overflowX, overflowY: getComputedStyle(container).overflowY, w: container.clientWidth, sw: container.scrollWidth, h: container.clientHeight, offsetH: container.offsetHeight, sbH: container.offsetHeight - container.clientHeight, sbW: container.offsetWidth - container.clientWidth, rect: container.getBoundingClientRect().bottom, dialogBottom: dialog.getBoundingClientRect().bottom, win: window.innerHeight }, dialogW: dialog.getBoundingClientRect().width, content: (() => { const c = container.querySelector('.jss_content'); return c ? { overflowX: getComputedStyle(c).overflowX, w: c.clientWidth, sw: c.scrollWidth, sbH: c.offsetHeight - c.clientHeight } : null; })() };
+      if (overflowing.length === 0) { fail('popup-wide-scroll: a 26-column sheet does not overflow the popup (nothing to scroll)', { info }); }
+      else if (!scroller) { dataLoss.push({ context, table: 'wide popup sheet', problem: `a sheet wider than the popup has no horizontal scrolling (${info})` }); }
+      else {
+        // the scroll bar sits at the bottom edge of the scroller: that edge must be inside the dialog and the window
+        const box = scroller.getBoundingClientRect(); const dbox = dialog.getBoundingClientRect();
+        if (box.bottom > dbox.bottom + 1 || box.bottom > window.innerHeight + 1) {
+          dataLoss.push({ context, table: 'wide popup sheet', problem: `the horizontal scroll bar is below the visible dialog (scroller bottom ${Math.round(box.bottom)}, dialog bottom ${Math.round(dbox.bottom)}, window ${window.innerHeight})` });
+        }
+        scroller.scrollLeft = scroller.scrollWidth;
+        await sleep(200);
+        const lastHeader = dialog.querySelector('.jss_worksheet thead td[data-x="25"]');
+        const sbox = scroller.getBoundingClientRect(); const hbox = lastHeader && lastHeader.getBoundingClientRect();
+        if (!lastHeader || hbox.right > sbox.right + 2 || hbox.left < sbox.left) {
+          dataLoss.push({ context, table: 'wide popup sheet', problem: 'after scrolling right the last column is not visible' });
+        }
+        // the column letters scroll with the content, the toolbar does not move
+        const toolbarBefore = (dialog.querySelector('button') || dialog).getBoundingClientRect().top;
+        scroller.scrollLeft = 0; await sleep(100);
+        const toolbarAfter = (dialog.querySelector('button') || dialog).getBoundingClientRect().top;
+        if (Math.abs(toolbarBefore - toolbarAfter) > 1) dataLoss.push({ context, table: 'wide popup sheet', problem: 'the toolbar moved while scrolling sideways' });
+      }
+      [...dialog.querySelectorAll('button')].find(b => /^Cancel/.test(b.textContent.trim()))?.click();
+      await waitPopupGone();
+    },
+
+    // The popup's own scroll bars (drawn when the browser only has overlay bars that hide until you scroll; forced here with
+    // window.__forceOverlayScrollbars): a thumb that is smaller than the track when the sheet is wider than the popup, dragging it moves
+    // .jss_content sideways, and the last column can be reached.
+    async 'popup-own-scrollbar'() {
+      window.__forceOverlayScrollbars = true;
+      try {
+        const uid = await createTable('wide popup sheet (own bar)', { rows: 6, cols: 26 });
+        if (!uid) return;
+        const dialog = await openPopupFor(uid);
+        const container = dialog.querySelector('.inline-spreadsheet-container');
+        const bar = container && container.querySelector('.elabftw-own-scrollbar-x');
+        const scroller = container && container.querySelector('.jss_content');
+        if (!bar || !scroller) { dataLoss.push({ context, table: 'wide popup sheet (own bar)', problem: 'the popup has no own horizontal scroll bar in overlay mode' }); }
+        else {
+          await sleep(300);
+          const thumb = bar.querySelector('.elabftw-own-scrollbar-thumb');
+          const track = bar.getBoundingClientRect(); const tb = thumb.getBoundingClientRect();
+          if (getComputedStyle(bar).visibility !== 'visible' || !(tb.width > 0 && tb.width < track.width)) {
+            dataLoss.push({ context, table: 'wide popup sheet (own bar)', problem: `own scroll bar thumb missing or full width (visibility ${getComputedStyle(bar).visibility}, thumb ${Math.round(tb.width)} of ${Math.round(track.width)})` });
+          }
+          if (bar.getBoundingClientRect().bottom > dialog.getBoundingClientRect().bottom + 1) dataLoss.push({ context, table: 'wide popup sheet (own bar)', problem: 'the own scroll bar is below the dialog' });
+          const before = scroller.scrollLeft;
+          const fire = (type, x) => thumb.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 7, clientX: x, clientY: tb.top + 3 }));
+          fire('pointerdown', tb.left + 4);
+          fire('pointermove', tb.left + 4 + track.width);
+          fire('pointerup', tb.left + 4 + track.width);
+          await sleep(200);
+          if (!(scroller.scrollLeft > before + 50)) dataLoss.push({ context, table: 'wide popup sheet (own bar)', problem: `dragging the thumb did not scroll the grid (scrollLeft ${before} -> ${scroller.scrollLeft})` });
+          const last = dialog.querySelector('.jss_worksheet thead td[data-x="25"]');
+          const sb = scroller.getBoundingClientRect(); const lb = last && last.getBoundingClientRect();
+          if (!last || lb.right > sb.right + 2) dataLoss.push({ context, table: 'wide popup sheet (own bar)', problem: 'after dragging the thumb to the end the last column is not visible' });
+          // the keyboard: Home on the focused bar goes back to the start
+          bar.focus(); bar.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true })); await sleep(150);
+          if (scroller.scrollLeft !== 0) dataLoss.push({ context, table: 'wide popup sheet (own bar)', problem: 'Home on the own scroll bar did not go back to the start' });
+        }
+        [...dialog.querySelectorAll('button')].find(b => /^Cancel/.test(b.textContent.trim()))?.click();
+        await waitPopupGone();
+      } finally {
+        window.__forceOverlayScrollbars = false;
+      }
+    },
+
     async 'find-in-grid'() {
+      // a word no earlier run left in this page: matches in other tables would hold the one "current" mark instead
+      const word = 'zebrafinch' + Math.random().toString(36).slice(2, 7);
       const uid = await createTable('find in grid', { rows: 4, cols: 3 });
       if (!uid) return;
-      await typeInto(uid, 1, 2, 'zebrafinch');
-      await typeInto(uid, 3, 0, 'another zebrafinch here');
+      await typeInto(uid, 1, 2, word);
+      await typeInto(uid, 3, 0, 'another ' + word + ' here');
       // the typed text reaches the stored table (where Find looks) once the grid has written it out: settle first
       await verify('find-in-grid: typed', true);
       const search = editor.plugins?.searchreplace;
@@ -2028,16 +2203,21 @@ async function spreadsheetSoak(options = {}) {
         while (Date.now() - started < ms) { if (condition()) return true; await sleep(100); }
         return condition();
       };
-      const found = search.find('zebrafinch', true, false);
+      const found = search.find(word, true, false);
       if (found < 2) fail(`Find counted ${found} matches of a text that is in two cells`);
       await until(() => marked().length >= 2 && currentCount() === 1);
       const now = marked();
       if (!now.includes('2,1') || !now.includes('0,3')) dataLoss.push({ context, table: models.get(uid)?.label, problem: `the cells that hold a match were not marked in the grid (marked: ${now.join(' ') || 'none'})` });
-      if (currentCount() !== 1) dataLoss.push({ context, table: models.get(uid)?.label, problem: 'exactly one cell should be marked as the current match' });
+      const findState = () => {
+        const body = editor.getBody();
+        const markers = [...body.querySelectorAll('.mce-match-marker')];
+        return `markers=${markers.length} selected=${markers.filter(m => m.classList.contains('mce-match-marker-selected')).length} current=${currentCount()} marked=${marked().length} cells=${[...grid().querySelectorAll('td.elabftw-find-match-current')].map(td => td.dataset.x + ',' + td.dataset.y).join(' ')}`;
+      };
+      if (currentCount() !== 1) dataLoss.push({ context, table: models.get(uid)?.label, problem: 'exactly one cell should be marked as the current match (' + findState() + ')' });
       const before = grid().querySelector('td.elabftw-find-match-current')?.dataset.x;
       search.next();
       await until(() => currentCount() === 1 && grid().querySelector('td.elabftw-find-match-current')?.dataset.x !== before);
-      if (currentCount() !== 1) dataLoss.push({ context, table: models.get(uid)?.label, problem: 'after Next exactly one cell should be marked as the current match' });
+      if (currentCount() !== 1) dataLoss.push({ context, table: models.get(uid)?.label, problem: 'after Next exactly one cell should be marked as the current match (' + findState() + ')' });
       search.done();
       await until(() => marked().length === 0);
       if (marked().length > 0) dataLoss.push({ context, table: models.get(uid)?.label, problem: `the marks stayed in the grid after the search was closed (${marked().join(' ')})` });

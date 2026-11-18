@@ -24,27 +24,27 @@
           <span id='documentTitle' class='breakable malleable-title malleable rounded py-1' data-target='title' data-endpoint='{{ Entity.entityType.value }}' data-id='{{ Entity.id }}'>{{ Entity.entityData.title }}</span>
         </h1>
         {% if Entity.entityType.value == 'experiments' %}
-          <div class='mb-2'>
+          <div class='entity-summary-edit'>
+          <div>
             <label for='experimentGoalInput' class='font-weight-bold mb-1'>
               <i class='fas fa-bullseye fa-fw mr-1' aria-hidden='true'></i>{{ 'Goals'|trans }}
-              <span class='font-weight-normal color-medium'>({{ 'optional'|trans }})</span>
+              
             </label>
             <textarea
               id='experimentGoalInput'
               class='form-control'
-              rows='2'
+              rows='3'
               maxlength='1000'
               data-trigger='blur'
               data-model='experiments/{{ Entity.id }}'
               data-target='experiment_goal'
               placeholder='{{ 'Briefly describe the goal of this experiment'|trans }}'
             >{{ Entity.entityData.experiment_goal }}</textarea>
-            <small class='form-text color-medium'>{{ 'Maximum 1000 characters.'|trans }}</small>
           </div>
-          <div class='mb-2'>
+          <div>
             <label for='experimentConclusionInput' class='font-weight-bold mb-1'>
               <i class='fas fa-clipboard-check fa-fw mr-1' aria-hidden='true'></i>{{ 'Conclusion'|trans }}
-              <span class='font-weight-normal color-medium'>({{ 'optional'|trans }})</span>
+              
             </label>
             <textarea
               id='experimentConclusionInput'
@@ -56,12 +56,11 @@
               data-target='experiment_conclusion'
               placeholder='{{ 'Briefly describe the conclusion of this experiment'|trans }}'
             >{{ Entity.entityData.experiment_conclusion }}</textarea>
-            <small class='form-text color-medium'>{{ 'Maximum 1000 characters.'|trans }}</small>
           </div>
-          <div class='mb-2'>
+          <div>
             <label for='experimentNotesInput' class='font-weight-bold mb-1'>
               <i class='fas fa-file-lines fa-fw mr-1' aria-hidden='true'></i>{{ 'Notes'|trans }}
-              <span class='font-weight-normal color-medium'>({{ 'optional'|trans }})</span>
+              
             </label>
             <textarea
               id='experimentNotesInput'
@@ -73,7 +72,7 @@
               data-target='experiment_notes'
               placeholder='{{ 'Add short notes about this experiment'|trans }}'
             >{{ Entity.entityData.experiment_notes }}</textarea>
-            <small class='form-text color-medium'>{{ 'Maximum 1000 characters.'|trans }}</small>
+          </div>
           </div>
         {% endif %}
       </div>

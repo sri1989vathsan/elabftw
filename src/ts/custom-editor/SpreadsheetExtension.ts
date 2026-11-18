@@ -12,6 +12,7 @@ import {
   openSpreadsheetModal,
   pasteSpreadsheetRange,
   spreadsheetFromClipboard,
+  decodeSpreadsheetData,
   spreadsheetFromFlattenedClipboard,
   spreadsheetToHTML,
   wellPlateFromClipboard,
@@ -141,6 +142,19 @@ function pasteIntoHtmlTable(
     }
   }
   return lastCell;
+}
+
+/** The stored model of a spreadsheet that was copied inside the editor (one standalone table), if it has one. */
+function spreadsheetFromRichClipboard(html: string): SpreadsheetData | null {
+  const table = new DOMParser().parseFromString(html, 'text/html').body.querySelector('table.elabftw-spreadsheet[data-spreadsheet]');
+  const encoded = table?.getAttribute('data-spreadsheet');
+  if (!encoded) return null;
+  try {
+    const data = decodeSpreadsheetData(encoded);
+    return data.kind === 'well-plate' ? null : data;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -3412,6 +3426,19 @@ export function registerSpreadsheetExtension(editor: Editor): void {
           event.stopImmediatePropagation();
           editor.undoManager.transact(() => {
             insertPastedSpreadsheet(spreadsheetToHTML(copiedPlate, copiedPlate.displayData ?? copiedPlate.data));
+          });
+          return;
+        }
+      }
+      if (isRichSelection && !selectedCell && isStandaloneClipboardTable(richClipboardHtml)) {
+        // A spreadsheet copied inside the editor becomes a new spreadsheet built from its stored model: the editor's
+        // own paste filter keeps the data but drops the <col> widths and the table width, and keeps the sheet's id.
+        const copiedSheet = spreadsheetFromRichClipboard(richClipboardHtml);
+        if (copiedSheet) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          editor.undoManager.transact(() => {
+            insertPastedSpreadsheet(spreadsheetToHTML(copiedSheet, copiedSheet.displayData ?? copiedSheet.data));
           });
           return;
         }

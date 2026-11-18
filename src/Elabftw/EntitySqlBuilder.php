@@ -218,6 +218,14 @@ final class EntitySqlBuilder implements SqlBuilderInterface
                 AND st.finished = 0
             ORDER BY st.ordering ASC, st.id ASC
             LIMIT 1) AS next_step';
+        // progress of the steps (done / total) for the board and list views
+        $this->selectSql[] = '(SELECT COUNT(*)
+            FROM %1$s_steps AS stt
+            WHERE stt.item_id = entity.id) AS steps_total';
+        $this->selectSql[] = '(SELECT COUNT(*)
+            FROM %1$s_steps AS std
+            WHERE std.item_id = entity.id
+                AND std.finished = 1) AS steps_done';
     }
 
     protected function comments(): void

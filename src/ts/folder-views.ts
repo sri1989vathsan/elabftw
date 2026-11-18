@@ -1,10 +1,13 @@
 /**
- * Switchable views of the folders in the Folders side panel: the nested tree (as before), a flat list of every folder
- * with its path, and a details table (name, path, experiment and resource counts, description) that can be sorted.
+ * Views of the folders in the Folders side panel, built like a file explorer for a narrow strip beside the page:
+ *  - tree: the nested tree, drawn by the template (unchanged)
+ *  - list: one level at a time, its folders and its experiments / resources ("files"), with a preview of the selected file
+ *  - cards: the same level, each file as a small card (name, status, age, tag)
  *
  * The flat views are built from the tree's own markup each time (see syncFolderView), so they always show the same
  * folders as the tree does: the "My folders / All folders" scope and the experiments / resources choice apply to them
- * too, and the links, bookmark stars and README buttons are the tree's own (they work through the same handlers).
+ * too, and the bookmark stars and README buttons are the tree's own (they work through the same handlers).
+ * Clicking a folder in a flat view steps into it; a file opens with a double click (list) or a click (cards).
  * @author eLabFTW contributors
  * @license AGPL-3.0
  */
@@ -12,8 +15,9 @@ import i18next from './i18n';
 import { on } from './handlers';
 import { Api } from './Apiv2.class';
 
-export type FolderView = 'tree' | 'list' | 'details';
+export type FolderView = 'tree' | 'list' | 'cards';
 export type FolderSortKey = 'name' | 'path' | 'experiments' | 'resources' | 'modified';
+export type FolderEntryType = 'experiments' | 'items';
 
 export interface FolderRow {
   id: string;
@@ -36,45 +40,48 @@ export interface FolderRow {
   more: HTMLElement | null;
 }
 
+/** An experiment or resource filed in a folder, as far as the explorer needs it. */
+export interface FolderEntry {
+  type: FolderEntryType;
+  id: number;
+  title: string;
+  status: string;
+  /** a CSS colour, '' when the status has none */
+  statusColor: string;
+  owner: string;
+  /** when it last changed, in seconds since 1970 (0 = unknown) */
+  changed: number;
+  tags: string[];
+}
+
+interface PanelPrefs {
+  favorites: boolean;
+  files: boolean;
+  counts: boolean;
+  /** the Exp / Res / All switch: on "All" the files of both kinds are listed */
+  allTypes: boolean;
+}
+
 // how a folder's full path joins its ancestors' names
 const PATH_SEPARATOR = ' > ';
-const VIEWS: readonly FolderView[] = ['tree', 'list', 'details'];
+const VIEWS: readonly FolderView[] = ['tree', 'list', 'cards'];
+const DEFAULT_PREFS: PanelPrefs = { favorites: true, files: true, counts: true, allTypes: false };
 
-let sortKey: FolderSortKey = 'path';
-let sortDirection: 1 | -1 = 1;
 let filterText = '';
 // the folder whose subfolders the flat views list ('' = the top level), set from the folder being looked at the first time
 let level = '';
 let levelReady = false;
-// folders whose entries are shown under their row, and the entries fetched for them
-const expandedFolders = new Set<string>();
-// the switch above the list: while it is on, clicking a folder opens it in place to show its experiments and resources (like a
-// folder in Finder); while it is off nothing is shown and a click on a folder works as before. Remembered per user in this browser.
-let entriesOn = false;
-let entriesOnLoaded = false;
-const entriesOnKey = (): string => `${viewKey()}-entries`;
-function entriesMode(): boolean {
-  if (!entriesOnLoaded) {
-    entriesOnLoaded = true;
-    try {
-      entriesOn = window.localStorage.getItem(entriesOnKey()) === '1';
-    } catch {
-      entriesOn = false;
-    }
-  }
-  return entriesOn;
-}
-// folders listed twice (bookmarked and in the level below) show their entries only in the lower list
-let entriesElsewhere = new Set<string>();
-// a folder is open only while the switch is on: the arrow in front of it just shows (and flips) the same state as a click on it
-const isOpen = (id: string): boolean => entriesMode() && expandedFolders.has(id);
+// the file picked in the list view, as "type:id"
+let selectedEntry = '';
+let prefs: PanelPrefs | null = null;
 
-interface FolderEntry { type: 'experiments' | 'items'; id: number; title: string }
-const entryCache = new Map<string, { at: number; entries: FolderEntry[] | null }>();
+const levelEntries = new Map<string, { at: number; entries: FolderEntry[] | null }>();
 const ENTRY_CACHE_MS = 30000;
 const ENTRY_LIMIT = 100;
 
 export function parseFolderView(value: string | null): FolderView {
+  // "details" was the name of the table view that the cards replaced
+  if (value === 'details') return 'cards';
   return VIEWS.find(view => view === value) ?? 'tree';
 }
 
@@ -124,9 +131,67 @@ export function initialFolderLevel<T extends Pick<FolderRow, 'id' | 'parentId' |
   return active.hasChildren ? active.id : active.parentId;
 }
 
+/** How long ago something changed, in a few characters: "today", "2d", "3w", "5mo", "1y" ('' when unknown). */
+export function shortAge(seconds: number, nowSeconds: number = Date.now() / 1000): string {
+  if (seconds <= 0) return '';
+  const days = Math.floor(Math.max(0, nowSeconds - seconds) / 86400);
+  if (days < 1) return i18next.t('today');
+  if (days < 7) return `${days}d`;
+  if (days < 30) return `${Math.floor(days / 7)}w`;
+  if (days < 365) return `${Math.floor(days / 30)}mo`;
+  return `${Math.floor(days / 365)}y`;
+}
+
+/** One entry of the API's experiment / resource list, reduced to what the explorer shows. */
+export function entryFromApi(type: FolderEntryType, raw: Record<string, unknown>): FolderEntry {
+  const text = (value: unknown): string => (typeof value === 'string' ? value : '');
+  const color = text(raw.status_color);
+  const changedText = text(raw.modified_at) || text(raw.lastchange) || text(raw.created_at);
+  const changed = changedText ? Date.parse(changedText.replace(' ', 'T')) / 1000 : 0;
+  const tagsValue = raw.tags;
+  const tags = typeof tagsValue === 'string'
+    ? tagsValue.split('|')
+    : Array.isArray(tagsValue) ? tagsValue.map(tag => text(tag)) : [];
+  return {
+    type,
+    id: Number(raw.id),
+    title: text(raw.title),
+    status: text(raw.status_title),
+    statusColor: color === '' ? '' : (color.startsWith('#') ? color : `#${color}`),
+    owner: text(raw.fullname),
+    changed: Number.isFinite(changed) ? changed : 0,
+    tags: tags.map(tag => tag.trim()).filter(tag => tag !== ''),
+  };
+}
+
 function viewKey(): string {
   const userId = document.getElementById('experimentsFoldersSidebar')?.dataset.currentUserId ?? '';
   return `elabftw-folders-view-${userId}`;
+}
+
+function panelPrefs(): PanelPrefs {
+  if (prefs) return prefs;
+  const loaded: PanelPrefs = { ...DEFAULT_PREFS };
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(`${viewKey()}-prefs`) ?? '{}') as Partial<PanelPrefs>;
+    (Object.keys(DEFAULT_PREFS) as Array<keyof PanelPrefs>).forEach(key => {
+      const value = stored[key];
+      if (typeof value === 'boolean') loaded[key] = value;
+    });
+  } catch {
+    // the defaults then
+  }
+  prefs = loaded;
+  return loaded;
+}
+
+function setPanelPref(key: keyof PanelPrefs, value: boolean): void {
+  panelPrefs()[key] = value;
+  try {
+    window.localStorage.setItem(`${viewKey()}-prefs`, JSON.stringify(panelPrefs()));
+  } catch {
+    // the choice then only lasts until the page is reloaded
+  }
 }
 
 /** The folder the flat views are inside right now ('' = the top level), or null while the tree is shown. */
@@ -140,6 +205,16 @@ export function currentFolderView(): FolderView {
   } catch {
     return 'tree';
   }
+}
+
+/** The page's own choice of experiments or resources (the select that the Exp / Res switch drives). */
+function currentEntityType(): FolderEntryType {
+  return (document.getElementById('folderEntityTypeSelect') as HTMLSelectElement | null)?.value === 'items' ? 'items' : 'experiments';
+}
+
+/** The kinds of file the list and cards show: both on "All", else the chosen one. */
+function shownEntryTypes(): FolderEntryType[] {
+  return panelPrefs().allTypes ? ['experiments', 'items'] : [currentEntityType()];
 }
 
 /** The folders that are shown in the tree right now (scope applied), one row each. */
@@ -193,20 +268,6 @@ function copyOfActions(row: FolderRow): HTMLElement {
     dots.append(element('i', 'fas fa-ellipsis-v fa-xs'));
     box.append(dots);
   }
-  // a folder with subfolders can be stepped into without leaving the page
-  if (row.hasChildren) {
-    const enter = element('button', 'folder-action-btn hl-hover-gray rounded folder-enter-button');
-    enter.type = 'button';
-    enter.dataset.action = 'open-folder-level';
-    enter.dataset.folderId = row.id;
-    enter.title = i18next.t('Show the folders inside');
-    enter.setAttribute('aria-label', `${i18next.t('Show the folders inside')}: ${row.name}`);
-    enter.append(element('i', 'fas fa-chevron-right fa-xs'));
-    box.append(enter);
-  } else {
-    // keeps the buttons of folders with and without subfolders in line
-    box.append(element('span', 'folder-enter-placeholder'));
-  }
   return box;
 }
 
@@ -225,216 +286,180 @@ function morePanel(row: FolderRow): HTMLElement | null {
   return panel;
 }
 
+const entryPage = (type: FolderEntryType): string => (type === 'items' ? 'database' : 'experiments');
+const entryHref = (entry: FolderEntry): string => `${entryPage(entry.type)}.php?mode=view&id=${entry.id}`;
+const entryKey = (entry: FolderEntry): string => `${entry.type}:${entry.id}`;
+
 /** The experiments and resources of a folder that the API lets this user read (it applies each entry's own permissions). */
 async function loadFolderEntries(folderId: string): Promise<FolderEntry[]> {
   const ApiC = new Api();
-  const fetchType = (type: FolderEntry['type']): Promise<FolderEntry[]> =>
-    ApiC.getJson<Array<{ id: number; title: string }>>(`${type}?folder=${encodeURIComponent(folderId)}&scope=2&limit=${ENTRY_LIMIT}&order=lastchange&sort=desc`)
-      .then(list => (Array.isArray(list) ? list : []).map(entry => ({ type, id: entry.id, title: entry.title })));
+  const fetchType = (type: FolderEntryType): Promise<FolderEntry[]> =>
+    ApiC.getJson<Array<Record<string, unknown>>>(`${type}?folder=${encodeURIComponent(folderId)}&scope=2&limit=${ENTRY_LIMIT}&order=lastchange&sort=desc`)
+      .then(list => (Array.isArray(list) ? list : []).map(raw => entryFromApi(type, raw)));
   const [experiments, resources] = await Promise.all([fetchType('experiments'), fetchType('items')]);
-  return [...experiments, ...resources];
+  return [...experiments, ...resources].sort((a, b) => b.changed - a.changed);
 }
 
-function entriesBlockOf(folderId: string): HTMLElement {
-  const block = element('div', 'folder-entries');
-  block.dataset.folderEntriesFor = folderId;
-  fillEntriesBlock(block, folderId);
-  return block;
-}
-
-function fillEntriesBlock(block: HTMLElement, folderId: string): void {
-  const cached = entryCache.get(folderId);
-  if (!cached || cached.entries === null) {
-    block.replaceChildren(element('div', 'folder-entry-note small color-medium', i18next.t('Loading...')));
-    return;
-  }
-  if (cached.entries.length === 0) {
-    block.replaceChildren(element('div', 'folder-entry-note small color-medium', i18next.t('Nothing you can see in here.')));
-    return;
-  }
-  block.replaceChildren(...cached.entries.map(entry => {
-    const isResource = entry.type === 'items';
-    const link = element('a', 'folder-entry text-decoration-none color-medium');
-    link.href = `${isResource ? 'database' : 'experiments'}.php?mode=view&id=${entry.id}`;
-    const icon = element('i', `fas ${isResource ? 'fa-boxes-stacked' : 'fa-flask'} fa-fw mr-1`);
-    icon.title = i18next.t(isResource ? 'Resource' : 'Experiment');
-    link.append(icon, element('span', 'folder-entry-title', entry.title));
-    return link;
-  }));
-}
-
-/** Fetches the entries of an expanded folder (unless fresh in the cache) and fills every block that shows them. */
-function ensureEntries(folderId: string): void {
-  const cached = entryCache.get(folderId);
-  if (cached && (cached.entries === null || Date.now() - cached.at < ENTRY_CACHE_MS)) return;
-  entryCache.set(folderId, { at: Date.now(), entries: null });
+/** The files of a folder: null while they load (the view is drawn again when they arrive). */
+function entriesOf(folderId: string): FolderEntry[] | null {
+  const cached = levelEntries.get(folderId);
+  if (cached && (cached.entries === null || Date.now() - cached.at < ENTRY_CACHE_MS)) return cached.entries;
+  levelEntries.set(folderId, { at: Date.now(), entries: null });
   loadFolderEntries(folderId)
-    .then(entries => entryCache.set(folderId, { at: Date.now(), entries }))
-    .catch(() => entryCache.set(folderId, { at: Date.now(), entries: [] }))
-    .finally(() => document.querySelectorAll<HTMLElement>(`[data-folder-entries-for="${folderId}"]`).forEach(block => fillEntriesBlock(block, folderId)));
+    .then(entries => levelEntries.set(folderId, { at: Date.now(), entries }))
+    .catch(() => levelEntries.set(folderId, { at: Date.now(), entries: [] }))
+    .finally(() => {
+      if (level === folderId) syncFolderView();
+    });
+  return null;
 }
 
-/** The arrow in front of a folder's name that shows or hides the entries filed in it (only folders that hold some). */
-function entriesToggle(row: FolderRow): HTMLElement {
-  // with the switch off there is no arrow at all, so nothing can open a folder behind the switch's back
-  if (!entriesMode()) return element('span');
-  if (row.experiments + row.resources === 0 || entriesElsewhere.has(row.id)) return element('span', 'folder-entries-toggle-placeholder');
-  const open = isOpen(row.id);
-  const button = element('button', 'folder-action-btn hl-hover-gray rounded folder-entries-toggle');
-  button.type = 'button';
-  button.dataset.action = 'toggle-folder-entries';
-  button.dataset.folderId = row.id;
-  button.title = i18next.t('Show the experiments and resources in this folder');
-  button.setAttribute('aria-expanded', String(open));
-  button.setAttribute('aria-label', `${i18next.t('Show the experiments and resources in this folder')}: ${row.name}`);
-  button.append(element('i', `fas fa-chevron-${open ? 'down' : 'right'} fa-xs`));
-  return button;
+/** Forget the files fetched so far, e.g. after something was moved, so the next view of a folder asks again. */
+export function forgetFolderEntries(): void {
+  levelEntries.clear();
 }
 
-function folderLink(row: FolderRow, withPath: boolean, entityCount: number | null): HTMLAnchorElement {
+function entityCountOf(row: FolderRow): number {
+  const types = shownEntryTypes();
+  return (types.includes('experiments') ? row.experiments : 0) + (types.includes('items') ? row.resources : 0);
+}
+
+/** A folder in the flat views: a click steps into it. */
+function folderItem(row: FolderRow): HTMLElement {
+  const item = element('div', 'folder-flat-item');
+  const line = element('div', 'd-flex align-items-center folder-flat-row');
+  line.draggable = true;
+  line.dataset.dragKind = 'folder';
+  line.dataset.dragId = row.id;
+  line.dataset.dropFolder = row.id;
   const link = element('a', `text-decoration-none color-medium folder-flat-link${row.active ? ' font-weight-bold' : ''}`);
   link.href = row.href;
-  link.title = row.path;
-  link.setAttribute('data-folder-flat-link', '');
-  // switch on: a click on a folder that holds entries opens or closes it in place (a modified click still follows the link)
-  if (entriesMode() && row.experiments + row.resources > 0 && !entriesElsewhere.has(row.id)) {
-    link.dataset.action = 'toggle-folder-entries';
-    link.dataset.folderId = row.id;
-  }
+  link.title = row.description ? `${row.path}\n${row.description}` : row.path;
+  link.dataset.action = 'open-folder-level';
+  link.dataset.folderId = row.id;
   link.append(element('i', 'fas fa-folder fa-fw mr-1'), element('span', 'folder-name', row.name));
-  if (withPath && row.path !== row.name) {
-    const parent = row.path.includes(PATH_SEPARATOR) ? row.path.slice(0, row.path.lastIndexOf(PATH_SEPARATOR)) : '';
-    if (parent !== '') link.append(element('small', 'color-medium ml-2 folder-flat-parent', parent));
+  const count = entityCountOf(row);
+  if (count > 0) link.append(element('span', 'badge badge-secondary ml-1 folder-entity-count', String(count)));
+  line.append(link, copyOfActions(row));
+  item.append(line);
+  const more = morePanel(row);
+  if (more) item.append(more);
+  return item;
+}
+
+/** A folder in the cards view: a card with its name and buttons, then how many experiments and resources it holds and when it last changed. */
+function folderCard(row: FolderRow): HTMLElement {
+  const card = element('div', `folder-flat-item folder-card${row.active ? ' is-active' : ''}`);
+  card.draggable = true;
+  card.dataset.dragKind = 'folder';
+  card.dataset.dragId = row.id;
+  card.dataset.dropFolder = row.id;
+  const head = element('div', 'd-flex align-items-center');
+  const link = element('a', 'text-decoration-none folder-flat-link folder-card-title');
+  link.href = row.href;
+  link.title = row.path;
+  link.dataset.action = 'open-folder-level';
+  link.dataset.folderId = row.id;
+  link.append(element('i', 'fas fa-folder fa-fw mr-1'), element('span', 'folder-name', row.name));
+  head.append(link, copyOfActions(row));
+  card.append(head);
+  const meta = element('div', 'folder-file-card-meta');
+  const counts = element('span', 'folder-entity-count folder-card-counts');
+  counts.append(
+    element('i', 'fas fa-flask fa-fw'), document.createTextNode(String(row.experiments)),
+    element('i', 'fas fa-boxes-stacked fa-fw ml-2'), document.createTextNode(String(row.resources)),
+  );
+  meta.append(counts);
+  const age = shortAge(row.modified);
+  if (age) meta.append(element('span', 'folder-file-card-when text-right', age));
+  card.append(meta);
+  if (row.description) card.append(element('div', 'folder-card-description', row.description));
+  const more = morePanel(row);
+  if (more) card.append(more);
+  return card;
+}
+
+function entryIcon(entry: FolderEntry): HTMLElement {
+  const icon = element('i', `fas ${entry.type === 'items' ? 'fa-boxes-stacked' : 'fa-flask'} fa-fw mr-1 folder-file-icon`);
+  icon.title = i18next.t(entry.type === 'items' ? 'Resource' : 'Experiment');
+  return icon;
+}
+
+function statusDot(entry: FolderEntry): HTMLElement {
+  const dot = element('span', 'folder-status-dot');
+  if (entry.statusColor) dot.style.background = entry.statusColor;
+  return dot;
+}
+
+function dragAttributes(el: HTMLElement, entry: FolderEntry): void {
+  el.draggable = true;
+  el.dataset.dragKind = 'entry';
+  el.dataset.dragType = entry.type;
+  el.dataset.dragId = String(entry.id);
+}
+
+/** A file in the list view: a click picks it (its preview shows below), a double click or Enter opens it. */
+function fileRow(entry: FolderEntry): HTMLElement {
+  const row = element('div', `folder-file-row${selectedEntry === entryKey(entry) ? ' is-selected' : ''}`);
+  row.tabIndex = 0;
+  row.title = entry.title;
+  row.dataset.action = 'select-folder-entry';
+  row.dataset.entryKey = entryKey(entry);
+  row.dataset.openHref = entryHref(entry);
+  dragAttributes(row, entry);
+  row.append(entryIcon(entry), element('span', 'folder-file-title', entry.title));
+  return row;
+}
+
+/** A file in the cards view: name, then status, age and the first tag; a click opens it. */
+function fileCard(entry: FolderEntry): HTMLAnchorElement {
+  const card = element('a', 'folder-file-card text-decoration-none');
+  card.href = entryHref(entry);
+  card.title = entry.title;
+  dragAttributes(card, entry);
+  card.append(element('b', 'folder-file-card-title', entry.title));
+  const meta = element('div', 'folder-file-card-meta');
+  if (entry.type === 'items') meta.append(entryIcon(entry));
+  else meta.append(statusDot(entry));
+  const age = shortAge(entry.changed);
+  meta.append(element('span', 'folder-file-card-when', [entry.status, age].filter(Boolean).join(' · ')));
+  if (entry.tags.length > 0) meta.append(element('span', 'folder-file-tag', entry.tags[0]));
+  card.append(meta);
+  return card;
+}
+
+/** The picked file's details, under the list. */
+function previewOf(entries: FolderEntry[] | null): HTMLElement {
+  const box = element('div', 'folder-preview');
+  const entry = entries?.find(candidate => entryKey(candidate) === selectedEntry);
+  if (!entry) {
+    box.append(element('div', 'folder-preview-empty', i18next.t('Pick a file to see its details here.')));
+    return box;
   }
-  if (entityCount !== null && entityCount > 0) link.append(element('span', 'badge badge-secondary ml-1', String(entityCount)));
-  return link;
-}
-
-function listOf(rows: FolderRow[], entityType: string): HTMLElement {
-  const list = element('div', 'folder-flat-list');
-  rows.forEach(row => {
-    const item = element('div', 'folder-flat-item');
-    const line = element('div', 'd-flex align-items-center folder-flat-row');
-    const linkBox = element('span', 'folder-flat-main');
-    linkBox.append(entriesToggle(row), folderLink(row, true, entityType === 'items' ? row.resources : row.experiments));
-    line.append(linkBox, copyOfActions(row));
-    item.append(line);
-    const more = morePanel(row);
-    if (more) item.append(more);
-    if (row.experiments + row.resources > 0 && !entriesElsewhere.has(row.id) && isOpen(row.id)) {
-      ensureEntries(row.id);
-      item.append(entriesBlockOf(row.id));
-    }
-    list.append(item);
-  });
-  return list;
-}
-
-const SORT_CHIPS: Array<{ key: FolderSortKey; label: string; icon?: string; title: string }> = [
-  { key: 'name', label: 'Name', title: 'Sort by name' },
-  { key: 'path', label: 'Path', title: 'Sort by path' },
-  { key: 'experiments', label: '', icon: 'fa-flask', title: 'Sort by number of experiments' },
-  { key: 'resources', label: '', icon: 'fa-boxes-stacked', title: 'Sort by number of resources' },
-  { key: 'modified', label: 'Modified', title: 'Sort by last modified' },
-];
-
-function sortChip(chip: (typeof SORT_CHIPS)[number]): HTMLButtonElement {
-  const active = sortKey === chip.key;
-  const button = element('button', `folder-sort-chip${active ? ' active' : ''}`);
-  button.type = 'button';
-  button.dataset.action = 'sort-folder-details';
-  button.dataset.sortKey = chip.key;
-  button.title = i18next.t(chip.title);
-  button.setAttribute('aria-pressed', String(active));
-  if (chip.icon) button.append(element('i', `fas ${chip.icon} fa-fw`));
-  if (chip.label) button.append(document.createTextNode(i18next.t(chip.label)));
-  if (active) button.append(element('i', `fas fa-caret-${sortDirection === 1 ? 'up' : 'down'} fa-fw ml-1`));
-  return button;
-}
-
-/** Each folder as a small card: name and buttons, then its path, description and how many experiments / resources it holds. */
-/** The column headings: pressing one sorts by it (again to reverse). Path and description are columns of their own only when the panel is wide enough. */
-function sortBarOf(): HTMLElement {
-  const bar = element('div', 'folder-column-heads');
-  const name = element('div', 'folder-column-head-name');
-  name.append(sortChip(SORT_CHIPS[0]));
-  // in a narrow panel the path is not a column: sorting by it stays reachable next to the name
-  const narrowPath = sortChip(SORT_CHIPS[1]);
-  narrowPath.classList.add('folder-col-narrow-only');
-  // a clock instead of the word, so Name, Path and Modified stay on one line in a narrow panel
-  const narrowModified = sortChip({ ...SORT_CHIPS[4], label: '', icon: 'fa-clock' });
-  narrowModified.classList.add('folder-col-narrow-only');
-  name.append(narrowPath, narrowModified);
-  const widePath = element('div', 'folder-col-wide folder-col-path');
-  widePath.append(sortChip(SORT_CHIPS[1]));
-  const description = element('div', 'folder-col-wider folder-col-description');
-  description.append(element('span', 'folder-sort-label', i18next.t('Description')));
-  const wideModified = element('div', 'folder-col-wide folder-col-modified');
-  wideModified.append(sortChip(SORT_CHIPS[4]));
-  bar.append(name, widePath, description, sortChip(SORT_CHIPS[2]), sortChip(SORT_CHIPS[3]), wideModified, element('span'));
-  return bar;
-}
-
-function countCell(count: number, title: string): HTMLElement {
-  const cell = element('span', `folder-count-cell${count === 0 ? ' is-zero' : ''}`, count === 0 ? '\u2013' : String(count));
-  cell.title = `${count} ${title}`;
-  return cell;
-}
-
-function modifiedText(seconds: number): string {
-  return seconds <= 0 ? '\u2013' : new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: '2-digit' }).format(new Date(seconds * 1000));
-}
-
-function modifiedCell(seconds: number): HTMLElement {
-  const cell = element('span', `folder-modified-cell folder-col-wide${seconds <= 0 ? ' is-zero' : ''}`, modifiedText(seconds));
-  if (seconds > 0) cell.title = new Date(seconds * 1000).toLocaleString();
-  return cell;
-}
-
-/**
- * Each folder as a row of columns: name, (path, description), experiments, resources, last modified, and the buttons at the far
- * right. The path and description are columns only while the panel is wide enough; otherwise they sit under the name.
- */
-function cardsOf(rows: FolderRow[]): HTMLElement {
-  const list = element('div', 'folder-details-list');
-  rows.forEach(row => {
-    const card = element('div', `folder-details-card${row.active ? ' is-active' : ''}`);
-    const main = element('div', 'folder-details-text');
-    main.append(entriesToggle(row), folderLink(row, false, null));
-    const pathColumn = element('div', 'folder-col-wide folder-col-path', row.path !== row.name ? row.path : '');
-    pathColumn.title = row.path;
-    const descriptionColumn = element('div', 'folder-col-wider folder-col-description', row.description);
-    descriptionColumn.title = row.description;
-    card.append(
-      main,
-      pathColumn,
-      descriptionColumn,
-      countCell(row.experiments, i18next.t('experiments')),
-      countCell(row.resources, i18next.t('resources')),
-      modifiedCell(row.modified),
-      copyOfActions(row),
-    );
-    if (row.path !== row.name) card.append(element('div', 'folder-details-path folder-col-narrow-only', row.path));
-    if (row.modified > 0) card.append(element('div', 'folder-details-path folder-col-narrow-only', `${i18next.t('Modified')} ${modifiedText(row.modified)}`));
-    if (row.description) card.append(element('div', 'folder-details-description folder-col-narrow-only', row.description));
-    const more = morePanel(row);
-    if (more) card.append(more);
-    if (row.experiments + row.resources > 0 && !entriesElsewhere.has(row.id) && isOpen(row.id)) {
-      ensureEntries(row.id);
-      card.append(entriesBlockOf(row.id));
-    }
-    list.append(card);
-  });
-  return list;
-}
-
-/** The bookmarked folders as a block of their own above the folders of the current level. */
-function favoritesSection(...content: HTMLElement[]): HTMLElement {
-  const section = element('section', 'folder-flat-favorites');
-  const label = element('div', 'folder-tree-section-label small font-weight-bold mb-1');
-  label.append(element('i', 'fas fa-star fa-fw mr-1'), document.createTextNode(i18next.t('Bookmarked')));
-  section.append(label, ...content);
-  return section;
+  const open = element('a', 'folder-preview-title', entry.title);
+  open.href = entryHref(entry);
+  open.title = i18next.t('Open');
+  box.append(open);
+  const line = (label: string, value: string | HTMLElement): void => {
+    if (value === '') return;
+    const row = element('div', 'folder-preview-row');
+    row.append(element('span', 'folder-preview-label', label));
+    const content = element('span', 'folder-preview-value');
+    if (typeof value === 'string') content.textContent = value;
+    else content.append(value);
+    row.append(content);
+    box.append(row);
+  };
+  line(i18next.t('Type'), i18next.t(entry.type === 'items' ? 'Resource' : 'Experiment'));
+  if (entry.status) {
+    const status = element('span');
+    status.append(statusDot(entry), document.createTextNode(` ${entry.status}`));
+    line(i18next.t('Status'), status);
+  }
+  line(i18next.t('Owner'), entry.owner);
+  if (entry.changed > 0) line(i18next.t('Edited'), `${new Date(entry.changed * 1000).toLocaleDateString()} (${shortAge(entry.changed)})`);
+  line(i18next.t('Tags'), entry.tags.join(', '));
+  return box;
 }
 
 /** One button that moves the flat views to another level. */
@@ -448,14 +473,25 @@ function levelButton(className: string, folderId: string, label: string, title: 
   return button;
 }
 
-/** "..": back to the folder that holds the current level (or the top). */
+/** "..": back to the folder that holds the current level (or the top), and a link that lists this folder in the page. */
 function upRow(all: FolderRow[]): HTMLElement {
   const chain = ancestorChain(all, level);
   const parent = chain.length > 1 ? chain[chain.length - 2] : null;
   const row = element('div', 'd-flex align-items-center folder-flat-row folder-up-row');
+  // dropping something here moves it up one level (to the top level, folders stay folders and files become unfiled)
+  row.dataset.dropFolder = parent ? parent.id : 'top';
   const button = levelButton('btn btn-link btn-sm p-0 folder-up-button color-medium', parent ? parent.id : '', '', i18next.t('Up one level'));
   button.replaceChildren(element('i', 'fas fa-level-up-alt fa-fw mr-1'), document.createTextNode(`.. ${parent ? parent.name : i18next.t('All folders')}`));
   row.append(button);
+  const current = chain[chain.length - 1];
+  if (current) {
+    const show = element('a', 'folder-action-btn hl-hover-gray rounded ml-auto color-medium');
+    show.href = current.href;
+    show.title = i18next.t('Show this folder in the page');
+    show.setAttribute('aria-label', show.title);
+    show.append(element('i', 'fas fa-arrow-up-right-from-square fa-xs'));
+    row.append(show);
+  }
   return row;
 }
 
@@ -468,14 +504,17 @@ function levelPathBar(all: FolderRow[]): HTMLElement {
     ...ancestorChain(all, level).map(folder => ({ id: folder.id, name: folder.name, icon: 'fa-folder' })),
   ];
   crumbs.forEach((crumb, index) => {
-    if (index > 0) nav.append(element('i', 'fas fa-chevron-right folder-path-sep'));
+    // the chevron and the part after it stay together, so a wrapped line never starts with a lone chevron
+    const group = element('span', 'folder-path-part');
+    if (index > 0) group.append(element('i', 'fas fa-chevron-right folder-path-sep'));
     const last = index === crumbs.length - 1;
     const part = last
       ? element('span', 'folder-path-crumb')
       : levelButton('folder-path-crumb', crumb.id, '', crumb.name);
     if (last) part.setAttribute('aria-current', 'location');
     part.replaceChildren(element('i', `fas ${crumb.icon} fa-fw`), document.createTextNode(crumb.name));
-    nav.append(part);
+    group.append(part);
+    nav.append(group);
   });
   return nav;
 }
@@ -501,10 +540,75 @@ function ensureFlatContainer(tree: HTMLElement): HTMLElement {
   allEntries.dataset.action = 'toggle-folder-all-entries';
   allEntries.title = i18next.t('While on, click a folder to open it and see its experiments and resources');
   const body = element('div', 'folder-flat-body');
+  const preview = element('div', 'folder-preview-holder');
   const bar = element('div', 'folder-level-bar-holder mt-2');
-  flat.append(filter, allEntries, body, bar);
+  flat.append(filter, body, preview, bar);
   tree.after(flat);
   return flat;
+}
+
+/**
+ * The selected folder as a path under the tabs ("Vatsi › EV Project  ×"): each part opens that folder in the page, the x shows
+ * everything again. Hidden when no folder is selected (or when the selection is "Unfiled", which has its own row).
+ */
+function syncFolderCrumb(entityType: string): void {
+  const nav = document.getElementById('folderCrumb');
+  if (!nav) return;
+  const currentId = document.getElementById('experimentsFoldersSidebar')?.dataset.currentFolderId ?? '';
+  const tree = document.getElementById('experimentsFoldersTree');
+  const node = /^[1-9]\d*$/.test(currentId) ? tree?.querySelector<HTMLElement>(`.folder-node[data-folder-id="${currentId}"]`) ?? null : null;
+  if (!node) {
+    nav.hidden = true;
+    nav.replaceChildren();
+    return;
+  }
+  const chain: HTMLElement[] = [];
+  for (let el: HTMLElement | null = node; el; el = el.parentElement?.closest<HTMLElement>('.folder-node') ?? null) chain.unshift(el);
+  const parts: Node[] = [];
+  chain.forEach((folder, index) => {
+    const link = folder.querySelector<HTMLAnchorElement>(':scope > .folder-row [data-folder-entity-link]');
+    const name = folder.querySelector(':scope > .folder-row .folder-name')?.textContent?.trim() ?? '';
+    if (index > 0) parts.push(element('span', 'folder-crumb-sep', '›'));
+    const part = element('a', `folder-crumb-part${index === chain.length - 1 ? ' is-current' : ''}`, name);
+    part.href = link?.href ?? '#';
+    part.title = folder.dataset.folderFullPath ?? name;
+    parts.push(part);
+  });
+  const option = document.querySelector<HTMLOptionElement>('#folderQuickLinkSelect option[value="all"]');
+  const clear = element('a', 'folder-crumb-clear', '×');
+  clear.href = (entityType === 'items' ? option?.dataset.itemsHref : option?.dataset.experimentsHref) ?? 'experiments.php';
+  clear.title = i18next.t('Show all folders');
+  clear.setAttribute('aria-label', i18next.t('Show all folders'));
+  nav.replaceChildren(...parts, clear);
+  nav.hidden = false;
+}
+
+/** The parts of the panel that every view shares: the Exp / Res / All switch, the quick links, the option switches, the page classes. */
+function syncPanelChrome(): void {
+  const current = panelPrefs();
+  const entityType = currentEntityType();
+  const active = current.allTypes ? 'all' : entityType === 'items' ? 'items' : 'experiments';
+  document.querySelectorAll<HTMLElement>('[data-action="select-folder-type"]').forEach(button => {
+    const on = button.dataset.type === active;
+    button.classList.toggle('active', on);
+    button.setAttribute('aria-pressed', String(on));
+  });
+  // the quick links (All / Unfiled) follow the experiments / resources choice, as the select they replace did
+  document.querySelectorAll<HTMLAnchorElement>('[data-folder-quick]').forEach(link => {
+    const option = document.querySelector<HTMLOptionElement>(`#folderQuickLinkSelect option[value="${link.dataset.folderQuick}"]`);
+    const href = entityType === 'items' ? option?.dataset.itemsHref : option?.dataset.experimentsHref;
+    if (href) link.href = href;
+    link.classList.toggle('font-weight-bold', option?.selected === true);
+  });
+  syncFolderCrumb(entityType);
+  document.querySelectorAll<HTMLElement>('[data-folder-pref]').forEach(button => {
+    const key = button.dataset.folderPref as keyof PanelPrefs;
+    button.setAttribute('aria-checked', String(current[key]));
+    button.classList.toggle('is-on', current[key]);
+  });
+  const panel = document.getElementById('foldersPanel');
+  panel?.classList.toggle('folders-no-favorites', !current.favorites);
+  panel?.classList.toggle('folders-no-counts', !current.counts);
 }
 
 /**
@@ -515,13 +619,12 @@ export function syncFolderView(): void {
   const tree = document.getElementById('experimentsFoldersTree');
   if (!tree) return;
   const view = currentFolderView();
+  syncPanelChrome();
   document.querySelectorAll<HTMLElement>('[data-action="select-folder-view"]').forEach(button => {
     const active = button.dataset.view === view;
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', String(active));
   });
-  const title = document.getElementById('folderViewTitle');
-  if (title) title.textContent = i18next.t(view === 'tree' ? 'Folder tree' : view === 'list' ? 'Folder list' : 'Folder details');
   tree.hidden = view !== 'tree';
   // the tree keeps the original New folder form, the flat views the icon
   document.querySelectorAll<HTMLElement>('[data-folder-create]').forEach(box => { box.hidden = (box.dataset.folderCreate === 'tree') !== (view === 'tree'); });
@@ -534,13 +637,6 @@ export function syncFolderView(): void {
   flat.hidden = false;
   const body = flat.querySelector<HTMLElement>('.folder-flat-body');
   if (!body) return;
-  const allButton = flat.querySelector<HTMLElement>('.folder-all-entries-toggle');
-  if (allButton) {
-    allButton.setAttribute('aria-pressed', String(entriesMode()));
-    allButton.classList.toggle('active', entriesMode());
-    allButton.replaceChildren(element('i', `fas ${entriesMode() ? 'fa-eye-slash' : 'fa-eye'} fa-fw mr-1`), document.createTextNode(i18next.t(entriesMode() ? 'Hide experiments/resources' : 'Show experiments/resources')));
-  }
-  const entityType = (document.getElementById('folderEntityTypeSelect') as HTMLSelectElement | null)?.value ?? 'experiments';
   const all = collectRows(tree);
   if (!levelReady) {
     levelReady = true;
@@ -553,29 +649,71 @@ export function syncFolderView(): void {
   const searching = filterText.trim() !== '';
   // typing in the filter searches every folder; without it the folders inside the current level are listed
   const pool = searching ? filterFolderRows(all, filterText) : rowsAtLevel(all, level);
-  const rows = sortFolderRows(pool, view === 'list' ? 'path' : sortKey, view === 'list' ? 1 : sortDirection);
+  const rows = sortFolderRows(pool, 'name', 1);
   flat.querySelector<HTMLElement>('.folder-level-bar-holder')?.replaceChildren(levelPathBar(all));
-  // the bookmarked folders follow the sort of the table below them and have their own column headings
-  const favorites = searching ? [] : sortFolderRows(all.filter(row => row.favorite), view === 'list' ? 'path' : sortKey, view === 'list' ? 1 : sortDirection);
-  entriesElsewhere = new Set(rows.map(row => row.id));
-  const favoritesBlock = favorites.length > 0
-    ? [favoritesSection(...(view === 'list' ? [listOf(favorites, entityType)] : [sortBarOf(), cardsOf(favorites)]))]
-    : [];
-  entriesElsewhere = new Set();
-  if (rows.length === 0) {
-    const empty = element('div', 'small color-medium text-center border rounded p-3', i18next.t(all.length === 0 ? 'No folders to show.' : searching ? 'No folder matches.' : 'No folders in here.'));
-    body.replaceChildren(...favoritesBlock, ...(level !== '' && !searching ? [upRow(all), empty] : [empty]));
-    return;
+  const parts: HTMLElement[] = [];
+  if (level !== '' && !searching) parts.push(upRow(all));
+  // the cards view draws folders as cards too, in the same stack as the file cards
+  const cardsBox = view === 'cards' ? element('div', 'folder-file-cards') : null;
+  if (cardsBox) {
+    rows.forEach(row => cardsBox.append(folderCard(row)));
+    parts.push(cardsBox);
+  } else {
+    rows.forEach(row => parts.push(folderItem(row)));
   }
-  const parts: HTMLElement[] = [...favoritesBlock];
-  if (view === 'details') parts.push(sortBarOf());
-  const main = view === 'list' ? listOf(rows, entityType) : cardsOf(rows);
-  if (level !== '' && !searching) main.prepend(upRow(all));
-  parts.push(main);
+  // the files of the folder we are in (the top level has none: its files are in the folders, or unfiled)
+  let entries: FolderEntry[] | null = [];
+  if (panelPrefs().files && level !== '' && !searching) {
+    entries = entriesOf(level);
+    const shown = (entries ?? []).filter(entry => shownEntryTypes().includes(entry.type));
+    if (entries === null) parts.push(element('div', 'folder-entry-note small color-medium', i18next.t('Loading...')));
+    else if (view === 'list') shown.forEach(entry => parts.push(fileRow(entry)));
+    else if (cardsBox) shown.forEach(entry => cardsBox.append(fileCard(entry)));
+    entries = shown;
+  }
+  if (parts.length === 0) {
+    parts.push(element('div', 'small color-medium text-center border rounded p-3', i18next.t(all.length === 0 ? 'No folders to show.' : searching ? 'No folder matches.' : 'No folders in here.')));
+  }
   body.replaceChildren(...parts);
+  const previewHolder = flat.querySelector<HTMLElement>('.folder-preview-holder');
+  if (previewHolder) {
+    if (view === 'list' && panelPrefs().files && level !== '' && !searching) previewHolder.replaceChildren(previewOf(entries));
+    else previewHolder.replaceChildren();
+  }
 }
 
-/** Wires the view buttons and the sortable column headers (delegated, so they survive the panel being replaced). */
+function closePopovers(except: HTMLElement | null = null): void {
+  document.querySelectorAll<HTMLElement>('.folder-popover').forEach(pop => {
+    if (pop !== except) pop.hidden = true;
+  });
+  document.querySelectorAll<HTMLElement>('[data-action="toggle-folder-popover"]').forEach(button => {
+    button.setAttribute('aria-expanded', String(!!except && button.dataset.popover === except.id));
+  });
+}
+
+/** The bookmarked folders, as the list the star button opens. */
+function fillFavoritesPopover(pop: HTMLElement): void {
+  const tree = document.getElementById('experimentsFoldersTree');
+  const favorites = tree ? sortFolderRows(collectRows(tree).filter(row => row.favorite), 'path', 1) : [];
+  if (favorites.length === 0) {
+    pop.replaceChildren(element('div', 'folder-popover-note', i18next.t('Star a folder to find it here.')));
+    return;
+  }
+  pop.replaceChildren(
+    element('div', 'folder-popover-label', i18next.t('Favourites')),
+    ...favorites.map(row => {
+      const link = element('a', 'folder-popover-item text-decoration-none');
+      link.href = row.href;
+      link.title = row.path;
+      link.dataset.action = 'open-favorite-folder';
+      link.dataset.folderId = row.id;
+      link.append(element('i', 'fas fa-folder fa-fw mr-1'), element('span', 'folder-popover-text', row.name));
+      return link;
+    }),
+  );
+}
+
+/** Wires the view buttons, the Exp / Res / All switch and the pop-up lists (delegated, so they survive the panel being replaced). */
 export function initFolderViews(): void {
   const ApiC = new Api();
   const remember = (view: FolderView): void => {
@@ -600,74 +738,99 @@ export function initFolderViews(): void {
     const view = parseFolderView(el.dataset.view ?? null);
     remember(view);
     void ApiC.patch('experiments_folders', { action: 'set_folder_view', view }).catch(() => { /* kept in this browser at least */ });
+    closePopovers();
+    syncFolderView();
+  });
+  on('select-folder-type', (el: HTMLElement) => {
+    const type = el.dataset.type;
+    if (type === 'all') {
+      setPanelPref('allTypes', true);
+      syncFolderView();
+      return;
+    }
+    if (type !== 'experiments' && type !== 'items') return;
+    setPanelPref('allTypes', false);
+    const select = document.getElementById('folderEntityTypeSelect') as HTMLSelectElement | null;
+    if (select && select.value !== type) {
+      // the select (kept out of sight) still drives the page's own handling of the choice
+      select.value = type;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    } else {
+      syncFolderView();
+    }
+  });
+  on('folder-pref', (el: HTMLElement) => {
+    const key = el.dataset.folderPref as keyof PanelPrefs | undefined;
+    if (!key || !(key in DEFAULT_PREFS) || key === 'allTypes') return;
+    setPanelPref(key, !panelPrefs()[key]);
+    syncFolderView();
+  });
+  on('toggle-folder-popover', (el: HTMLElement, event: Event) => {
+    event.stopPropagation();
+    const pop = document.getElementById(el.dataset.popover ?? '');
+    if (!pop) return;
+    const opening = pop.hidden;
+    closePopovers(opening ? pop : null);
+    if (!opening) return;
+    if (pop.id === 'folderFavoritesMenu') fillFavoritesPopover(pop);
+    pop.hidden = false;
+  });
+  on('open-favorite-folder', (el: HTMLElement, event: Event) => {
+    // in the tree a favourite is a normal link (it lists the folder in the page); in the flat views it opens the folder here
+    if (currentFolderView() === 'tree') return;
+    if (event instanceof MouseEvent && (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)) return;
+    event.preventDefault();
+    level = el.dataset.folderId ?? '';
+    selectedEntry = '';
+    filterText = '';
+    closePopovers();
     syncFolderView();
   });
   on('toggle-folder-flat-more', (el: HTMLElement, event: Event) => {
     event.stopPropagation();
     event.preventDefault();
-    const panel = el.closest('.folder-flat-item, .folder-details-card')?.querySelector<HTMLElement>('.folder-flat-more-actions');
+    const panel = el.closest('.folder-flat-item')?.querySelector<HTMLElement>('.folder-flat-more-actions');
     if (!panel) return;
     const open = panel.hidden;
     document.querySelectorAll<HTMLElement>('.folder-flat-more-actions').forEach(other => { other.hidden = other !== panel || !open; });
     document.querySelectorAll<HTMLElement>('[data-action="toggle-folder-flat-more"]').forEach(toggle => toggle.setAttribute('aria-expanded', 'false'));
     el.setAttribute('aria-expanded', String(open));
   });
-  // a click anywhere else closes an open three-dots panel
+  // a click anywhere else closes an open pop-up list or three-dots panel
   document.addEventListener('click', event => {
     const target = event.target;
     if (!(target instanceof Node)) return;
+    if (!(target as Element).closest?.('.folder-popover')) closePopovers();
     document.querySelectorAll<HTMLElement>('.folder-flat-more-actions').forEach(panel => {
-      const container = panel.closest('.folder-flat-item, .folder-details-card');
+      const container = panel.closest('.folder-flat-item');
       if (panel.hidden || container?.contains(target) && (panel.contains(target) || (target as Element).closest?.('[data-action="toggle-folder-flat-more"]'))) return;
       panel.hidden = true;
     });
   });
-  on('toggle-folder-entries', (el: HTMLElement, event: Event) => {
-    // ctrl/cmd/shift/middle click on a folder's name keeps its normal meaning (open the folder's list, in a new tab or window)
+  on('select-folder-entry', (el: HTMLElement) => {
+    selectedEntry = el.dataset.entryKey ?? '';
+    syncFolderView();
+  });
+  // a double click, or Enter, opens the picked file
+  document.addEventListener('dblclick', event => {
+    const row = (event.target as Element | null)?.closest<HTMLElement>('#foldersPanel [data-open-href]');
+    if (row?.dataset.openHref) window.location.href = row.dataset.openHref;
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Enter') return;
+    const row = (event.target as Element | null)?.closest<HTMLElement>('#foldersPanel [data-open-href]');
+    if (row?.dataset.openHref) window.location.href = row.dataset.openHref;
+  });
+  on('open-folder-level', (el: HTMLElement, event: Event) => {
+    // ctrl/cmd/shift/middle click on a folder keeps its normal meaning (list the folder in the page, in a new tab or window)
     if (event instanceof MouseEvent && (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)) return;
     event.preventDefault();
-    event.stopPropagation();
-    const id = el.dataset.folderId ?? '';
-    if (id === '') return;
-    // a row can show up twice (bookmarked block and the level below it): both follow the same state
-    if (isOpen(id)) {
-      expandedFolders.delete(id);
-    } else {
-      expandedFolders.add(id);
-      // opening always shows fresh entries
-      entryCache.delete(id);
-    }
-    syncFolderView();
-  });
-  on('toggle-folder-all-entries', () => {
-    entriesOn = !entriesMode();
-    try {
-      window.localStorage.setItem(entriesOnKey(), entriesOn ? '1' : '0');
-    } catch {
-      // the switch then only lasts until the page is reloaded
-    }
-    // every folder starts closed whenever the switch is flipped
-    expandedFolders.clear();
-    entryCache.clear();
-    syncFolderView();
-  });
-  on('open-folder-level', (el: HTMLElement) => {
     level = el.dataset.folderId ?? '';
+    selectedEntry = '';
     // stepping to another level also leaves a search, which would otherwise keep listing every folder
     filterText = '';
     const filter = document.getElementById('folderFlatFilter') as HTMLInputElement | null;
     if (filter) filter.value = '';
-    syncFolderView();
-  });
-  on('sort-folder-details', (el: HTMLElement) => {
-    const key = el.dataset.sortKey as FolderSortKey | undefined;
-    if (!key) return;
-    if (sortKey === key) sortDirection = sortDirection === 1 ? -1 : 1;
-    else {
-      sortKey = key;
-      // counts are most useful biggest first
-      sortDirection = key === 'experiments' || key === 'resources' || key === 'modified' ? -1 : 1;
-    }
     syncFolderView();
   });
 }

@@ -3,13 +3,43 @@
 
 {% block body %}
 
+{# showScheduledBookings comes from DashboardController::SHOW_SCHEDULED_BOOKINGS, the one place to switch the card #}
+
 {% include 'show-view-edit.html' %}
-<h2>{{ 'Welcome %s'|trans|format(App.Users.userData.firstname) }}</h2>
+<h2 class='dashboard-welcome'>{{ 'Welcome %s'|trans|format(App.Users.userData.firstname) }}</h2>
 
 {% include 'request-actions-show.html' %}
+
+{# STAT TILES: counts of my own experiments, flat tiles that link to the matching list #}
+{% set meId = App.Users.userData.userid %}
+<div class='dashboard-stats' aria-label='{{ 'My activity'|trans }}'>
+  {% if statsModifiedThisWeek > 0 %}
+    <a class='dashboard-stat' href='experiments.php?mode=show&amp;owner={{ meId }}&amp;modified_days=7&amp;order=lastchange&amp;sort=desc'>
+      <span class='dashboard-stat-number'>{{ statsModifiedThisWeek }}</span>
+      <span class='dashboard-stat-label'>{{ 'Experiments modified this week'|trans }}</span>
+    </a>
+  {% endif %}
+  {# the status lists are in the cards below (Browse by status): not repeated here #}
+  {% if statsResourcesModifiedThisWeek > 0 %}
+    <a class='dashboard-stat' href='database.php?mode=show&amp;owner={{ meId }}&amp;modified_days=7&amp;order=lastchange&amp;sort=desc'>
+      <span class='dashboard-stat-number'>{{ statsResourcesModifiedThisWeek }}</span>
+      <span class='dashboard-stat-label'>{{ 'Resources modified this week'|trans }}</span>
+    </a>
+  {% endif %}
+  {# Open steps open the To-do side panel (where the steps are listed and can be ticked) #}
+  <button type='button' class='dashboard-stat dashboard-stat-button' data-action='toggle-sidepanel' data-target='todolist' aria-controls='todolistPanel' title='{{ 'Open the To-do panel with your steps'|trans }}'>
+    <span class='dashboard-stat-number'>{{ statsOpenSteps }}</span>
+    <span class='dashboard-stat-label'>{{ 'Open steps'|trans }}</span>
+  </button>
+  <button type='button' class='dashboard-stat dashboard-stat-button' data-action='toggle-sidepanel' data-target='todolist' aria-controls='todolistPanel' title='{{ 'Open the To-do panel with your tasks'|trans }}'>
+    <span class='dashboard-stat-number'>{{ statsOpenTasks }}</span>
+    <span class='dashboard-stat-label'>{{ 'Open tasks'|trans }}</span>
+  </button>
+</div>
 <hr>
 <div class='row dashboard-grid'>
   <div class='col-md-4'>
+    <div class='dashboard-card'>
     <div class='d-flex justify-content-between dashboard-heading'>
       <h3><a href='experiments.php'><i class='fas fa-flask mr-2'></i>{% trans %}Experiment{% plural 2 %}Experiments{% endtrans %}</a>{{ guide.area('Experiments', 'Experiments') }}</h3>
       <div>
@@ -30,7 +60,7 @@
       <h4>{{ 'Browse by category'|trans }}</h4>
       <div class='d-flex my-2 flex-wrap lh-150'>
         {% for category in App.experimentsCategoryArr|filter(c => c.is_current_team == 1) -%}
-          <a href='experiments.php?mode=show&amp;category={{ category.id }}' class='btn mr-2 catstat-btn category-btn mb-1' style='--bg: #{{ category.color }}'>{{ category.title }}</a>
+          <a href='experiments.php?mode=show&amp;category={{ category.id }}&amp;owner={{ meId }}' class='btn mr-2 catstat-btn category-btn mb-1' style='--bg: #{{ category.color }}'>{{ category.title }} <span class='catstat-count{{ (countExpCategory[category.id]|default(0)) == 0 ? ' is-zero' }}'>{{ countExpCategory[category.id]|default(0) }}</span></a>
         {%- endfor %}
       </div>
       <hr>
@@ -39,7 +69,7 @@
       <h4>{{ 'Browse by status'|trans }}</h4>
       <div class='d-flex my-2 flex-wrap lh-150'>
         {% for status in experimentsStatusArr|filter(c => c.is_current_team == 1) -%}
-          <a href='experiments.php?mode=show&amp;status={{ status.id }}' class='btn mr-2 catstat-btn status-btn mb-1' style='--bg: #{{ status.color }}'><i class='fas fa-circle fa-fw' style='--bg:#{{ status.color }}'></i> {{ status.title }}</a>
+          <a href='experiments.php?mode=show&amp;status={{ status.id }}&amp;owner={{ meId }}' class='btn mr-2 catstat-btn status-btn mb-1' style='--bg: #{{ status.color }}'><i class='fas fa-circle fa-fw' style='--bg:#{{ status.color }}'></i> {{ status.title }} <span class='catstat-count{{ (countExpStatus[status.id]|default(0)) == 0 ? ' is-zero' }}'>{{ countExpStatus[status.id]|default(0) }}</span></a>
         {%- endfor %}
       </div>
       <hr>
@@ -58,8 +88,10 @@
         </a>
       {% endfor %}
     </div>
+    </div>
   </div>
   <div class='col-md-4 mt-2 mt-md-0'>
+    <div class='dashboard-card'>
     <div class='d-flex justify-content-between dashboard-heading'>
       <h3><a href='database.php'><i class='fas fa-cubes-stacked mr-2'></i>{% trans %}Resource{% plural 2 %}Resources{% endtrans %}</a>{{ guide.area('Resources', 'Resources') }}</h3>
       <div>
@@ -79,7 +111,7 @@
     <h4>{{ 'Browse by category'|trans }}</h4>
     <div class='d-flex my-2 flex-wrap lh-150'>
       {% for category in App.itemsCategoryArr|filter(c => c.is_current_team == 1) -%}
-        <a href='database.php?mode=show&amp;category={{ category.id }}' class='btn mr-2 catstat-btn category-btn lh-normal mb-1' style='--bg: #{{ category.color }}'>{{ category.title }}</a>
+        <a href='database.php?mode=show&amp;category={{ category.id }}&amp;owner={{ meId }}' class='btn mr-2 catstat-btn category-btn lh-normal mb-1' style='--bg: #{{ category.color }}'>{{ category.title }} <span class='catstat-count{{ (countResCategory[category.id]|default(0)) == 0 ? ' is-zero' }}'>{{ countResCategory[category.id]|default(0) }}</span></a>
       {%- endfor %}
     </div>
     <hr>
@@ -87,7 +119,7 @@
       <h4>{{ 'Browse by status'|trans }}</h4>
       <div class='d-flex my-2 flex-wrap lh-150'>
         {% for status in itemsStatusArr|filter(c => c.is_current_team == 1) -%}
-          <a href='database.php?mode=show&amp;status={{ status.id }}' class='btn mr-2 catstat-btn status-btn lh-normal border-0 mb-1' style='--bg: #{{ status.color }}'><i class='fas fa-circle fa-fw' style='--bg:#{{ status.color }}'></i> {{ status.title }}</a>
+          <a href='database.php?mode=show&amp;status={{ status.id }}&amp;owner={{ meId }}' class='btn mr-2 catstat-btn status-btn lh-normal border-0 mb-1' style='--bg: #{{ status.color }}'><i class='fas fa-circle fa-fw' style='--bg:#{{ status.color }}'></i> {{ status.title }} <span class='catstat-count{{ (countResStatus[status.id]|default(0)) == 0 ? ' is-zero' }}'>{{ countResStatus[status.id]|default(0) }}</span></a>
         {%- endfor %}
       </div>
       <hr>
@@ -106,8 +138,11 @@
         </a>
       {% endfor %}
     </div>
+    </div>
   </div>
-  <div class='col-md-4 mt-2 mt-md-0' hidden>
+  {% if showScheduledBookings %}
+  <div class='col-md-4 mt-2 mt-md-0'>
+    <div class='dashboard-card'>
     <div class='d-flex justify-content-between dashboard-heading'>
       <h3><a href='scheduler.php'><i class='far fa-calendar-alt mr-2'></i>{{ 'Scheduled bookings'|trans }}</a></h3>
       <div>
@@ -126,8 +161,11 @@
         </a>
       {% endfor %}
     </div>
+    </div>
   </div>
-  <div class='col-md-4 mt-2 mt-md-0'>
+  {% endif %}
+  <div class='col-md-4 mt-2 mt-md-0 dashboard-announcements-col'>
+    <div class='dashboard-card'>
     <div class='d-flex justify-content-between align-items-center dashboard-heading'>
       <h3><i class='fas fa-bullhorn mr-2'></i>{{ 'Announcements'|trans }}{{ guide.info('guide-announcements', 'Announcements') }}</h3>
       {% if App.Users.isAdmin %}
@@ -188,6 +226,7 @@
       {% endfor %}
     </div>
     <a href='announcements.php' class='smallgray d-block mt-1'>{{ 'See previous announcements'|trans }}</a>
+    </div>
   </div>
 </div>
 
