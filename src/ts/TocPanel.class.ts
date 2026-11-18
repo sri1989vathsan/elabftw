@@ -760,7 +760,8 @@ export default class TocPanel extends SidePanel {
     const showing = document.getElementById('tocShowingLabel');
     if (showing) {
       const totalSections = this.entries.filter(isSection).length;
-      showing.textContent = filterActive ? `Showing ${sectionIds.size} of ${totalSections} sections` : '';
+      const shownSections = this.entries.filter(entry => isSection(entry) && sectionIds.has(entry.id)).length;
+      showing.textContent = filterActive ? `Showing ${shownSections} of ${totalSections} sections` : '';
     }
     this.filterMainText(filterActive, sectionIds);
   }
