@@ -199,12 +199,12 @@
       </div>
     </details>
 
-    <div class='d-flex mb-3'>
+    <div class='d-flex mb-3 favorite-apply-row'>
       <button type='button' class='btn btn-primary flex-grow-1' data-action='apply-favorite-filters'>
         <i class='fas fa-filter fa-fw mr-1'></i>{{ 'Apply filters'|trans }}
       </button>
-      <button type='button' class='btn btn-secondary ml-2' data-action='clear-favorite-filters'>
-        <i class='fas fa-xmark fa-fw mr-1'></i>{{ 'Clear'|trans }}
+      <button type='button' class='btn btn-secondary ml-2 favorite-clear-btn' data-action='clear-favorite-filters' title='{{ 'Clear'|trans }}' aria-label='{{ 'Clear'|trans }}'>
+        <i class='fas fa-xmark fa-fw' aria-hidden='true'></i><span class='sr-only'>{{ 'Clear'|trans }}</span>
       </button>
     </div>
       </div>

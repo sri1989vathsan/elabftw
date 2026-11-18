@@ -1243,6 +1243,153 @@ tr:first-child td {
   }
 }
 
+// The Filters popover of the Search panel, on the shared --fx look: small medium-weight section rows with a muted chevron,
+// 1.5rem option rows (0.9rem controls, hover tint), icon-only remove buttons that appear on row hover or focus, one muted
+// small line for empty states (#5c636a on white = 6.3:1, AA), hairline dividers, smaller radius and padding, and the
+// Apply / clear controls on the 1.4rem control height. The card stays a self-contained light card (see the note above
+// .favorite-filter-overlay); behaviour and markup hooks are unchanged.
+#favoritesPanel .favorite-filter-overlay {
+  border-radius: 0.4rem;
+  box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.25);
+  font-size: 0.78rem;
+  max-height: min(65vh, 28rem);
+  padding: 0.6rem !important;
+
+  .favorite-filter-section {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    margin-bottom: 0.5rem !important;
+    padding-bottom: 0.25rem;
+
+    &:last-of-type {
+      border-bottom: 0;
+    }
+  }
+
+  .favorite-filter-section-summary {
+    font-size: 0.78rem;
+    font-weight: 500;
+    min-height: 1.5rem;
+    padding: 0 0.15rem;
+  }
+
+  .favorite-filter-section-chevron {
+    color: #6c757d !important;
+    font-size: 0.6rem;
+    margin-right: 0.3rem;
+    width: 0.8rem;
+  }
+
+  .favorite-filter-section-body {
+    padding: 0 0 0.15rem 0.15rem;
+  }
+
+  .favorite-filter-option {
+    border-radius: 3px;
+    gap: 0.4rem;
+    min-height: 1.5rem;
+    padding: 0 0.3rem;
+
+    &:hover {
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    input[type='checkbox'],
+    input[type='radio'] {
+      flex: 0 0 auto;
+      height: 0.9rem;
+      margin: 0 !important;
+      width: 0.9rem;
+    }
+
+    label {
+      font-size: 0.78rem;
+      line-height: 1.3;
+    }
+
+    // remove-from-favorites: a muted icon that shows on hover or focus; danger colour on its own hover
+    .btn {
+      align-items: center;
+      background: transparent;
+      border: 0;
+      display: inline-flex;
+      height: 1.25rem;
+      justify-content: center;
+      opacity: 0;
+      padding: 0;
+      width: 1.25rem;
+
+      .fas {
+        color: #6c757d !important;
+        font-size: 0.68rem;
+      }
+
+      &:hover .fas,
+      &:focus-visible .fas {
+        color: #b02a37 !important;
+      }
+    }
+
+    &:hover .btn,
+    &:focus-within .btn {
+      opacity: 1;
+    }
+
+    @media (hover: none) {
+      .btn {
+        opacity: 1;
+      }
+    }
+  }
+
+  .category-color-dot {
+    flex-basis: 0.6rem;
+    height: 0.6rem;
+    width: 0.6rem;
+  }
+
+  // empty-state and hint lines: one muted small line with AA contrast
+  p.color-medium,
+  p.small {
+    color: #5c636a !important;
+    font-size: 0.72rem !important;
+    line-height: 1.3;
+    margin: 0 0 0.2rem !important;
+    padding: 0 0.3rem;
+  }
+
+  .favorite-apply-row {
+    align-items: center;
+    gap: 0.3rem;
+    margin-bottom: 0 !important;
+
+    .btn {
+      align-items: center;
+      display: inline-flex;
+      font-size: 0.78rem;
+      height: var(--fx-ctl, 1.4rem);
+      justify-content: center;
+      margin: 0 !important;
+      padding: 0 0.6rem;
+    }
+
+    .favorite-clear-btn {
+      background: transparent;
+      border-color: transparent;
+      color: #495057;
+      padding: 0;
+      width: var(--fx-ctl, 1.4rem);
+
+      .fas {
+        color: #495057 !important;
+      }
+
+      &:hover {
+        background: rgba(0, 0, 0, 0.06);
+      }
+    }
+  }
+}
+
 // Compact rows and rows with a preview (display modes cr and pv). Sizes follow the shared --fx-* look:
 // 1.5rem rows, a muted second colour, one hover tint, the primary colour for the selected row.
 .entity-rows {
