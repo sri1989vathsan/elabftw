@@ -5122,6 +5122,11 @@ html[data-ui-size='comfortable'] {
   .jss_content {
     font-size: 16px;
   }
+
+  // a hidden tooltip is 400px wide and, with the larger text, can push the page sideways: take no room until hovered
+  .infotip:not(:hover) .infotip-text {
+    display: none;
+  }
 }
 
 .ui-size-switch {
