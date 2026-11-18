@@ -31,52 +31,6 @@ final class DashboardStats
         $this->Db = Db::getConnection();
     }
 
-    /**
-     * My experiments by status: status id (0 for "not set") => count
-     *
-     * @return array<int, int>
-     */
-    public function experimentsByStatus(): array
-    {
-        $req = $this->Db->prepare(
-            'SELECT COALESCE(status, 0) AS status_id, COUNT(*) AS n
-            FROM experiments
-            WHERE userid = :userid AND state = :state
-            GROUP BY status_id',
-        );
-        $req->bindValue(':userid', $this->Users->userid, PDO::PARAM_INT);
-        $req->bindValue(':state', State::Normal->value, PDO::PARAM_INT);
-        $this->Db->execute($req);
-        $out = array();
-        foreach ($req->fetchAll() as $row) {
-            $out[(int) $row['status_id']] = (int) $row['n'];
-        }
-        return $out;
-    }
-
-    /**
-     * My resources by status: status id (0 for "not set") => count. Only the requester's own, non deleted resources.
-     *
-     * @return array<int, int>
-     */
-    public function resourcesByStatus(): array
-    {
-        $req = $this->Db->prepare(
-            'SELECT COALESCE(status, 0) AS status_id, COUNT(*) AS n
-            FROM items
-            WHERE userid = :userid AND state = :state
-            GROUP BY status_id',
-        );
-        $req->bindValue(':userid', $this->Users->userid, PDO::PARAM_INT);
-        $req->bindValue(':state', State::Normal->value, PDO::PARAM_INT);
-        $this->Db->execute($req);
-        $out = array();
-        foreach ($req->fetchAll() as $row) {
-            $out[(int) $row['status_id']] = (int) $row['n'];
-        }
-        return $out;
-    }
-
     /** How many of my resources were modified in the last seven days */
     public function resourcesModifiedThisWeek(): int
     {
