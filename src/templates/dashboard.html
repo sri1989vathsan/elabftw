@@ -12,8 +12,6 @@
 
 {# STAT TILES: counts of my own experiments, flat tiles that link to the matching list #}
 {% set meId = App.Users.userData.userid %}
-{% set runningStatus = experimentsStatusArr|filter(st => st.title|lower == 'running')|first %}
-{% set runningCount = runningStatus ? statsByStatus[runningStatus.id]|default(0) : 0 %}
 <div class='dashboard-stats' aria-label='{{ 'My activity'|trans }}'>
   {% if statsByStatus|length > 0 %}
     <div class='dashboard-stat dashboard-stat-wide'>
@@ -29,12 +27,6 @@
         {% endif %}
       </div>
     </div>
-  {% endif %}
-  {% if runningStatus and runningCount > 0 %}
-    <a class='dashboard-stat' href='experiments.php?mode=show&amp;status={{ runningStatus.id }}&amp;owner={{ meId }}'>
-      <span class='dashboard-stat-number'>{{ runningCount }}</span>
-      <span class='dashboard-stat-label'>{{ 'Running'|trans }}</span>
-    </a>
   {% endif %}
   {% if statsModifiedThisWeek > 0 %}
     <a class='dashboard-stat' href='experiments.php?mode=show&amp;owner={{ meId }}&amp;modified_days=7&amp;order=lastchange&amp;sort=desc'>
