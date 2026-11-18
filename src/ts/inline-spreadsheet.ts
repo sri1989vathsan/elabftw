@@ -354,6 +354,8 @@ function installTransposedPaste(
  * Keeping minDimensions equal to the real size after every structure change (and just before an insert) avoids it.
  */
 function syncMinDimensions(worksheet: JssInstance | null | undefined): void {
+  // window.__noMinDimSync: lets a soak run the same seeds with and without this sync
+  if ((window as unknown as { __noMinDimSync?: boolean }).__noMinDimSync === true) return;
   const sheet = worksheet as unknown as { headers?: unknown[]; options?: { data?: unknown[]; minDimensions?: number[] } } | null | undefined;
   if (!sheet?.options || !Array.isArray(sheet.headers) || sheet.headers.length === 0) return;
   const rows = Array.isArray(sheet.options.data) ? sheet.options.data.length : 0;
