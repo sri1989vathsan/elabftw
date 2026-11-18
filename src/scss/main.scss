@@ -9904,7 +9904,8 @@ button.wp-legend-item {
   }
 
   --dashboard-line: rgba(128, 128, 128, 0.25);
-  --dashboard-muted: #6b7780;
+  // follows the page's text colour (a fixed grey would fail contrast on the dark themes)
+  --dashboard-muted: color-mix(in srgb, currentColor 72%, transparent);
 }
 
 // a card: one thin muted border, one radius, one padding; the heading row, small muted sub-headings and compact list rows inside
