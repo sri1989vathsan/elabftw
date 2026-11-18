@@ -5,7 +5,7 @@
 {% include('ownership-transfer-modal.html') %}
 
 {# BOOKING PARAMS #}
-{% include('booking-params-modal.html') %}
+{% if App.Teams.teamArr.feature_bookable_resources %}{% include('booking-params-modal.html') %}{% endif %}
 {# IMPORT FROM PUBCHEM #}
 {% include('import-pubchem-modal.html') %}
 {# PROCUREMENT PARAMS #}

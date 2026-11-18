@@ -256,7 +256,7 @@
       </button>
 
       {# Calendar booking #}
-      {% if Entity.entityType.value == 'items' and (Entity.entityData.is_bookable or not Entity.isReadOnly) %}
+      {% if Entity.entityType.value == 'items' and App.Teams.teamArr.feature_bookable_resources and (Entity.entityData.is_bookable or not Entity.isReadOnly) %}
         {% if Entity.entityData.is_bookable %}
           <a class='btn mr-2 btn-transparent' title='{{ 'Book item'|trans }}' aria-label='{{ 'Book item'|trans }}' href='scheduler.php?items[]={{ Entity.id }}'>
             <i class='fas fa-calendar-plus fa-fw'></i>
@@ -369,8 +369,10 @@
 
         <div class='dropdown-menu dropdown-menu-right'>
           {% if Entity.entityType.value == 'items' %}
+            {% if App.Teams.teamArr.feature_bookable_resources %}
             {# BOOKING PARAMS #}
             <button type='button' class='dropdown-item' data-action='toggle-modal' data-target='bookingParamsModal'><i class='fas fa-calendar-plus fa-fw' title='{{ 'Modify booking parameters'|trans }}'></i> {{ 'Modify booking parameters'|trans }}</button>
+            {% endif %}
 
             {# PROCUREMENT #}
             <button type='button' class='dropdown-item' data-action='toggle-modal' data-target='procurementParamsModal'><i class='fas fa-cart-shopping fa-fw' title='{{ 'Modify procurement parameters'|trans }}'></i> {{ 'Modify procurement parameters'|trans }}</button>
