@@ -73,7 +73,10 @@
     label.append(copies);
     box.append(label);
     // the label has the ID and the title of the entry; text typed here is added below them, one line each
-    const preview = element('p', 'small text-muted mb-2');
+    // the preview: a visible bordered panel (inline styles, so no stylesheet can hide it), above the buttons
+    const preview = element('div', 'small');
+    preview.style.cssText = 'border:1px solid #888;border-radius:6px;padding:0.5rem;margin:0 0 0.6rem;min-height:4.5rem;background:rgba(128,128,128,0.08)';
+    preview.textContent = 'Preview…';
     box.append(preview);
     // margins (mm) dragged in the preview for this label; null = those of the format
     let edited = null;
@@ -388,6 +391,10 @@
       const svg = document.createElementNS(SVGNS, 'svg');
       svg.setAttribute('viewBox', '0 0 ' + body.width + ' ' + body.height);
       svg.setAttribute('width', String(Math.min(360, body.width)));
+      // a size in CSS too (an svg without one can collapse in a dialog): the label is shown at up to 360px wide, whatever the panel
+      svg.style.width = Math.min(360, body.width) + 'px';
+      svg.style.maxWidth = '100%';
+      svg.style.height = 'auto';
       svg.style.border = '1px solid #888';
       svg.style.background = '#fff';
       svg.style.display = 'block';
@@ -490,9 +497,18 @@
       svg.setAttribute('overflow', 'hidden');
       preview.append(svg, document.createTextNode(body.width_mm + ' x ' + body.height_mm + ' mm' + ', the dashed lines are the margins (left / top / right / bottom: ' + preview.dataset.margins + ' mm): drag them to change' + (body.rotated ? '; shown as it is read (it prints turned by 180 degrees)' : '')));
     };
+    // never silent: when the preview cannot be made the panel says why, with a way to try again
     const showPreview = function () {
-      request({ dry: true }).then(draw).catch(function () {
+      request({ dry: true }).then(draw).catch(function (error) {
         preview.textContent = '';
+        const note = element('span', 'text-muted', 'Preview unavailable: ' + (error && error.message ? error.message : 'the request failed') + ' ');
+        const retry = element('a', '', 'Try again');
+        retry.href = '#';
+        retry.addEventListener('click', function (e) {
+          e.preventDefault();
+          showPreview();
+        });
+        preview.append(note, retry);
       });
     };
     custom.addEventListener('input', function () {
@@ -596,5 +612,7 @@
     back.append(box);
     document.body.append(back);
     print.focus();
+    // the preview at once (the label outline with its size, even with no text yet)
+    showPreview();
   });
 })();

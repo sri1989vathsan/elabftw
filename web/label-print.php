@@ -205,10 +205,15 @@ try {
     $data = $sample || $generic
         ? array('custom_id' => $generic ? null : '1374', 'personal_id' => null, 'title' => $generic ? '' : 'Title of the entry', 'category' => 0, 'metadata' => '', 'date' => '')
         : new Inventory($App->Users, $id)->readOne();
-    $req = $pdo->prepare('SELECT title FROM inventory_categories WHERE id = :id');
-    $req->bindValue(':id', (int) ($data['category'] ?? 0), PDO::PARAM_INT);
-    $pdo->execute($req);
-    $module = (string) $req->fetchColumn();
+    // the module (category) name of an entry of the Database: a generic or sample label has no entry, and the table only exists where the
+    // Database is installed, so it is not read for them (the preview of a generic label failed on a missing table)
+    $module = '';
+    if (!$sample && !$generic) {
+        $req = $pdo->prepare('SELECT title FROM inventory_categories WHERE id = :id');
+        $req->bindValue(':id', (int) ($data['category'] ?? 0), PDO::PARAM_INT);
+        $pdo->execute($req);
+        $module = (string) $req->fetchColumn();
+    }
 
     $fields = array();
     $metadata = json_decode((string) ($data['metadata'] ?? ''), true);
@@ -238,6 +243,10 @@ try {
         if ((int) $format['id'] === (int) ($payload['format'] ?? -1)) {
             break;
         }
+    }
+    // a team without any format yet: the label of the lab (31 x 15 mm), so the preview and a print still work
+    if ($chosen === null) {
+        $chosen = array('id' => 0, 'name' => '31 x 15 mm', 'width_mm' => 31, 'height_mm' => 15, 'margin_mm' => 1.0, 'margin_left_mm' => 2.2, 'margin_top_mm' => 1.8, 'margin_right_mm' => 1.0, 'margin_bottom_mm' => 1.0, 'offset_x_mm' => 0, 'offset_y_mm' => 0, 'rotate_180' => 1, 'font_mm' => 2.9, 'qr' => 0, 'lines' => json_encode(array('{id_line}', '{title}')), 'is_default' => 1);
     }
     $design = array('width_mm' => $chosen['width_mm'], 'height_mm' => $chosen['height_mm'], 'margin_mm' => $chosen['margin_mm'], 'margin_left_mm' => $chosen['margin_left_mm'], 'margin_top_mm' => $chosen['margin_top_mm'], 'margin_right_mm' => $chosen['margin_right_mm'], 'margin_bottom_mm' => $chosen['margin_bottom_mm'], 'offset_x_mm' => $chosen['offset_x_mm'], 'offset_y_mm' => $chosen['offset_y_mm'], 'rotate_180' => $chosen['rotate_180'], 'font_mm' => $chosen['font_mm'], 'qr' => (bool) $chosen['qr'], 'rotate_180' => (int) $chosen['rotate_180'], 'lines' => $chosen['lines']);
     if ($sample && is_array($payload['design'] ?? null)) {
