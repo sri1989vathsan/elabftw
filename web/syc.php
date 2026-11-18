@@ -26,6 +26,10 @@ require_once 'app/init.inc.php';
 $Response = new Response();
 
 try {
+    // a tool that an admin switched off for the team: a short message (admins can still open it by its address)
+    if (!$App->Users->isAdmin && (int) ($App->Teams->teamArr['tools_opencloning'] ?? 1) !== 1) {
+        throw new \Elabftw\Exceptions\ImproperActionException(_('OpenCloning is switched off by your admin.'));
+    }
     $Response->prepare($Request);
     if (!Env::asBool('USE_OPENCLONING')) {
         throw new ImproperActionException('OpenCloning is disabled on this instance! As a Sysadmin, set USE_OPENCLONING to true in container environment to enable it.');

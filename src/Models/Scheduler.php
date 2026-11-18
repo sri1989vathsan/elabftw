@@ -109,6 +109,13 @@ final class Scheduler extends AbstractRest
         if ($this->Items->id === null) {
             throw new ImproperActionException('An item id is needed.');
         }
+        // booking is a team feature (Admin panel > Team > Features, off by default): the bookings already made stay, new ones are refused
+        $teamReq = $this->Db->prepare('SELECT feature_bookable_resources FROM teams WHERE id = :team');
+        $teamReq->bindValue(':team', (int) $this->Items->Users->userData['team'], \PDO::PARAM_INT);
+        $this->Db->execute($teamReq);
+        if ((int) $teamReq->fetchColumn() !== 1) {
+            throw new ImproperActionException(_('Booking is switched off for this team by an admin.'));
+        }
         if (!$this->Items->canBook()) {
             throw new ImproperActionException(_('You do not have the permission to book this entry.'));
         }

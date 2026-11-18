@@ -25,6 +25,10 @@ require_once 'app/init.inc.php';
 $Response = new Response();
 
 try {
+    // a tool that an admin switched off for the team: a short message (admins can still open it by its address)
+    if (!$App->Users->isAdmin && (int) ($App->Teams->teamArr['tools_compounds'] ?? 1) !== 1) {
+        throw new \Elabftw\Exceptions\ImproperActionException(_('Compounds is switched off by your admin.'));
+    }
     $Response = new CompoundsController($App)->getResponse();
 } catch (AppException $e) {
     $Response = $e->getResponseFromException($App);
