@@ -766,7 +766,6 @@ export default class FavoriteFilters extends SidePanel {
       starClone?.removeAttribute('data-id');
       items.push({
         label,
-        description: 'Folder',
         onSelect: () => link.click(),
         actionElement: starClone,
         actionSourceElement: star,

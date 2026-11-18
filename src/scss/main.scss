@@ -4024,6 +4024,75 @@ h1:has(> #documentTitle) {
   }
 }
 
+// Search results alignment: headings, rows and the results header share one left edge (--fx-pad) and one right edge.
+// The heading's inner label no longer adds its own padding on top of the summary's (that was a second indent); every
+// result is a two-line grid: title (ellipsis) and one muted line in column 1, the action (star, link buttons) in a
+// fixed right column, so nothing depends on the length of a name.
+#favoritesPanel {
+  .favorite-filter-section-summary .unified-search-group-title {
+    padding: 0;
+  }
+
+  .favorite-filter-section-summary {
+    gap: var(--fx-gap);
+    padding-left: var(--fx-pad);
+    padding-right: var(--fx-pad);
+  }
+
+  .favorite-results-line,
+  .favorite-results-status,
+  .favorite-filter-result {
+    padding-left: var(--fx-pad);
+    padding-right: var(--fx-pad);
+  }
+
+  .favorite-filter-result {
+    line-height: 1.3;
+    padding-bottom: 0.15rem;
+    padding-top: 0.15rem;
+  }
+
+  .favorite-filter-result .favorite-filter-result-link,
+  .favorite-filter-result .favorite-filter-result-meta {
+    margin: 0;
+    min-width: 0;
+  }
+
+  .favorite-filter-result.unified-search-result {
+    align-items: center;
+    column-gap: var(--fx-gap);
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) var(--fx-ctl);
+
+    > :not(.favorite-filter-result-meta):not(button):not(.btn) {
+      grid-column: 1;
+    }
+
+    > .favorite-filter-result-link {
+      grid-row: 1;
+    }
+
+    > .favorite-filter-result-meta {
+      grid-column: 1;
+      grid-row: 2;
+    }
+
+    // the star / action: one fixed column on the right edge, centred on the whole row
+    > button,
+    > .btn {
+      align-items: center;
+      display: inline-flex;
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      height: var(--fx-ctl);
+      justify-content: center;
+      margin: 0 !important;
+      padding: 0;
+      width: var(--fx-ctl);
+    }
+  }
+}
+
 // ---- Contents panel (entry pages) ----
 #tocPanel {
   // the filter row is one input group: one height, one tint, square buttons of equal width, a proper focus ring only from the keyboard
