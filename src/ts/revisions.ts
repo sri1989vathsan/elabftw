@@ -232,24 +232,42 @@ on('compare-revisions', async (el: HTMLElement) => {
     return;
   }
 
+  // Diff the readable text of the two bodies (block ends become line breaks), not their markup: tags cut in half by a
+  // character diff made the old output unreadable. Deletions are struck through, insertions underlined, both tinted.
   const dmp = new DiffMatchPatch();
-  const diff = dmp.diff_main(body0, body1);
+  const diff = dmp.diff_main(bodyToText(body0), bodyToText(body1));
+  dmp.diff_cleanupSemantic(diff);
+  let added = 0;
+  let removed = 0;
+  const pre = document.createElement('div');
+  pre.className = 'revision-diff';
   diff.forEach((part: DiffArr) => {
-    let color = '';
     const res = part[0];
-    if (res === DiffMatchPatch.DIFF_DELETE) {
-      color = '#dd1e00';
+    if (res === DiffMatchPatch.DIFF_EQUAL) {
+      pre.append(document.createTextNode(part[1]));
+      return;
     }
-    if (res === DiffMatchPatch.DIFF_INSERT) {
-      color = '#54aa08';
-    }
-    const span = document.createElement('span');
-    span.style.color = color;
-    const html = DOMPurify.sanitize(part[1], { USE_PROFILES: { html: true }, FORBID_TAGS: ['style', 'script', 'iframe', 'form'] });
-    span.innerHTML = html;
-    diffDiv.appendChild(span);
+    const mark = document.createElement(res === DiffMatchPatch.DIFF_DELETE ? 'del' : 'ins');
+    mark.textContent = part[1];
+    pre.append(mark);
+    if (res === DiffMatchPatch.DIFF_DELETE) removed += part[1].length;
+    else added += part[1].length;
   });
+  const summary = document.createElement('p');
+  summary.className = 'revision-diff-summary';
+  summary.textContent = added === 0 && removed === 0
+    ? 'No text changes between these two revisions.'
+    : `${added} characters added, ${removed} removed`;
+  diffDiv.append(summary, pre);
 });
+
+/** The readable text of an HTML body, with a line break at the end of each block. */
+function bodyToText(html: string): string {
+  const safe = DOMPurify.sanitize(html ?? '', { USE_PROFILES: { html: true }, FORBID_TAGS: ['style', 'script', 'iframe', 'form'] });
+  const withBreaks = safe.replace(/<\/(p|div|li|h[1-6]|tr|pre|blockquote)>|<br\s*\/?>/gi, '$&\n');
+  const doc = new DOMParser().parseFromString(withBreaks, 'text/html');
+  return (doc.body.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim();
+}
 
 // This page (revisions.php) only ever shows a version's history -- it has
 // no "edit" mode of its own to redirect back into. A relative
