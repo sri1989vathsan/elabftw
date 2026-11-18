@@ -294,6 +294,7 @@ export default class TocPanel extends SidePanel {
         html += `<button type="button" class="btn btn-sm toc-entry-action toc-insert-link" data-toc-target="${id}" data-toc-text="${label}" title="Insert link to ${label}" aria-label="Insert link to ${label}"><i class="fas fa-paste fa-fw" aria-hidden="true"></i></button>`;
       }
       if (!isTable) {
+        html += `<button type="button" class="btn btn-sm toc-entry-action toc-goto" data-toc-target="${id}" title="Go to ${label}" aria-label="Go to ${label}"><i class="fas fa-arrow-right fa-fw" aria-hidden="true"></i></button>`;
         html += `<button type="button" class="btn btn-sm toc-entry-action toc-row-more" data-toc-target="${id}" title="Selection options" aria-label="Selection options for ${label}" aria-haspopup="true"><i class="fas fa-ellipsis fa-fw" aria-hidden="true"></i></button>`;
       }
       html += '</div>';
@@ -385,6 +386,12 @@ export default class TocPanel extends SidePanel {
     });
     document.getElementById('tocSelectToggle')?.addEventListener('click', () => this.setSelectMode(!this.selectMode));
     document.getElementById('tocSelectClear')?.addEventListener('click', () => this.clearSelection());
+    document.getElementById('tocSelectAll')?.addEventListener('click', () => {
+      this.entries.filter(isSection).forEach(entry => this.selectedSectionIds.add(entry.id));
+      this.updateRowSelection();
+      this.filterEntries();
+    });
+    document.getElementById('tocSelectNone')?.addEventListener('click', () => this.clearSelection());
     document.querySelectorAll<HTMLButtonElement>('[data-toc-mode]').forEach(button => {
       button.addEventListener('click', () => {
         mode.value = button.dataset.tocMode ?? 'all';
@@ -479,6 +486,30 @@ export default class TocPanel extends SidePanel {
         this.openRowMenu(button);
       });
     });
+    // Select mode: a click anywhere on a heading row ticks it (shift = range, alt = this section only); the little arrow at the right
+    // end of the row (or a double-click on the text) jumps to the heading instead
+    container.addEventListener('click', event => {
+      if (!this.selectMode) return;
+      const target = event.target as HTMLElement;
+      if (target.closest('.toc-goto, .toc-entry-action, .toc-row-menu, .toc-row-check')) return;
+      const row = target.closest<HTMLElement>('.toc-item-section');
+      const checkbox = row?.querySelector<HTMLInputElement>('.toc-row-check');
+      if (!row || !checkbox) return;
+      event.preventDefault();
+      event.stopPropagation();
+      checkbox.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, shiftKey: event.shiftKey, altKey: event.altKey }));
+    }, true);
+    container.addEventListener('dblclick', event => {
+      if (!this.selectMode) return;
+      const target = (event.target as HTMLElement).closest<HTMLElement>('.toc-item');
+      if (target?.dataset.tocTarget) this.scrollToHeading(target.dataset.tocTarget);
+    });
+    container.querySelectorAll<HTMLButtonElement>('.toc-goto').forEach(button => {
+      button.addEventListener('click', event => {
+        event.stopPropagation();
+        if (button.dataset.tocTarget) this.scrollToHeading(button.dataset.tocTarget);
+      });
+    });
     // Arrow keys move between the rows, Enter jumps (the link), Space ticks the row in select mode
     container.addEventListener('keydown', event => {
       const target = event.target as HTMLElement | null;
@@ -541,6 +572,7 @@ export default class TocPanel extends SidePanel {
     document.getElementById(this.panelId)?.classList.toggle('toc-select-mode', on);
     const toggle = document.getElementById('tocSelectToggle');
     toggle?.setAttribute('aria-pressed', on ? 'true' : 'false');
+    document.getElementById('tocSelectStrip')?.toggleAttribute('hidden', !on);
     if (!on) this.clearSelection();
   }
 
@@ -679,9 +711,23 @@ export default class TocPanel extends SidePanel {
     });
     let matches = 0;
 
+    // Rows of the list: only the TEXT filters narrow it. Ticking sections must leave every row where it is (they are the
+    // checkboxes of the list), otherwise the first ticked heading hid all the others and only one could ever be selected.
+    // The selected rows (and their ancestors) stay visible whatever the text filters say.
+    const textMatchIds = new Set<string>();
+    if (filters.length > 0) {
+      this.entries.forEach(entry => {
+        const path = entry.path.toLocaleLowerCase();
+        const hit = matchAll ? filters.every(filter => path.includes(filter)) : filters.some(filter => path.includes(filter));
+        if (hit || this.selectedSectionIds.has(entry.id)) {
+          textMatchIds.add(entry.id);
+          entry.ancestorIds.forEach(id => textMatchIds.add(id));
+        }
+      });
+    }
     for (const item of items) {
       const targetId = item.dataset.tocTarget ?? '';
-      const visible = !filterActive || visibleTocIds.has(targetId);
+      const visible = filters.length === 0 || textMatchIds.has(targetId);
       item.hidden = !visible;
       if (sectionIds.has(targetId) || matchingTableIds.has(targetId)) matches++;
     }
@@ -691,7 +737,7 @@ export default class TocPanel extends SidePanel {
       // (matchingRoots only ever returns entries when one of those is set)
       // -- without the !filterActive check this showed on every plain,
       // unfiltered open of the panel as long as there were headings at all
-      noResults.hidden = !filterActive || items.length === 0 || matches > 0;
+      noResults.hidden = filters.length === 0 || items.length === 0 || items.some(item => !item.hidden);
     }
 
     this.currentFilterActive = filterActive;

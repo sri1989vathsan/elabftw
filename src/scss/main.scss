@@ -5031,6 +5031,52 @@ h1:has(> #documentTitle) {
     }
   }
 
+  .toc-select-strip {
+    align-items: center;
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 0.3rem;
+
+    &[hidden] {
+      display: none;
+    }
+
+    button {
+      background: var(--fx-hover);
+      border: 0;
+      border-radius: 4px;
+      color: var(--fx-fg);
+      font-size: 0.68rem;
+      height: 1.2rem;
+      padding: 0 0.5rem;
+
+      &:hover,
+      &:focus-visible {
+        background: var(--primary);
+        color: var(--primary-fg, #fff);
+      }
+    }
+
+    .toc-select-hint {
+      color: var(--fx-muted);
+      font-size: 0.62rem;
+      line-height: 1.2;
+    }
+  }
+
+  // select mode: the whole heading row is the toggle, so the pointer says so; the go-to arrow shows on the row
+  &.toc-select-mode .toc-items-container .toc-item-section .toc-entry {
+    cursor: pointer;
+  }
+
+  .toc-goto {
+    display: none;
+  }
+
+  &.toc-select-mode .toc-items-container .toc-goto {
+    display: inline-flex;
+  }
+
   .toc-empty {
     color: var(--fx-muted);
     font-size: 0.72rem;

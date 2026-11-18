@@ -31,6 +31,12 @@
       <button type='button' id='tocSelectToggle' class='toc-icon-btn toc-select-toggle' aria-pressed='false' title='{{ 'Select sections to filter, print or copy'|trans }}' aria-label='{{ 'Select sections'|trans }}'><i class='fas fa-square-check fa-fw' aria-hidden='true'></i></button>
     </div>
     <div id='tocSearchFilters' class='toc-search-filters' aria-live='polite'></div>
+    {# select mode: select all / none (the rows themselves are the checkboxes) #}
+    <div id='tocSelectStrip' class='toc-select-strip' hidden>
+      <button type='button' id='tocSelectAll'>{{ 'Select all'|trans }}</button>
+      <button type='button' id='tocSelectNone'>{{ 'None'|trans }}</button>
+      <span class='toc-select-hint'>{{ 'Click a heading to tick it; double-click to go to it'|trans }}</span>
+    </div>
     {# All | Any: only shown with two or more filters; the select stays as the value the code reads #}
     <div id='tocSearchModeSwitch' class='toc-mode-switch' role='group' aria-label='{{ 'Match'|trans }}' hidden>
       <span class='toc-mode-label'>{{ 'Match'|trans }}</span>
