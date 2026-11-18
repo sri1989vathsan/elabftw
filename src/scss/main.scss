@@ -5105,8 +5105,14 @@ h1:has(> #documentTitle) {
   .toc-filter-row {
     align-items: center;
     display: flex;
-    gap: 0.2rem;
+    gap: 0.15rem;
     margin-bottom: 0.3rem;
+
+    .toc-icon-btn,
+    .toc-icon-toggle {
+      height: var(--fx-ctl);
+      width: var(--fx-ctl);
+    }
   }
 
   .toc-filter-field {
@@ -5183,10 +5189,12 @@ h1:has(> #documentTitle) {
     }
   }
 
+  // Select all / None: two small ghost text buttons on one line, no wrapping, the same height as the other controls
   .toc-select-strip {
     align-items: center;
     display: flex;
-    gap: 0.25rem;
+    flex-wrap: nowrap;
+    gap: 0.15rem;
     margin-bottom: 0.3rem;
 
     &[hidden] {
@@ -5194,25 +5202,21 @@ h1:has(> #documentTitle) {
     }
 
     button {
-      background: var(--fx-hover);
+      background: transparent;
       border: 0;
       border-radius: 4px;
-      color: var(--fx-fg);
-      font-size: 0.68rem;
-      height: 1.2rem;
+      color: var(--fx-muted);
+      flex: 0 0 auto;
+      font-size: 0.72rem;
+      height: var(--fx-ctl);
       padding: 0 0.5rem;
+      white-space: nowrap;
 
       &:hover,
       &:focus-visible {
-        background: var(--primary);
-        color: var(--primary-fg, #fff);
+        background: var(--fx-hover);
+        color: var(--fx-fg);
       }
-    }
-
-    .toc-select-hint {
-      color: var(--fx-muted);
-      font-size: 0.62rem;
-      line-height: 1.2;
     }
   }
 
@@ -5278,10 +5282,11 @@ h1:has(> #documentTitle) {
   }
 
   .toc-items-container .toc-kind {
-    color: var(--fx-muted);
-    flex: 0 0 1.3rem;
-    font-size: 0.58rem;
-    font-weight: 600;
+    color: var(--fx-muted) !important;
+    flex: 0 0 1.5rem;
+    font-size: 0.6rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
     text-align: center;
 
     .fas {
@@ -5361,18 +5366,35 @@ h1:has(> #documentTitle) {
 
   // select mode: a checkbox column in front of the rows of the sections
   .toc-items-container .toc-row-check {
+    accent-color: var(--primary);
     display: none;
     flex: 0 0 0.9rem;
-    height: 0.9rem;
-    margin: 0;
-    width: 0.9rem;
+    height: 0.9rem !important;
+    margin: 0 !important;
+    min-height: 0;
+    width: 0.9rem !important;
   }
 
   &.toc-select-mode .toc-items-container .toc-row-check {
     display: block;
   }
 
+  // a ticked row: the same tint for every one (headings, and the tables and pictures under a ticked heading)
   .toc-items-container .toc-item.selected > .toc-entry {
+    background: color-mix(in srgb, var(--primary) 18%, transparent);
+  }
+
+  // tables and pictures: rows like the others, no box of their own
+  .toc-items-container .toc-item-table > .toc-entry,
+  .toc-items-container .toc-item-image > .toc-entry {
+    background-clip: border-box;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  .toc-items-container .toc-item-table.selected > .toc-entry,
+  .toc-items-container .toc-item-image.selected > .toc-entry {
     background: color-mix(in srgb, var(--primary) 18%, transparent);
   }
 

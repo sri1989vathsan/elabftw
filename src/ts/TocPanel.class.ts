@@ -642,6 +642,11 @@ export default class TocPanel extends SidePanel {
       const only = this.hasSectionChildren(entryId) && this.selectedSectionIds.has(entryId) && selected < branch.length;
       row.querySelector<HTMLElement>('.toc-only-mark')?.toggleAttribute('hidden', !only);
     });
+    // tables and pictures under a ticked heading take the same tint (they have no checkbox of their own)
+    document.querySelectorAll<HTMLElement>('#tocItems .toc-item-table, #tocItems .toc-item-image').forEach(row => {
+      const entry = this.entries.find(candidate => candidate.id === row.dataset.tocTarget);
+      row.classList.toggle('selected', Boolean(entry?.parentId && this.selectedSectionIds.has(entry.parentId)));
+    });
     const selectedCount = this.entries.filter(entry => isSection(entry) && this.selectedSectionIds.has(entry.id)).length;
     const bar = document.getElementById('tocSelectBar');
     const count = document.getElementById('tocSectionFilterCount');
