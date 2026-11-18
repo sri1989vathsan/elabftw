@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -2139,6 +2139,48 @@ async function spreadsheetSoak(options = {}) {
       }
       [...dialog.querySelectorAll('button')].find(b => /^Cancel/.test(b.textContent.trim()))?.click();
       await waitPopupGone();
+    },
+
+    // The popup's own scroll bars (drawn when the browser only has overlay bars that hide until you scroll; forced here with
+    // window.__forceOverlayScrollbars): a thumb that is smaller than the track when the sheet is wider than the popup, dragging it moves
+    // .jss_content sideways, and the last column can be reached.
+    async 'popup-own-scrollbar'() {
+      window.__forceOverlayScrollbars = true;
+      try {
+        const uid = await createTable('wide popup sheet (own bar)', { rows: 6, cols: 26 });
+        if (!uid) return;
+        const dialog = await openPopupFor(uid);
+        const container = dialog.querySelector('.inline-spreadsheet-container');
+        const bar = container && container.querySelector('.elabftw-own-scrollbar-x');
+        const scroller = container && container.querySelector('.jss_content');
+        if (!bar || !scroller) { dataLoss.push({ context, table: 'wide popup sheet (own bar)', problem: 'the popup has no own horizontal scroll bar in overlay mode' }); }
+        else {
+          await sleep(300);
+          const thumb = bar.querySelector('.elabftw-own-scrollbar-thumb');
+          const track = bar.getBoundingClientRect(); const tb = thumb.getBoundingClientRect();
+          if (getComputedStyle(bar).visibility !== 'visible' || !(tb.width > 0 && tb.width < track.width)) {
+            dataLoss.push({ context, table: 'wide popup sheet (own bar)', problem: `own scroll bar thumb missing or full width (visibility ${getComputedStyle(bar).visibility}, thumb ${Math.round(tb.width)} of ${Math.round(track.width)})` });
+          }
+          if (bar.getBoundingClientRect().bottom > dialog.getBoundingClientRect().bottom + 1) dataLoss.push({ context, table: 'wide popup sheet (own bar)', problem: 'the own scroll bar is below the dialog' });
+          const before = scroller.scrollLeft;
+          const fire = (type, x) => thumb.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 7, clientX: x, clientY: tb.top + 3 }));
+          fire('pointerdown', tb.left + 4);
+          fire('pointermove', tb.left + 4 + track.width);
+          fire('pointerup', tb.left + 4 + track.width);
+          await sleep(200);
+          if (!(scroller.scrollLeft > before + 50)) dataLoss.push({ context, table: 'wide popup sheet (own bar)', problem: `dragging the thumb did not scroll the grid (scrollLeft ${before} -> ${scroller.scrollLeft})` });
+          const last = dialog.querySelector('.jss_worksheet thead td[data-x="25"]');
+          const sb = scroller.getBoundingClientRect(); const lb = last && last.getBoundingClientRect();
+          if (!last || lb.right > sb.right + 2) dataLoss.push({ context, table: 'wide popup sheet (own bar)', problem: 'after dragging the thumb to the end the last column is not visible' });
+          // the keyboard: Home on the focused bar goes back to the start
+          bar.focus(); bar.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true })); await sleep(150);
+          if (scroller.scrollLeft !== 0) dataLoss.push({ context, table: 'wide popup sheet (own bar)', problem: 'Home on the own scroll bar did not go back to the start' });
+        }
+        [...dialog.querySelectorAll('button')].find(b => /^Cancel/.test(b.textContent.trim()))?.click();
+        await waitPopupGone();
+      } finally {
+        window.__forceOverlayScrollbars = false;
+      }
     },
 
     async 'find-in-grid'() {
