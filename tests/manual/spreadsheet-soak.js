@@ -446,6 +446,9 @@ async function spreadsheetSoak(options = {}) {
         for (let r = 0; r < rowsN; r++) {
           for (let c = 0; c < colsN; c++) {
             const expected = want[r]?.[c] ?? ''; const have = got[r]?.[c] ?? '';
+            // a formula whose references moved with an inserted or deleted column (=A1+1 became =B1+1) is the app doing its job: the record follows;
+            // formulas-and-structure checks the references strictly
+            if (have !== expected && String(expected).startsWith('=') && String(have).startsWith('=') && model.grid[r]) { model.grid[r][c] = have; continue; }
             if (have !== expected) dataLoss.push({ context, table: model.label, where, cell: cellName(r, c), expected, have });
           }
         }

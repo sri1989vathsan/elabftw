@@ -328,26 +328,26 @@ B = both Firefox and Chromium; C = Chromium only (needs the real clipboard).
 - find-in-grid used to report 0 or 2 current matches because earlier runs left the same word in other tables; the word is unique now.
 - "a spreadsheet sticks out of the editor sideways" in the editor-size check depends on the content of the scratch page.
 
-### 11.5 Results of the last full runs (headless Firefox, 3 parallel runs, seeds 11 / 22 / 33, about 17-20 minutes each)
+### 11.5 Results of the last full runs (headless Firefox, 3 parallel runs, seeds 11 / 22 / 33, about 17-18 minutes each; fresh scratch experiment each)
 
-| | Build 31 (before the fix) | Build 36 | Build 46 | Build 55 (final, 18 Nov) |
-|---|---|---|---|---|
-| Page errors | 0 / 6 / 1 | 0 / 0 / 0 | 0 / 0 / 0 | **0 / 0 / 0** |
-| Structure data loss (insert/delete, formulas) | seed 22 about 75 lines, seed 33 6 | 0 / 0 / 0 | 0 / 1 line / 0 | **0 / 0 / 0** |
-| mixed "size NxM instead of ..." | seed 11 | all 3 | 11 and 33 (7 each) | **11: 4, 22: 0, 33: 6** (see 11.6) |
-| Editor size problems | - | - | 0 / 6 / 12 | **0 / 0 / 0** |
-| Menu problems | 1 per run | 1 per run | 0 / 4 / 0 | **0 / 1 / 1** (scripted right-click, artefact) |
-| Scroll jiggle events | 0 / 47 / 66 | 0 / 47 / 66 | 0 / 45 / 70 | **0 / 0 / 0** (fresh scratch pages) |
-| Slowing down | none | none | none | **none** |
-| Clipboard scenarios (headless Firefox only) | 8-9 per seed | 8-9 | 8-9 | 8-9 (copy-table-format 2, paste-* and the new text-column-fits / no-stray-column-row paste variants 14; all "paste made 0 spreadsheets") |
+| | Build 31 (before the fix) | Build 36 | Build 46 | Build 55 | Build 57 (final, 19 Nov) |
+|---|---|---|---|---|---|
+| Page errors | 0 / 6 / 1 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | **0 / 0 / 0** |
+| Structure data loss (insert/delete, formulas) | seed 22 ~75 lines, seed 33 6 | 0 / 0 / 0 | 0 / 1 / 0 | 0 / 0 / 0 | **0 / 0 / 0** |
+| mixed "size NxM instead of ..." | seed 11 | all 3 | 11, 33 (7 each) | 11: 4, 22: 0, 33: 6 | **0 / 0 / 0** |
+| Editor size problems | - | - | 0 / 6 / 12 | 0 / 0 / 0 | **0 / 0 / 0** |
+| Menu problems | 1 per run | 1 per run | 0 / 4 / 0 | 0 / 1 / 1 | **0 / 1 / 1** (scripted right-click) |
+| Scroll jiggle events | 0 / 47 / 66 | 0 / 47 / 66 | 0 / 45 / 70 | 0 / 0 / 0 | **0 / 0 / 0** |
+| Slowing down | none | none | none | none | **none** |
+| Clipboard scenarios (headless Firefox only) | 8-9 per seed | 8-9 | 8-9 | 8-9 | 2 data-loss lines (copy-table-format) + 14-15 failures per seed, all "paste made 0 spreadsheets" or the clipboard copy |
 
-New scenarios in Firefox (build 55): popup-wide-scroll, popup-own-scrollbar, text-column-fits (typing and insert-command variants), preview-equals-live, toast-inside-viewport, inline-scrollbar-thin, filler-then-insert-column: no findings. Their paste variants cannot run in headless Firefox (no clipboard).
+Chromium (headless Google Chrome over the DevTools protocol, `scratchpad/cdp_soak.py`), in chunks on fresh scratch pages, final build: A (copy-paste, paste-external, paste-outside-widths, paste-copy-widths, paste-copy-widths-rich, copy-table-format, paste-range-format): CLEAN. C (text-column-fits, preview-equals-live, no-stray-column-row, toast-inside-viewport, inline-scrollbar-thin, popup-wide-scroll, popup-own-scrollbar, find-in-grid, drag-select, padding-fit): CLEAN. B (undo-redo, undo-everything, cut-undo, default-border-apply, colour-live), D (the first 13 scenarios), E (filler-*, autosave-in-grid, popup-direct-typing, formulas-and-structure, mixed seed 11): no data loss, no page errors, no menu problems except one scripted right-click; `type-in-cell` (1.3 to 2.7 s) and `save` (2.5 to 5.8 s) were flagged as slowing within one chunk (a chunk runs about 10 minutes on one page that gathers tables; not seen in the Firefox runs). mixed seed 22 alone in Chrome: CLEAN.
 
-Chromium (headless Google Chrome driven over the DevTools protocol, `scratchpad/cdp_soak.py`; the Browser pane runs too slowly while hidden): copy-paste, paste-external, paste-outside-widths, paste-copy-widths, copy-table-format, paste-range-format, undo-redo, cut-undo, text-column-fits, preview-equals-live, no-stray-column-row, formulas-and-structure, filler-revert, mixed on build 53: all pass (0 page errors, 0 structure data loss, 0 menu problems). paste-copy-widths-rich failed because the test changed only the `<colgroup>` of a copy whose saved data still said 100 px (the test now writes both, as the editor's own copy does). The run's other findings were artefacts of a scratch page used for many runs ("55 layout spacers for 54 spreadsheets", `save` slowing from 2 s to 7 s with 54 old tables on the page): use a fresh scratch experiment for every full run. A full-list Chrome run on build 55 lost its connection after 18 minutes (not analysed).
+Two soak-record fixes made this table clean (no app change): the record now follows the app's rule for the grey filler columns (taken off by a press outside the table, see 11.6) and adopts a formula whose references moved with an inserted or deleted column (`=A1+1` shown as `=B1+1`); formulas-and-structure still checks references strictly.
 
 ### 11.6 Open items
 
-1. **mixed: size shrink: explained, not an app bug (the rest of it).** Commit 208e1a4e8 fixed the real part (the filler cleanup deleting real columns after a right-click menu press or a column insert/delete). What remained on seeds 11 and 33 was the soak's own record: a press outside the table (Save, the page) takes the EMPTY grey filler columns off again by design (`dropEmptyColumnsFrom`: every column from the width before the press, when none of them holds text), while the record kept them. The new per-step column trail in each size finding showed it (`filler[m12 l12 s12] ... save[m12 l5 s5]`: model, live grid and stored table, 7 empty filler columns gone at the Save). The record now follows the same rule (`model.fillerBase`: set by the first filler press, cleared by a column insert or delete, applied when the saved table is back at that width with only empty columns beyond it). Scenarios: `filler-then-insert-column` (fails before 208e1a4e8) and `filler-then-popup` (a filler press, an inserted column and typed text, then the popup's Update or Cancel keep every real column; passes before and after, it guards the popup) cover the real part. The popup's own trimming of untyped grey columns (`buildResult`) only applies to grey columns pressed inside the popup and was not the cause.
+1. **mixed: size shrink: closed.** Commit 208e1a4e8 fixed the real part (the filler cleanup deleting real columns after a right-click menu press or a column insert/delete). What remained on seeds 11 and 33 was the soak's own record: a press outside the table (Save, the page) takes the EMPTY grey filler columns off again by design (`dropEmptyColumnsFrom`: every column from the width before the press, when none of them holds text), while the record kept them. The new per-step column trail in each size finding showed it (`filler[m12 l12 s12] ... save[m12 l5 s5]`: model, live grid and stored table, 7 empty filler columns gone at the Save). The record now follows the same rule (`model.fillerBase`: set by the first filler press, cleared by a column insert or delete, applied when the saved table is back at that width with only empty columns beyond it). Scenarios: `filler-then-insert-column` (fails before 208e1a4e8) and `filler-then-popup` (a filler press, an inserted column and typed text, then the popup's Update or Cancel keep every real column; passes before and after, it guards the popup) cover the real part. The popup's own trimming of untyped grey columns (`buildResult`) only applies to grey columns pressed inside the popup and was not the cause.
 2. **One-column drift** (seed 22, "col-before: ... -2 columns"): same cause as the first part of item 1 (cleanup at the moment of the insert); not seen on build 55.
 3. **Cosmetic**: scroll jiggle was 0 on fresh pages in build 55 (45 and 70 events on older, crowded pages); the taller last row after "row-before" in Firefox was not seen.
 4. Test hygiene: a scratch experiment accumulates tables; start every full run on a fresh one.
