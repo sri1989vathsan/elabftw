@@ -129,6 +129,7 @@ final class DashboardController extends AbstractHtmlController
                 'statsByStatus' => $DashboardStats->experimentsByStatus(),
                 'statsModifiedThisWeek' => $DashboardStats->modifiedThisWeek(),
                 'statsOpenSteps' => $DashboardStats->openSteps(),
+                'statsOpenTasks' => $DashboardStats->openTasks(),
                 'statsResourcesByStatus' => $DashboardStats->resourcesByStatus(),
                 'statsResourcesModifiedThisWeek' => $DashboardStats->resourcesModifiedThisWeek(),
                 'itemsStatusArr' => $ItemsStatus->readAll(),

@@ -103,6 +103,19 @@ final class DashboardStats
         return (int) $req->fetchColumn();
     }
 
+    /** Open to-do tasks assigned to me (not completed, not archived), the same rule as the sidebar To-do */
+    public function openTasks(): int
+    {
+        $req = $this->Db->prepare(
+            'SELECT COUNT(*) FROM todolist_task_assignees AS ta
+            INNER JOIN todolist AS t ON t.id = ta.task_id
+            WHERE ta.userid = :userid AND t.completed_at IS NULL AND t.archived_at IS NULL',
+        );
+        $req->bindValue(':userid', $this->Users->userid, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        return (int) $req->fetchColumn();
+    }
+
     /** Unfinished steps on my own experiments */
     public function openSteps(): int
     {
