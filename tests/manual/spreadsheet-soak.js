@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'text-column-fits', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'text-column-fits', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -447,7 +447,7 @@ async function spreadsheetSoak(options = {}) {
       };
       const dom = tableEl(uid);
       if (dom && settle && (dom.rows.length - 1 !== model.grid.length || dom.rows[0].cells.length - 1 !== model.grid[0].length)) {
-        dataLoss.push({ context, table: model.label, where: 'saved table', problem: `size ${dom.rows.length - 1}x${dom.rows[0].cells.length - 1} instead of ${model.grid.length}x${model.grid[0].length}` });
+        dataLoss.push({ context, table: model.label, where: 'saved table', problem: `size ${dom.rows.length - 1}x${dom.rows[0].cells.length - 1} instead of ${model.grid.length}x${model.grid[0].length}`, lastOps: opLog.slice(-16).join(' > ') });
       }
       if (snap.live && !snap.editing) compare('grid', snap.overlayData);
       if (settle) compare('saved table', snap.tableData);
@@ -1185,6 +1185,15 @@ async function spreadsheetSoak(options = {}) {
       const sourceCols = [...copyTable.querySelectorAll('colgroup > col')].slice(gutter);
       if (sourceCols.length !== wanted.length) { fail(`the copy has ${sourceCols.length} data columns, expected ${wanted.length}`); return; }
       sourceCols.forEach((col, i) => { col.style.width = `${wanted[i]}px`; });
+      // a copy made by the editor carries the sizes in its saved data as well as in the <colgroup>; the rich copy is made so (the plain one keeps only
+      // the <colgroup> changed, which the sheet handler has to honour too)
+      if (rich) {
+        try {
+          const payload = JSON.parse(atob(copyTable.getAttribute('data-spreadsheet')));
+          payload.colWidths = { 0: wanted[0], 1: wanted[1], 2: wanted[2] };
+          copyTable.setAttribute('data-spreadsheet', btoa(unescape(encodeURIComponent(JSON.stringify(payload)))));
+        } catch { /* the payload could not be read: the <colgroup> alone is tried */ }
+      }
       // plain: without the editor's own rich-selection marker (a copy of the table from the toolbar menu);
       // rich: wrapped in it, as the editor's Ctrl+C writes a selection, which TinyMCE (not the sheet handler) pastes
       const bare = copyTable.outerHTML.replace(/\sdata-elabftw-rich-selection(="[^"]*")?/g, '');
@@ -1723,6 +1732,54 @@ async function spreadsheetSoak(options = {}) {
       if (!update) { fail('the popup has no Update button'); } else { update.click(); await waitPopupGone(); }
       await verify('filler-revert: after Update', true);
       await consistency('filler-revert: inline, popup and stored HTML agree', true);
+    },
+    // A column the person adds (or deletes) after pressing the grey filler is a real column: the cleanup that takes the empty filler columns off
+    // must not delete it (a table used to shrink by columns after a filler press and an Insert column, 5x7 became 5x4).
+    async 'filler-then-insert-column'() {
+      const uid = await createTable('filler then insert', { rows: 4, cols: 3 });
+      if (!uid) return;
+      const colsOf = root => root.querySelectorAll('.jss_worksheet thead td[data-x]').length;
+      let root = await selectCell(uid, 0, 0);
+      let filler = null;
+      for (let i = 0; i < 40 && !(filler = root.querySelector('.elabftw-spreadsheet-filler .fc[data-i][data-r]') ? root.querySelector('.elabftw-spreadsheet-filler') : null); i++) await sleep(100);
+      if (!filler) { note('filler-no-room'); return; }
+      const cells = [...filler.querySelectorAll('.fc[data-i][data-r]')];
+      cells[Math.min(1, cells.length - 1)].dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window, button: 0, buttons: 1 }));
+      await sleep(1000);
+      root = api.overlayElement(uid) || root;
+      const grown = colsOf(root);
+      const holder = [...root.querySelectorAll('.jss_container')].find(el => el.jssWorksheet);
+      if (!holder) { fail('filler-then-insert-column: no worksheet'); return; }
+      holder.jssWorksheet.insertColumn(1, grown - 1, false);
+      await sleep(900);
+      root = api.overlayElement(uid) || root;
+      const withInserted = colsOf(root);
+      (document.querySelector('#experimentsFoldersSidebar') || document.body).dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window, button: 0, buttons: 1 }));
+      await sleep(1000);
+      root = api.overlayElement(uid) || root;
+      const after = colsOf(root);
+      if (after !== withInserted) dataLoss.push({ context, table: 'filler then insert', problem: `a column inserted after a filler press was taken off by the filler cleanup: ${withInserted} columns, then ${after}` });
+      const stored = tableEl(uid).rows[0].cells.length - 1;
+      if (stored !== after) dataLoss.push({ context, table: 'filler then insert', problem: `the stored table has ${stored} columns, the grid ${after}` });
+      note('filler-then-insert-column');
+      // this sheet was changed through the worksheet directly: the record follows the columns that are there
+      models.get(uid).grid.forEach(row => { while (row.length < after) row.push(''); });
+      // the same through the real right-click menu, with the record of the table kept as the mixed session keeps it: the grey filler is pressed
+      // (the record gets the columns), then menu inserts and deletes run, then a press outside the table; the table must still be what the record says
+      const uid2 = await createTable('filler then menu', { rows: 4, cols: 3 });
+      if (!uid2) return;
+      for (let round = 0; round < 4; round++) {
+        await fillerAdd(uid2);
+        for (let k = 0; k < 6; k++) await structureOp(uid2);
+        await verify(`filler-then-menu round ${round + 1}`, true);
+      }
+      (document.querySelector('#experimentsFoldersSidebar') || document.body).dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window, button: 0, buttons: 1 }));
+      await sleep(1000);
+      // the press outside takes the EMPTY grey columns off on purpose: the record follows what is left, and nothing real (typed, or added by the menu
+      // and still empty) may have gone before it, which the verify of each round above has checked
+      const left = tableEl(uid2).rows[0].cells.length - 1;
+      models.get(uid2).grid.forEach(row => { row.length = Math.min(row.length, left); });
+      await verify('filler-then-menu: after a press outside the table', true);
     },
     // Edits made inside a grid are saved without having to leave it.
     async 'autosave-in-grid'() {
