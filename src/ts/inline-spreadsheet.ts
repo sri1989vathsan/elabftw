@@ -8305,6 +8305,23 @@ export function buildReadOnlySpreadsheetHost(
       .reduce((sum, width) => sum + width, 0);
 
   const naturalTableWidth = computeNaturalTableWidth(cols, colWidths, appearance.rowIndexWidth);
+  // The saved widths are only a first guess: the live grid fits columns that were never sized by hand to
+  // their text, so its real table is often wider than the frame drawn from the saved numbers (the right
+  // part was cut off with no way to reach it). Once the grid is built the frame is set from the widths
+  // of its real columns: exactly the table when it fits, the full available width (with a scrollbar)
+  // when it does not (max-width:100% in the frame's style does the capping).
+  const syncFrameToRealColumns = (): void => {
+    if (editable) return;
+    const realCols = sheetContainer.querySelectorAll<HTMLElement>('.jss_worksheet > colgroup > col');
+    if (realCols.length === 0) return;
+    let total = 0;
+    realCols.forEach(col => {
+      total += Number.parseFloat(col.getAttribute('width') ?? '') || col.getBoundingClientRect().width;
+    });
+    if (!(total > 0)) return;
+    host.dataset.viewModeWidth = String(Math.round(total));
+    host.style.setProperty('width', `${Math.round(total)}px`);
+  };
   // Listeners put on the page or window by this grid. They are all taken off again when it is destroyed:
   // anonymous ones used to stay behind every time a grid was created and removed, so a long session got
   // slower and slower (every mouse event then ran through hundreds of dead handlers).
@@ -10368,6 +10385,7 @@ export function buildReadOnlySpreadsheetHost(
       applyCoordinateHeaderStyle(sheetContainer, appearance);
       applySpreadsheetRowHeights(sheetContainer, worksheet, rowHeights);
       applySpreadsheetColWidths(sheetContainer, worksheet, colWidths);
+      syncFrameToRealColumns();
       applyCellClipHeights(sheetContainer, manuallyResizedRows);
       window.requestAnimationFrame(reserveRoomForHorizontalScrollbar);
       if (options.initialSelection) {

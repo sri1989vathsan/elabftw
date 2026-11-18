@@ -299,6 +299,7 @@ B = both Firefox and Chromium; C = Chromium only (needs the real clipboard).
 | `no-stray-column-row` | pasted 3x1 and 3x2 sheets stay 3x1 / 3x2: no column of 1,2,3, no empty row nobody added | B |
 | `toast-inside-viewport` | the app's own toasts and tooltips stay in the window with a margin and do not cover the column letters (the "Last sync was successful" box seen in a screenshot is the Polybox client of the computer, not this page) | B |
 | `inline-scrollbar-thin` | the scroll bar of a wide inline sheet is thin, like the popup's | B |
+| `viewport-equals-table-width` | frame width equals the table width when it fits; when it does not, a scroll bar reaches the real right edge of the last column; header row as high as data rows, rows alike, no clipped last-column text, no empty strip under the last row (narrow and 24-column tables). View-page frame: `syncFrameToRealColumns` in `buildReadOnlySpreadsheetHost` | B |
 | `filler-then-popup` | after a filler press, an inserted column and typed text, the popup's Update or Cancel keep every real column | B |
 | `filler-then-insert-column` | after a press on the grey filler, a column inserted (directly, and by the right-click menu with the record kept as the mixed session keeps it) or a menu item used is not taken off by the filler cleanup | B |
 
