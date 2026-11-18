@@ -325,9 +325,20 @@ function getContextFolderId(): string | null {
   return null;
 }
 
+// The folder of the entry created last is the default where no folder page is open (kept in this browser only).
+const LAST_CREATE_FOLDER_KEY = 'create-last-folder';
+
+function lastCreateFolderId(): string | null {
+  try {
+    return localStorage.getItem(LAST_CREATE_FOLDER_KEY);
+  } catch {
+    return null;
+  }
+}
+
 function preselectCreateFolderFromContext(): void {
   if (!createNewFolderSelect) return;
-  const folderId = getContextFolderId();
+  const folderId = getContextFolderId() ?? lastCreateFolderId();
   if (folderId === null) return;
   const option = Array.from(createNewFolderSelect.options).find(candidate => candidate.value === folderId);
   if (!option) return;

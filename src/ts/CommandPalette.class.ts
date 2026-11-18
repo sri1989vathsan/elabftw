@@ -72,9 +72,22 @@ export default class CommandPalette {
       tinymce.activeEditor?.execCommand(command);
     };
     // the same call the "create" keyboard shortcut makes, but to a fixed page so it works from anywhere
-    const createEntity = async (entityType: EntityType, page: string): Promise<void> => {
-      const id = await ApiC.post2location(entityType, { category_id: 0, tags: [] });
-      window.location.href = `${page}?mode=edit&id=${id}`;
+    // the same dialog as the Create button, with the type chosen: it has the folder choice
+    const createEntity = (entityType: EntityType): void => {
+      // the + menu of the top bar has an item for each type on every page
+      const existing = document.querySelector<HTMLElement>(`[data-action="toggle-create-modal"][data-type="${entityType}"]`);
+      if (existing) {
+        existing.click();
+        return;
+      }
+      const opener = document.createElement('button');
+      opener.type = 'button';
+      opener.dataset.action = 'toggle-create-modal';
+      opener.dataset.type = entityType;
+      opener.hidden = true;
+      document.body.append(opener);
+      opener.click();
+      opener.remove();
     };
     return [
       { label: 'Save', description: 'Save the current entry', icon: 'fa-save', keywords: 'write autosave', action: () => click('[data-action="update-entity-body"]') },
@@ -85,8 +98,8 @@ export default class CommandPalette {
       { label: 'Insert note', description: 'Insert a note using your saved defaults', icon: 'fa-note-sticky', keywords: 'callout box', action: () => editorCommand('elabftwInsertNote') },
       { label: 'Insert table or spreadsheet', description: 'Open table, spreadsheet and well-plate options', icon: 'fa-table', keywords: 'formula well plate benchling', action: () => editorCommand('elabftwInsertTable') },
       { label: 'Insert link', description: 'Insert a web, file/folder or LabCollector link', icon: 'fa-link', keywords: 'url file folder', action: () => editorCommand('elabftwInsertWebLink') },
-      { label: 'New experiment', description: 'Create an experiment and open it for editing', icon: 'fa-flask', keywords: 'create add', action: () => void createEntity(EntityType.Experiment, 'experiments.php') },
-      { label: 'New resource', description: 'Create a resource and open it for editing', icon: 'fa-cubes-stacked', keywords: 'create add database item', action: () => void createEntity(EntityType.Item, 'database.php') },
+      { label: 'New experiment', description: 'Open the new experiment dialog (title, folder, template)', icon: 'fa-flask', keywords: 'create add', action: () => createEntity(EntityType.Experiment) },
+      { label: 'New resource', description: 'Open the new resource dialog (title, folder, template)', icon: 'fa-cubes-stacked', keywords: 'create add database item', action: () => createEntity(EntityType.Item) },
       { label: 'Go to Dashboard', description: 'The home page', icon: 'fa-house', keywords: 'home start', action: () => { window.location.href = 'dashboard.php'; } },
       { label: 'Go to Boards', description: 'Project boards and their cards', icon: 'fa-list-check', keywords: 'projects kanban', action: () => { window.location.href = 'projectmanagement.php'; } },
       { label: 'Keyboard shortcuts', description: 'List the keyboard shortcuts (press ? anywhere outside a text field)', icon: 'fa-keyboard', keywords: 'keys help cheat sheet', action: () => this.openShortcuts() },
