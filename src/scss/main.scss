@@ -10440,3 +10440,44 @@ button.wp-legend-item {
     }
   }
 }
+
+// loading and empty states of the side panels: a few greyed rows of the real row height with a soft pulse, and one short muted line
+.fx-skeleton {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.2rem 0;
+
+  > span:not(.sr-only) {
+    animation: fx-pulse 1.4s ease-in-out infinite;
+    background: var(--fx-hover, rgba(128, 128, 128, 0.2));
+    border-radius: 4px;
+    display: block;
+    height: 1.9rem;
+
+    &:nth-child(3) {
+      opacity: 0.7;
+    }
+
+    &:nth-child(4) {
+      opacity: 0.45;
+    }
+  }
+}
+
+@keyframes fx-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-skeleton > span {
+    animation: none !important;
+  }
+}
+
+.side-panel .fx-empty {
+  color: var(--fx-muted) !important;
+  font-size: 0.75rem;
+  padding: 0.3rem var(--fx-pad);
+}

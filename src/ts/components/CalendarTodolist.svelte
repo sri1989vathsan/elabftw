@@ -1342,9 +1342,9 @@
     </div>
   </div>
   {#if loading}
-    <p class='text-muted'>{t('Loading')}…</p>
+    <div class='fx-skeleton' aria-busy='true'><span class='sr-only'>{t('Loading')}…</span><span></span><span></span><span></span></div>
   {:else if agendaCount === 0}
-    <p class='text-muted'>{t('No matching activity for this date.')}</p>
+    <p class='text-muted fx-empty'>{t('No matching activity for this date.')}</p>
   {:else}
     {#if agendaEntries.length > 0}
       <details class='calendar-activity-group' open>

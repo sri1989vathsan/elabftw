@@ -2078,10 +2078,10 @@
 
 {#if panelView === 'list'}
 {#if loading}
-  <p class='todo-secondary-text'>{t('Loading')}…</p>
+  <div class='fx-skeleton' aria-busy='true'><span class='sr-only'>{t('Loading')}…</span><span></span><span></span><span></span></div>
 {:else}
   {#if dueGroups.length === 0}
-    <p class='mb-0'>{t('no-tasks-yet')}</p>
+    <p class='mb-0 fx-empty'>{t('no-tasks-yet')}</p>
   {:else}
     <div class='todo-due-groups'>
       {#each dueGroups as group (group.key)}
