@@ -69,6 +69,7 @@
     searchQuery,
     queryPending,
     selectedEntities = [],
+    layout,
     currentUserId = null,
     currentTeam = null,
     isAdmin = false,
@@ -82,12 +83,38 @@
     searchQuery: Writable<string>;
     queryPending?: Writable<boolean>;
     selectedEntities: Writable<string[]>;
+    layout?: Writable<string>;
     currentUserId?: number | null;
     currentTeam?: number | null;
     isAdmin?: boolean;
     isAnon?: boolean;
     onInitialLoadDone?: () => void;
   }>();
+
+  // 'it' cards, 'cr' grouped compact rows, 'pv' compact rows with a preview pane of the selected entry
+  let layoutMode = $state('it');
+  let previewId = $state<number | null>(null);
+
+  const previewEntity = $derived(entities.find(item => item.id === previewId) ?? entities[0] ?? null);
+
+  // rows are grouped by the month of their date (created for templates); order is kept
+  const groups = $derived.by(() => {
+    const result: Array<{ key: string; label: string; items: EntityListItem[] }> = [];
+    for (const item of entities) {
+      const raw = isTemplateType(entityType) ? item.created_at : item.date;
+      const key = raw && /^\d{4}-\d{2}/.test(String(raw)) ? String(raw).slice(0, 7) : '';
+      let group = result.find(candidate => candidate.key === key);
+      if (!group) {
+        const label = key === ''
+          ? t('No date')
+          : new Date(`${key}-01T12:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+        group = { key, label, items: [] };
+        result.push(group);
+      }
+      group.items.push(item);
+    }
+    return result;
+  });
 
   let hasReportedInitialLoad = false;
   let entities = $state<EntityListItem[]>([]);
@@ -586,6 +613,7 @@
   }
 
   onMount(() => {
+    const unsubscribeLayout = layout?.subscribe(value => { layoutMode = value; });
     nonSearchFilterSignature = getCurrentNonSearchFilterSignature();
 
     window.addEventListener('popstate', bumpUrlVersion);
@@ -594,6 +622,7 @@
     return () => {
       window.removeEventListener('popstate', bumpUrlVersion);
       window.removeEventListener('entity-filters-changed', bumpReloadVersionIfFiltersChanged);
+      unsubscribeLayout?.();
     };
   });
 </script>
@@ -601,6 +630,82 @@
 {#if error && entities.length === 0}
   <div class='alert alert-danger'>{error}</div>
 {:else}
+  {#snippet compactRow(entity: EntityListItem, index: number)}
+    {@const rowId = `entity-body-${entity.id}-${index}`}
+    <section
+      class={`entity entity-row d-flex align-items-center ${layoutMode === 'pv' && previewEntity?.id === entity.id ? 'is-previewed' : ''}`}
+      id={`parent_${rowId}`}
+      data-entity-id={entity.id}
+      style={`--left-color: #${getLeftColor(entity)};`}
+      aria-label={`${t('Entry')}_${rowId}`}
+    >
+      <input
+        autocomplete='off'
+        type='checkbox'
+        data-action='checkbox-entity'
+        data-id={entity.id}
+        data-randomid={rowId}
+        data-type={entityType}
+        aria-label={t('Select')}
+        class='entity-row-check'
+      />
+      {#if layoutMode === 'pv'}
+        <button type='button' class='entity-row-title btn-link-plain' onclick={() => { previewId = entity.id; }}>
+          {entity.title || t('entity-default-title')}
+        </button>
+      {:else}
+        <a class='entity-row-title' href={`?mode=view&id=${entity.id}`}>{entity.title || t('entity-default-title')}</a>
+      {/if}
+      {#if entity.status_title}<span class='entity-row-meta' title={t('Status')}>{entity.status_title}</span>{/if}
+      {#if entity.category_title}<span class='entity-row-meta' title={t('Category')}>{entity.category_title}</span>{/if}
+      <span class='entity-row-meta entity-row-date'>{formatDate(isTemplateType(entityType) ? entity.created_at : entity.date)}</span>
+    </section>
+  {/snippet}
+
+  {#if layoutMode === 'cr' || layoutMode === 'pv'}
+    <div class={`entity-rows ${layoutMode === 'pv' ? 'entity-rows-with-preview' : ''}`} id='itemList'>
+      <div class='entity-rows-list'>
+        {#each groups as group (group.key)}
+          <h3 class='entity-group-title'>{group.label} <span class='entity-group-count'>{group.items.length}</span></h3>
+          {#each group.items as entity, index (`${entity.id}-${index}`)}
+            {@render compactRow(entity, index)}
+          {/each}
+        {/each}
+        {#if hasMore}
+          <div bind:this={sentinelEl} class='py-3 text-center color-medium'>
+            {#if isLoadingMore}{t('Loading...')}{/if}
+          </div>
+        {/if}
+      </div>
+      {#if layoutMode === 'pv'}
+        <aside class='entity-preview' aria-label={t('Preview')}>
+          {#if previewEntity}
+            <h3 class='entity-preview-title'>
+              <a href={`?mode=view&id=${previewEntity.id}`}>{previewEntity.title || t('entity-default-title')}</a>
+            </h3>
+            <div class='entity-preview-meta color-medium'>
+              {formatDate(previewEntity.date ?? previewEntity.created_at)}
+              {#if previewEntity.fullname} · {previewEntity.fullname}{/if}
+              {#if previewEntity.status_title} · {previewEntity.status_title}{/if}
+            </div>
+            {#each [
+              { value: previewEntity.experiment_goal, label: t('Goals'), icon: 'fa-bullseye' },
+              { value: previewEntity.experiment_conclusion, label: t('Conclusion'), icon: 'fa-clipboard-check' },
+              { value: previewEntity.experiment_notes, label: t('Notes'), icon: 'fa-file-lines' },
+            ] as part}
+              {#if part.value?.trim()}
+                <h4 class='entity-preview-label'><i class={`fas ${part.icon} fa-fw`} aria-hidden='true'></i> {part.label}</h4>
+                <div class='entity-preview-text'>{part.value.trim()}</div>
+              {/if}
+            {/each}
+            {#if !previewEntity.experiment_goal?.trim() && !previewEntity.experiment_conclusion?.trim() && !previewEntity.experiment_notes?.trim()}
+              <p class='color-medium'>{t('Nothing to preview. Open the entry to read it.')}</p>
+            {/if}
+          {/if}
+        </aside>
+      {/if}
+    </div>
+  {:else}
   <div class='d-flex flex-column' id='itemList'>
     {#each entities as entity, index (`${entity.id}-${index}`)}
       {@const template = isTemplateType(entityType)}
@@ -911,6 +1016,7 @@
       </div>
     {/if}
   </div>
+  {/if}
 {/if}
 
 <style>

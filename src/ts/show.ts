@@ -53,6 +53,7 @@ type EntityFilterRequestedDetail = {
 const activeFilters = document.getElementById('activeFiltersDiv');
 let debounceTimer: number | undefined;
 let entityListSvComponent: Record<string, unknown> | null = null;
+const entityLayout = writable<string>('it');
 const initialUrlParams = new URLSearchParams(window.location.search);
 const initialQ = initialUrlParams.get('q') ?? '';
 initialUrlParams.delete('q');
@@ -196,6 +197,7 @@ const mountEntityListSv = (target: HTMLElement, order: string, sort: string): vo
       queryPending: isSearchPending,
       entityFilters,
       selectedEntities,
+      layout: entityLayout,
       currentUserId: core.currentUserid,
       currentTeam: core.currentTeam,
       isAdmin: core.isAdmin,
@@ -233,6 +235,8 @@ async function displayEntities(
     return;
   }
   entitiesTableModule?.unmountEntitiesTable();
+  // cards, compact rows and rows with a preview are one component; the mode is a store it follows
+  entityLayout.set(mode === 'cr' || mode === 'pv' ? mode : 'it');
   mountEntityListSv(rootEl, order, sort);
 }
 
@@ -797,17 +801,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // TOGGLE DISPLAY
-  on('toggle-items-layout', async () => {
-    let target = 'it';
-    const me = await getMe();
-    if (me['display_mode'] === 'it') {
-      target = 'tb';
-    }
-    ApiC.patch(`${Model.User}/me`, { notifOnSaved: 0, display_mode: target}).then(resp => resp.json()).then(json => {
-      document.getElementById('realContainer')?.classList.toggle('max-width-70', target === 'it');
-      displayEntities(target, getPreferredOrder(json), getPreferredSort(json));
+  // SWITCH THE LIST LAYOUT: cards (it), compact rows (cr), rows with preview (pv) or table (tb); saved on the user
+  on('set-items-layout', async (el: HTMLElement) => {
+    const target = el.dataset.layout ?? 'it';
+    const json = await ApiC.patch(`${Model.User}/me`, { notifOnSaved: 0, display_mode: target}).then(resp => resp.json());
+    document.getElementById('realContainer')?.classList.toggle('max-width-70', target === 'it');
+    document.querySelectorAll<HTMLElement>('[data-action="set-items-layout"]').forEach(button => {
+      const active = button.dataset.layout === target;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
+    displayEntities(target, getPreferredOrder(json), getPreferredSort(json));
   });
 
   on('add-tag-filter', (el: HTMLElement) => {

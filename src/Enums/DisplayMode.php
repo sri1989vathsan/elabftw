@@ -16,4 +16,8 @@ enum DisplayMode: string
 {
     case Normal = 'it';
     case Table = 'tb';
+    // grouped compact rows
+    case Compact = 'cr';
+    // compact rows with a preview pane
+    case Preview = 'pv';
 }

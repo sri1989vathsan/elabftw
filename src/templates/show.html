@@ -236,7 +236,7 @@
   <div class='d-flex flex-wrap'>
     {# LEFT #}
     <div class='d-flex'>
-      {% if App.Users.userData.display_mode == 'it' %}
+      {% if App.Users.userData.display_mode in ['it', 'cr', 'pv'] %}
         <a title='{{ 'Select all'|trans }}' aria-label='{{ 'Select all'|trans }}' data-action='toggle-select-all-entities' data-target='select' href='#' class='btn btn-transparent'>
           <i class='far fa-square'></i>
         </a>
@@ -450,10 +450,14 @@
     <div class='vertical-separator'></div>
     <div class='d-flex'>
       {# SWITCH LAYOUT #}
-      <button title='{{ 'Switch layout'|trans }}' aria-label='{{ 'Switch layout'|trans }}' type='button' class='btn btn-transparent mr-1' data-action='toggle-items-layout'>
-        <i class='fas fa-fw fa-list'></i>
-        <i class='fas fa-fw fa-table'></i>
-      </button>
+      <div class='btn-group layout-switch mr-1' role='group' aria-label='{{ 'Switch layout'|trans }}'>
+        {% set layoutModes = {'it': ['Cards', 'fa-list'], 'cr': ['Compact rows', 'fa-bars'], 'pv': ['Rows with preview', 'fa-table-columns'], 'tb': ['Tabular', 'fa-table']} %}
+        {% for mode, def in layoutModes %}
+          <button title='{{ def[0]|trans }}' aria-label='{{ def[0]|trans }}' type='button' class='btn btn-transparent{{ App.Users.userData.display_mode == mode ? ' active' }}' data-action='set-items-layout' data-layout='{{ mode }}' aria-pressed='{{ App.Users.userData.display_mode == mode ? 'true' : 'false' }}'>
+            <i class='fas fa-fw {{ def[1] }}'></i>
+          </button>
+        {% endfor %}
+      </div>
     <div class='vertical-separator'></div>
 
     <div class='d-flex'>
