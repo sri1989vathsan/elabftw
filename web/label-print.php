@@ -85,7 +85,7 @@ $loadFormats = static function () use ($pdo, $teamId, $config): array {
     }
     if ($formats === array()) {
         $default = $config['default'];
-        $formats[] = array('id' => 0, 'name' => $default['width_mm'] . ' x ' . $default['height_mm'] . ' mm', 'width_mm' => $default['width_mm'], 'height_mm' => $default['height_mm'], 'margin_mm' => 1.0, 'margin_left_mm' => $default['margin_left_mm'], 'margin_top_mm' => $default['margin_top_mm'], 'margin_right_mm' => $default['margin_right_mm'], 'margin_bottom_mm' => $default['margin_bottom_mm'], 'offset_x_mm' => $default['offset_x_mm'] ?? 0, 'offset_y_mm' => $default['offset_y_mm'] ?? 0, 'rotate_180' => !empty($default['rotate_180']) ? 1 : 0, 'font_mm' => $default['font_mm'], 'qr' => $default['qr'] ? 1 : 0, 'lines' => $default['lines'], 'is_default' => 1);
+        $formats[] = array('id' => 0, 'name' => $default['name'] ?? ($default['width_mm'] . ' x ' . $default['height_mm'] . ' mm'), 'width_mm' => $default['width_mm'], 'height_mm' => $default['height_mm'], 'margin_mm' => $default['margin_mm'] ?? 1.0, 'margin_left_mm' => $default['margin_left_mm'], 'margin_top_mm' => $default['margin_top_mm'], 'margin_right_mm' => $default['margin_right_mm'], 'margin_bottom_mm' => $default['margin_bottom_mm'], 'offset_x_mm' => $default['offset_x_mm'] ?? 0, 'offset_y_mm' => $default['offset_y_mm'] ?? 0, 'rotate_180' => !empty($default['rotate_180']) ? 1 : 0, 'font_mm' => $default['font_mm'], 'qr' => $default['qr'] ? 1 : 0, 'lines' => $default['lines'], 'is_default' => 1);
     }
     return $formats;
 };
@@ -244,9 +244,10 @@ try {
             break;
         }
     }
-    // a team without any format yet: the label of the lab (31 x 15 mm), so the preview and a print still work
+    // a team without any format yet: the label of the lab (Fisher, 37 x 15 mm; label-config.json), so the preview and a print still work
     if ($chosen === null) {
-        $chosen = array('id' => 0, 'name' => '31 x 15 mm', 'width_mm' => 31, 'height_mm' => 15, 'margin_mm' => 1.0, 'margin_left_mm' => 2.2, 'margin_top_mm' => 1.8, 'margin_right_mm' => 1.0, 'margin_bottom_mm' => 1.0, 'offset_x_mm' => 0, 'offset_y_mm' => 0, 'rotate_180' => 1, 'font_mm' => 2.9, 'qr' => 0, 'lines' => json_encode(array('{id_line}', '{title}')), 'is_default' => 1);
+        $default = $config['default'];
+        $chosen = array('id' => 0, 'name' => $default['name'] ?? 'Fisher', 'width_mm' => $default['width_mm'], 'height_mm' => $default['height_mm'], 'margin_mm' => $default['margin_mm'] ?? 1.0, 'margin_left_mm' => $default['margin_left_mm'], 'margin_top_mm' => $default['margin_top_mm'], 'margin_right_mm' => $default['margin_right_mm'], 'margin_bottom_mm' => $default['margin_bottom_mm'], 'offset_x_mm' => $default['offset_x_mm'] ?? 0, 'offset_y_mm' => $default['offset_y_mm'] ?? 0, 'rotate_180' => !empty($default['rotate_180']) ? 1 : 0, 'font_mm' => $default['font_mm'], 'qr' => $default['qr'] ? 1 : 0, 'lines' => json_encode($default['lines']), 'is_default' => 1);
     }
     $design = array('width_mm' => $chosen['width_mm'], 'height_mm' => $chosen['height_mm'], 'margin_mm' => $chosen['margin_mm'], 'margin_left_mm' => $chosen['margin_left_mm'], 'margin_top_mm' => $chosen['margin_top_mm'], 'margin_right_mm' => $chosen['margin_right_mm'], 'margin_bottom_mm' => $chosen['margin_bottom_mm'], 'offset_x_mm' => $chosen['offset_x_mm'], 'offset_y_mm' => $chosen['offset_y_mm'], 'rotate_180' => $chosen['rotate_180'], 'font_mm' => $chosen['font_mm'], 'qr' => (bool) $chosen['qr'], 'rotate_180' => (int) $chosen['rotate_180'], 'lines' => $chosen['lines']);
     if ($sample && is_array($payload['design'] ?? null)) {

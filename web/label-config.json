@@ -6,21 +6,21 @@
   "dpi": 300,
   "qr_base_url": "",
   "default": {
-    "width_mm": 31,
+    "name": "Fisher",
+    "width_mm": 37,
     "height_mm": 15,
-    "margin_mm": 1.0,
-    "margin_left_mm": 2.2,
-    "margin_top_mm": 1.8,
-    "margin_right_mm": 1.0,
-    "margin_bottom_mm": 1.0,
-    "offset_x_mm": 0.0,
-    "offset_y_mm": 0.0,
-    "font_mm": 2.9,
+    "margin_mm": 0.0,
+    "margin_left_mm": 0.0,
+    "margin_top_mm": 1.0,
+    "margin_right_mm": 0.0,
+    "margin_bottom_mm": 3.0,
+    "offset_x_mm": 5.0,
+    "offset_y_mm": 1.5,
+    "font_mm": 3.0,
     "qr": false,
-    "rotate_180": true,
+    "rotate_180": false,
     "lines": [
-      "{id_line}",
-      "{title}"
+      "{id_line} {title}"
     ]
   },
   "modules": {},
