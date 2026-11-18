@@ -10008,3 +10008,85 @@ button.wp-legend-item {
     order: -1;
   }
 }
+
+// ---- Boards: the board's bands become one toolbar row ----
+// The page is a wrapping row: the project tabs, the project description and the subprojects, then ONE toolbar row (search and priority,
+// the card scope, "+ Add card" at the right end), then the bulk bar and the columns. Everything else takes a whole line.
+.pm-board {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.5rem;
+
+  > * {
+    flex: 0 0 100%;
+    margin: 0 !important;
+    order: 8;
+  }
+
+  > .pm-project-row {
+    order: 1;
+  }
+
+  > .pm-project-description {
+    order: 2;
+  }
+
+  > .pm-subproject-row {
+    order: 3;
+  }
+
+  > .pm-subproject-description {
+    order: 4;
+  }
+
+  > .pm-toolbar-search {
+    flex: 1 1 16rem;
+    order: 5;
+  }
+
+  > .pm-toolbar-scope {
+    flex: 0 0 auto;
+    order: 6;
+  }
+
+  > .pm-toolbar-add {
+    flex: 0 0 auto;
+    margin-left: auto !important;
+    order: 7;
+  }
+
+  > .pm-progress {
+    order: 9;
+  }
+
+  > .pm-bulk-bar {
+    order: 10;
+  }
+
+  > .pm-columns,
+  > .pm-load-more {
+    order: 11;
+  }
+
+  .pm-toolbar-search .form-control {
+    height: var(--fx-ctl, 1.4rem);
+    min-height: 1.75rem;
+  }
+
+  .pm-toolbar-search .pm-priority-filter {
+    width: auto;
+  }
+
+  .pm-toolbar-add .btn,
+  .pm-toolbar-scope .btn {
+    align-items: center;
+    display: inline-flex;
+    min-height: 1.75rem;
+  }
+
+  // the archived button is just its icon (its label is the tooltip)
+  .pm-archived-btn .pm-btn-label {
+    display: none;
+  }
+}

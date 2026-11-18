@@ -2555,7 +2555,7 @@
   {#if typeof effectiveTopLevelId === 'number'}
     {@const topLevelProject = projects.find(p => p.id === effectiveTopLevelId) ?? null}
     {#if topLevelProject}
-      <div class="pm-project-description mt-2">
+      <div class="pm-project-description">
         <div class="d-flex align-items-center flex-wrap" style="gap:0.4rem">
           <strong class="pm-project-name-heading">{topLevelProject.name}</strong>
           {#if topLevelProject.target_end_date}
@@ -2571,7 +2571,7 @@
       </div>
     {/if}
 
-    <div class="d-flex align-items-center mt-2" style="gap:0.5rem">
+    <div class="d-flex align-items-center pm-subproject-row" style="gap:0.5rem">
       {#if subprojectsOfActive.length > 0}
         <select
           class="form-control form-control-sm"
@@ -2603,7 +2603,7 @@
     </div>
 
     {#if subprojectsOfActive.length > 0 && !viewingAllSubprojects && activeProject}
-      <div class="pm-project-description mt-2">
+      <div class="pm-project-description pm-subproject-description">
         <div class="d-flex align-items-center flex-wrap" style="gap:0.4rem">
           <strong class="pm-project-name-heading">{activeProject.name}</strong>
           {#if activeProject.target_end_date}
@@ -2620,7 +2620,7 @@
     {/if}
   {/if}
 
-  <div class="pm-search mt-2 d-flex align-items-start flex-wrap" style="gap:0.5rem">
+  <div class="pm-search pm-toolbar-search d-flex align-items-center" style="gap:0.5rem">
     <div class="flex-grow-1">
       <input
         class="form-control form-control-sm"
@@ -2630,7 +2630,6 @@
         bind:value={searchQuery}
         on:input={onSearchInput}
       />
-      <span class="pm-muted small">{t('Searches: title, notes, description, project, priority, people, links')}</span>
     </div>
     <select class="form-control form-control-sm pm-priority-filter" bind:value={priorityFilter} on:change={onPriorityFilterChange} aria-label={t('Filter by priority')}>
       <option value="all">{t('All priorities')}</option>
@@ -2651,7 +2650,7 @@
     </button>
   {/if}
 
-  <div class="mb-3 mt-2">
+  <div class="pm-toolbar-add">
     <button
       type="button"
       class="btn btn-primary"
@@ -2662,7 +2661,7 @@
     </button>
   </div>
 
-  <div class="d-flex align-items-center my-3">
+  <div class="d-flex align-items-center pm-toolbar-scope">
     <div class="btn-group btn-group-sm" role="group" aria-label={t('Card view')}>
       <button type="button" class={scope === 'team' ? 'btn btn-sm btn-secondary' : 'btn btn-sm btn-ghost'} on:click={() => selectScope('team')}>
         <i class="fas fa-list fa-fw mr-1" aria-hidden="true"></i>{t('All')}
@@ -2674,8 +2673,8 @@
         <i class="fas fa-pen-to-square fa-fw mr-1" aria-hidden="true"></i>{t('Created by me')}
       </button>
     </div>
-    <button type="button" class="btn btn-sm btn-ghost ml-2" on:click={openArchivedModal}>
-      <i class="fas fa-box-archive fa-fw mr-1" aria-hidden="true"></i>{t('Archived')}
+    <button type="button" class="btn btn-sm btn-ghost ml-1 pm-archived-btn" title={t('Archived')} aria-label={t('Archived')} on:click={openArchivedModal}>
+      <i class="fas fa-box-archive fa-fw" aria-hidden="true"></i><span class="pm-btn-label ml-1">{t('Archived')}</span>
     </button>
   </div>
 
