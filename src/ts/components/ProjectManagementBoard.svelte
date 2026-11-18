@@ -974,6 +974,7 @@
       // the choice just is not remembered
     }
   }
+  let subprojectMenuOpen = false;
   let cardDensity: 'compact' | 'expanded' = 'expanded';
 
   // Board (columns) or canvas (free-form cards and arrows) -- remembered per browser.
@@ -2596,33 +2597,32 @@
       </div>
     {/if}
 
-    <div class="d-flex align-items-center pm-subproject-row" style="gap:0.5rem">
+    <div class="pm-subproject-row">
       {#if subprojectsOfActive.length > 0}
-        <select
-          class="form-control form-control-sm"
-          style="width:auto"
-          value={activeProjectId}
-          on:change={(event) => selectProject(Number((event.target as HTMLSelectElement).value))}
-          title={t('Filter by subproject')}
-        >
-          <option value={effectiveTopLevelId}>{t('All')}</option>
+        <div class="pm-subproject-chips" role="group" aria-label={t('Filter by subproject')}>
+          <button type="button" class="pm-chip" class:active={activeProjectId === effectiveTopLevelId} aria-pressed={activeProjectId === effectiveTopLevelId} on:click={() => selectProject(effectiveTopLevelId)}>{t('All')}</button>
           {#each subprojectsOfActive as subproject (subproject.id)}
-            <option value={subproject.id}>{subproject.name}</option>
+            <button type="button" class="pm-chip" class:active={activeProjectId === subproject.id} aria-pressed={activeProjectId === subproject.id} on:click={() => selectProject(subproject.id)}>{subproject.name}</button>
           {/each}
-        </select>
-        {#if !viewingAllSubprojects && activeProject}
-          <button type="button" class="pm-manage-btn" title={t('Manage this subproject')} aria-label={t('Manage this subproject')} on:click={() => openProjectDialog(activeProject)}>
-            <i class="fas fa-pen fa-fw" aria-hidden="true"></i>
-          </button>
-        {/if}
+        </div>
       {/if}
-      <button type="button" class="btn btn-ghost btn-sm" on:click={() => openProjectDialog(null, effectiveTopLevelId)}>
-        <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add subproject')}
-      </button>
-      <button type="button" class="btn btn-ghost btn-sm" on:click={openLinksSummary}>
-        <i class="fas fa-link fa-fw mr-1" aria-hidden="true"></i>{t('All links')}
-      </button>
-      <button type="button" class="btn btn-link guide-info-btn p-0 ml-1" data-action="open-guide-card" data-card="guide-collaboration" title={t('About members, assignments and comments in the guide')} aria-label={t('About members, assignments and comments in the guide')}>
+      <details class="pm-more-menu" bind:open={subprojectMenuOpen}>
+        <summary class="pm-manage-btn" title={t('More')} aria-label={t('More')}><i class="fas fa-ellipsis fa-fw" aria-hidden="true"></i></summary>
+        <div class="pm-more-pop">
+          <button type="button" class="pm-more-item" on:click={() => { subprojectMenuOpen = false; openProjectDialog(null, effectiveTopLevelId); }}>
+            <i class="fas fa-plus fa-fw mr-1" aria-hidden="true"></i>{t('Add subproject')}
+          </button>
+          <button type="button" class="pm-more-item" on:click={() => { subprojectMenuOpen = false; openLinksSummary(); }}>
+            <i class="fas fa-link fa-fw mr-1" aria-hidden="true"></i>{t('All links')}
+          </button>
+          {#if subprojectsOfActive.length > 0 && !viewingAllSubprojects && activeProject}
+            <button type="button" class="pm-more-item" on:click={() => { subprojectMenuOpen = false; openProjectDialog(activeProject); }}>
+              <i class="fas fa-pen fa-fw mr-1" aria-hidden="true"></i>{t('Manage this subproject')}
+            </button>
+          {/if}
+        </div>
+      </details>
+      <button type="button" class="btn btn-link guide-info-btn p-0" data-action="open-guide-card" data-card="guide-collaboration" title={t('About members, assignments and comments in the guide')} aria-label={t('About members, assignments and comments in the guide')}>
         <i class="fas fa-circle-info" aria-hidden="true"></i>
       </button>
     </div>

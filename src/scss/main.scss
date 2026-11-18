@@ -10129,3 +10129,82 @@ button.wp-legend-item {
     padding-top: 0.3rem;
   }
 }
+
+// subprojects as chips, and a "..." menu for the secondary actions
+.pm-board {
+  .pm-subproject-row {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .pm-subproject-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+
+  .pm-chip {
+    background: rgba(128, 128, 128, 0.15);
+    border: 0;
+    border-radius: 999px;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 0.15rem 0.65rem;
+
+    &:hover {
+      background: rgba(128, 128, 128, 0.28);
+    }
+
+    &.active {
+      background: var(--primary);
+      color: var(--primary-fg, #fff);
+    }
+  }
+
+  .pm-more-menu {
+    position: relative;
+
+    > summary {
+      cursor: pointer;
+      list-style: none;
+
+      &::-webkit-details-marker {
+        display: none;
+      }
+    }
+  }
+
+  .pm-more-pop {
+    background: var(--mainbackground, #fff);
+    border: 1px solid rgba(128, 128, 128, 0.35);
+    border-radius: 6px;
+    box-shadow: 0 0.3rem 1rem rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+    left: 0;
+    min-width: 12rem;
+    padding: 0.25rem;
+    position: absolute;
+    top: 100%;
+    z-index: 30;
+  }
+
+  .pm-more-item {
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 0.3rem 0.5rem;
+    text-align: left;
+
+    &:hover,
+    &:focus-visible {
+      background: rgba(128, 128, 128, 0.2);
+    }
+  }
+}
