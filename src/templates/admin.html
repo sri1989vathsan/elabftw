@@ -720,8 +720,9 @@
 </div>
 
 {# TAB 9 ANNOUNCEMENTS #}
-<div data-tabcontent='9' hidden>
-  <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Announcements'|trans }}</h2>
+<div data-tabcontent='9' hidden style='padding-top:0.75rem'>
+  {# the tab already says its name: the heading stays for screen readers only #}
+  <h2 class='sr-only'>{{ 'Announcements'|trans }}</h2>
   <p class='pl-3'>{{ 'Publish an announcement to notify every team member. It also shows as a dismissible banner on the dashboard until it expires.'|trans }}</p>
 
   {# CREATE AN ANNOUNCEMENT #}
@@ -815,8 +816,8 @@
 {# END ANNOUNCEMENTS #}
 
 {# TAB 10 LABELS: the printer, the formats and their editor (label-formats.js, label-print.php) #}
-<div data-tabcontent='10' hidden>
-  <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Labels'|trans }}</h2>
+<div data-tabcontent='10' hidden style='padding-top:0.75rem'>
+  <h2 class='sr-only'>{{ 'Labels'|trans }}</h2>
   <div id='labelFormatsApp'></div>
   <script src='label-formats.js?v={{ 'now'|date('YmdHi') }}'></script>
 </div>
