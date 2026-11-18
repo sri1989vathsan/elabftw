@@ -27,3 +27,262 @@
 .planned-dialog [hidden] {
   display: none !important;
 }
+
+/* The Labels tab of the Admin panel (label-formats.js), on the shared --fx look: a label / value grid, small controls, quiet help text */
+.lf-app {
+  --lf-ctl: var(--fx-ctl, 1.5rem);
+  font-size: 0.9rem;
+}
+
+.lf-intro {
+  color: inherit;
+  margin-bottom: 0.9rem;
+}
+
+.lf-fields > summary {
+  color: var(--fx-muted, #7a8591);
+  cursor: pointer;
+  font-size: 0.8rem;
+  width: max-content;
+}
+
+.lf-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.4rem 0;
+}
+
+.lf-chip {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  border-radius: 4px;
+  color: inherit;
+  cursor: help;
+  font-size: 0.78rem;
+  padding: 0.05rem 0.4rem;
+}
+
+.lf-hint {
+  color: var(--fx-muted, #7a8591);
+  font-size: 0.75rem;
+  line-height: 1.3;
+  margin-top: 0.15rem;
+}
+
+.lf-message {
+  font-size: 0.8rem;
+  margin: 0 0 0.5rem;
+  min-height: 0;
+}
+
+.lf-message:empty {
+  display: none;
+}
+
+.lf-section {
+  margin-bottom: 1.2rem;
+}
+
+.lf-h {
+  border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  color: var(--fx-muted, #7a8591);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.6rem;
+  padding-bottom: 0.25rem;
+  text-transform: uppercase;
+}
+
+.lf-grid {
+  display: grid;
+  gap: 0.35rem 0.8rem;
+  grid-template-columns: 1fr;
+}
+
+.lf-row {
+  align-items: start;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: 8rem minmax(0, 1fr);
+}
+
+.lf-label {
+  color: var(--fx-muted, #7a8591);
+  font-size: 0.82rem;
+  line-height: var(--lf-ctl);
+  margin: 0;
+}
+
+.lf-control {
+  min-width: 0;
+}
+
+.lf-app .lf-input {
+  font-size: 0.9rem;
+  height: var(--lf-ctl);
+  line-height: 1.2;
+  padding: 0 0.45rem;
+}
+
+.lf-app textarea.lf-input {
+  height: auto;
+  line-height: 1.35;
+  padding: 0.25rem 0.45rem;
+  resize: vertical;
+}
+
+.lf-app .lf-number {
+  max-width: 8rem;
+}
+
+.lf-app select.lf-number {
+  max-width: none;
+  width: 11rem;
+}
+
+/* number fields without the chunky spinners */
+.lf-app input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.lf-app input[type='number']::-webkit-inner-spin-button,
+.lf-app input[type='number']::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.lf-checks {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.6rem 0;
+}
+
+.lf-check {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.lf-checkbox {
+  accent-color: var(--fx-accent, #2b5cab);
+  flex: none;
+  height: 0.9rem;
+  margin: 0;
+  width: 0.9rem;
+}
+
+.lf-actions {
+  margin-top: 0.6rem;
+}
+
+.lf-app .lf-btn {
+  align-items: center;
+  display: inline-flex;
+  font-size: 0.85rem;
+  gap: 0.35rem;
+  height: var(--lf-ctl);
+  padding: 0 0.8rem;
+  width: auto;
+}
+
+.lf-app .lf-icon-btn {
+  align-items: center;
+  display: inline-flex;
+  font-size: 0.8rem;
+  height: var(--lf-ctl);
+  justify-content: center;
+  min-width: var(--lf-ctl);
+  padding: 0 0.4rem;
+}
+
+.lf-formats {
+  display: grid;
+}
+
+.lf-format {
+  align-items: center;
+  border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  display: flex;
+  gap: 0.6rem;
+  min-height: 1.9rem;
+  padding: 0.15rem 0;
+}
+
+.lf-format-name {
+  font-weight: 600;
+}
+
+.lf-format-size {
+  color: var(--fx-muted, #7a8591);
+  font-size: 0.8rem;
+}
+
+.lf-badge {
+  background: color-mix(in srgb, var(--fx-accent, #2b5cab) 18%, transparent);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  padding: 0 0.5rem;
+}
+
+.lf-format-tools {
+  display: inline-flex;
+  gap: 0.3rem;
+  margin-left: auto;
+}
+
+.lf-app {
+  container-type: inline-size;
+}
+
+.lf-edit:not([hidden]) {
+  align-items: start;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.lf-edit > .lf-h {
+  margin-bottom: 0;
+}
+
+.lf-preview {
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 6px;
+  order: -1;
+  padding: 0.7rem;
+}
+
+.lf-preview .lf-svg {
+  max-width: 100%;
+}
+
+.lf-edit > .lf-h {
+  order: -2;
+}
+
+/* wide enough (the width of the tab, not of the window, because the side panels take room): the fields and the preview side by side */
+@container (min-width: 760px) {
+  .lf-edit:not([hidden]) {
+    gap: 0.8rem 1.5rem;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 24rem);
+  }
+
+  .lf-edit > .lf-h {
+    grid-column: 1 / -1;
+  }
+
+  .lf-preview {
+    order: 0;
+    position: sticky;
+    top: calc(var(--navbar-height, 43px) + 0.5rem);
+  }
+}
+
+@media (max-width: 800px) {
+  .lf-row {
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+  }
+}

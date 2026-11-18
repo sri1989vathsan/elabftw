@@ -48,7 +48,7 @@ use function trim;
 /**
  * Prints the label of an entry of the database on the Zebra label printer of the lab: the label is made in ZPL (the language of the
  * printer) and sent to the printer on the network, port 9100. The label formats (a size, a margin, a text size, a QR code, the lines)
- * and the address of the printer are set by an admin (label-formats.php); label-config.json holds what is used until then.
+ * and the address of the printer are set by an admin (Admin panel, Labels tab: label-formats.js); label-config.json holds what is used until then.
  *
  * GET ?formats=1 gives the formats and whether the printer is set; GET ?admin=1 gives all the settings (admins).
  * POST {id, copies, custom, format, dry} prints (dry gives the ZPL without printing it).
@@ -522,7 +522,7 @@ try {
     }
     $host = (string) $settings['printer_host'];
     if ($host === '') {
-        respond(400, array('error' => 'The address of the printer is not set: an admin sets it on the Label formats page.'));
+        respond(400, array('error' => 'The address of the printer is not set: an admin sets it in the Admin panel, Labels tab.'));
     }
     $socket = @stream_socket_client('tcp://' . $host . ':' . (int) $settings['printer_port'], $errno, $errstr, 5);
     if ($socket === false) {

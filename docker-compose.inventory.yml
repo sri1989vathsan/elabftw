@@ -50,7 +50,6 @@ services:
       - ./web/label-print.php:/elabftw/web/label-print.php:ro
       - ./web/label-formats.php:/elabftw/web/label-formats.php:ro
       - ./web/label-formats.js:/elabftw/web/label-formats.js:ro
-      - ./src/templates/label-formats.html:/elabftw/src/templates/label-formats.html:ro
       - ./src/templates/admin.html:/elabftw/src/templates/admin.html:ro
       - ./web/label-config.json:/elabftw/web/label-config.json:ro
       - ./web/registry-columns.php:/elabftw/web/registry-columns.php:ro

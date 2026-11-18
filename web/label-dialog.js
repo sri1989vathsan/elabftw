@@ -1,7 +1,7 @@
 /**
  * The label printing dialog: an item "Print a label" in the + menu of the top bar (on every page) that opens a dialog to print labels on the label
  * printer of the lab (label-print.php): any text with {variables} and one label per row of a pasted spreadsheet table, line formats, a preview with
- * draggable margins and a test pattern. The sizes and the printer are set by admins on the Label formats page (label-formats.php). Other scripts can
+ * draggable margins and a test pattern. The sizes and the printer are set by admins in the Labels tab of the Admin panel (label-formats.js). Other scripts can
  * open the same dialog for an entry with window.dispatchEvent(new CustomEvent('registry:print-label', { detail: { id, title } })). Needs nothing else.
  */
 (function () {
