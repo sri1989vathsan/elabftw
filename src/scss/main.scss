@@ -1243,6 +1243,27 @@ tr:first-child td {
   }
 }
 
+// Section headings (the Search results groups and the Filters popover): no big chevron on the left; a small muted one
+// at the right end of the row. The whole summary row is the click target (and stays keyboard-operable as a <summary>;
+// <details> exposes its expanded state). Right = collapsed, down = open.
+#favoritesPanel .favorite-filter-section > .favorite-filter-section-summary {
+  justify-content: space-between;
+
+  > .favorite-filter-section-chevron {
+    color: var(--fx-muted) !important;
+    flex: 0 0 auto;
+    font-size: 0.7rem;
+    margin: 0 0 0 auto;
+    order: 2;
+    text-align: center;
+    width: 1rem;
+  }
+}
+
+#favoritesPanel .favorite-filter-overlay .favorite-filter-section > .favorite-filter-section-summary > .favorite-filter-section-chevron {
+  color: #6c757d !important;
+}
+
 // The Filters popover of the Search panel, on the shared --fx look: small medium-weight section rows with a muted chevron,
 // 1.5rem option rows (0.9rem controls, hover tint), icon-only remove buttons that appear on row hover or focus, one muted
 // small line for empty states (#5c636a on white = 6.3:1, AA), hairline dividers, smaller radius and padding, and the
@@ -1274,9 +1295,6 @@ tr:first-child td {
 
   .favorite-filter-section-chevron {
     color: #6c757d !important;
-    font-size: 0.6rem;
-    margin-right: 0.3rem;
-    width: 0.8rem;
   }
 
   .favorite-filter-section-body {
