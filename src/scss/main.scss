@@ -1659,17 +1659,6 @@ tr:first-child td {
   text-transform: uppercase;
 }
 
-// the View button of the edit toolbar: icon and label, the label goes on narrow widths
-.toolbar-view-btn .toolbar-view-label {
-  margin-left: 0.35rem;
-}
-
-@media (max-width: 52rem) {
-  .toolbar-view-btn .toolbar-view-label {
-    display: none;
-  }
-}
-
 // ---- Experiment / resource / template pages: view and edit on the --fx look ----
 // A flat sticky bar of quiet icon buttons (the one action is highlighted), a calm header, three soft summary tiles, comfortable
 // body typography. Markup and behaviour are unchanged.

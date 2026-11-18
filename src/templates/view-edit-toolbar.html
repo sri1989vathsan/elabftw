@@ -215,19 +215,9 @@
 
   {# TOP TOOLBAR #}
   <div class='d-flex align-items-center flex-wrap' id='topToolbar'>
-    {% if mode == 'edit' and Entity.entityType.value in ['experiments', 'items'] %}
-      {# an entry filed in a folder goes back to that folder, the others to their view page #}
-      <a title='{{ 'Go back'|trans }}' aria-label='{{ 'Go back'|trans }}' href='{{ Entity.entityData.folder_id|default(0) ? '?folder=' ~ Entity.entityData.folder_id : '?mode=view&id=' ~ Entity.id }}' class='btn btn-secondary'>
-        <i class='fas fa-arrow-left fa-fw'></i>
-      </a>
-    {% else %}
+    {# view mode keeps its back arrow; in edit mode the way out is 'Save and go back' (to the view page of the entry) #}
+    {% if mode != 'edit' %}
       {% include 'back-to-previous.html' %}
-    {% endif %}
-    {# edit mode: save what was typed and go to the view page of this entry (the entry itself, not the folder or the previous page) #}
-    {% if mode == 'edit' %}
-      <button type='button' class='btn btn-secondary ml-2 toolbar-view-btn' data-action='save-and-view' title='{{ 'Back to view mode'|trans }}' aria-label='{{ 'Back to view mode'|trans }}'>
-        <i class='fas fa-eye fa-fw' aria-hidden='true'></i><span class='toolbar-view-label'>{{ 'View'|trans }}</span>
-      </button>
     {% endif %}
     {# for templates: create from button #}
     {% if Entity.entityType.value == 'experiments_templates' or Entity.entityType.value == 'items_types' %}
@@ -236,7 +226,7 @@
       </a>
     {% endif %}
 
-    <div class='vertical-separator'></div>
+    {% if mode != 'edit' %}<div class='vertical-separator'></div>{% endif %}
 
     {% if mode == 'edit' %}
       {# SAVE buttons #}
@@ -247,7 +237,7 @@
       <button type='button' title='{{ 'Save'|trans }}' data-action='update-entity-body' aria-label='{{ 'Save'|trans }}' class='btn btn-primary mr-2'>
         <i class='fas fa-save'></i>
       </button>
-      <button type='button' title='{{ 'Save and go back'|trans }}' aria-label='{{ 'Save and go back'|trans }}' data-action='update-entity-body' data-redirect='{{ Entity.entityType.value in ['experiments', 'items'] and Entity.entityData.folder_id|default(0) ? 'folder' : (Entity.entityType.value in ['experiments', 'items', 'experiments_templates', 'items_types'] ? 'view' : 'list') }}' data-folder-url='?folder={{ Entity.entityData.folder_id|default(0) }}' class='btn btn-secondary mr-2'>
+      <button type='button' title='{{ 'Save and go back to view'|trans }}' aria-label='{{ 'Save and go back to view'|trans }}' data-action='update-entity-body' data-redirect='{{ Entity.entityType.value in ['experiments', 'items', 'experiments_templates', 'items_types'] ? 'view' : 'list' }}' data-folder-url='?folder={{ Entity.entityData.folder_id|default(0) }}' class='btn btn-secondary mr-2'>
         <i class='fas fa-arrow-left fa-fw' aria-hidden='true'></i>
         <i class='fas fa-save fa-fw' aria-hidden='true'></i>
       </button>
