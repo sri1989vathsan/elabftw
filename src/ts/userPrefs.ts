@@ -18,19 +18,33 @@ const PREFS: Record<string, boolean> = {
   googleSyncCalendar: true,
   googleSyncCalendarsShown: true,
   googleSyncImportEvents: true,
+  // the Boards page: board or canvas, the last project tab; the card density of each project is 'elabftw-pm-density-<id>' (see DENSITY_PREF)
+  'pm-canvas-view': true,
+  'pm-last-project': true,
 };
+
+const DENSITY_PREF = /^elabftw-pm-density-(all|unfiled|\d+)$/;
+
+function isPrefBase(base: string): boolean {
+  return Object.hasOwn(PREFS, base) || DENSITY_PREF.test(base);
+}
 
 const ApiC = new Api();
 
 function localKey(base: string): string {
-  return PREFS[base] ? `${base}:${core.currentUserid ?? 0}` : base;
+  return PREFS[base] !== false ? `${base}:${core.currentUserid ?? 0}` : base;
+}
+
+/** The key of this browser's own copy of a setting (kept under the account, so that two people can use one browser). */
+export function userPrefKey(base: string): string {
+  return localKey(base);
 }
 
 /** The setting a browser storage key stands for, or null when that key is not kept on the server. */
 export function userPrefBase(storageKey: string): string | null {
   const suffix = `:${core.currentUserid ?? 0}`;
   const base = storageKey.endsWith(suffix) ? storageKey.slice(0, -suffix.length) : storageKey;
-  return Object.hasOwn(PREFS, base) && localKey(base) === storageKey ? base : null;
+  return isPrefBase(base) && localKey(base) === storageKey ? base : null;
 }
 
 /** Sends a change to the server (null removes the setting). Failing is fine: this browser still has it. */
@@ -52,7 +66,12 @@ export function syncUserPrefs(): Promise<boolean> {
       const data = await response.json() as { prefs?: Record<string, string> | unknown[] };
       const server = (data.prefs && !Array.isArray(data.prefs) ? data.prefs : {}) as Record<string, string>;
       let changed = false;
-      for (const base of Object.keys(PREFS)) {
+      // the settings listed above, the card densities the server has, and the ones this browser has and the server does not
+      const localDensities = Object.keys(window.localStorage)
+        .map(storageKey => userPrefBase(storageKey))
+        .filter((base): base is string => base !== null && DENSITY_PREF.test(base));
+      const bases = new Set([...Object.keys(PREFS), ...Object.keys(server).filter(base => DENSITY_PREF.test(base)), ...localDensities]);
+      for (const base of bases) {
         const key = localKey(base);
         const here = window.localStorage.getItem(key);
         if (Object.hasOwn(server, base)) {

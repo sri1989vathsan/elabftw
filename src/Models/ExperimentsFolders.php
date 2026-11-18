@@ -611,7 +611,15 @@ final class ExperimentsFolders extends AbstractRest
         'googleSyncCalendar',
         'googleSyncCalendarsShown',
         'googleSyncImportEvents',
+        // the Boards page: board or canvas, the last project tab (the card density of each project is 'elabftw-pm-density-<id>', see isUserPrefKey)
+        'pm-canvas-view',
+        'pm-last-project',
     );
+
+    private function isUserPrefKey(string $key): bool
+    {
+        return in_array($key, self::USER_PREF_KEYS, true) || preg_match('/^elabftw-pm-density-(all|unfiled|\d+)$/', $key) === 1;
+    }
 
     /** @return array<string, string> */
     public function getUserPrefs(): array
@@ -629,7 +637,7 @@ final class ExperimentsFolders extends AbstractRest
     /** A null value removes the setting. */
     private function setUserPref(string $key, ?string $value): void
     {
-        if (!in_array($key, self::USER_PREF_KEYS, true)) {
+        if (!$this->isUserPrefKey($key)) {
             throw new ImproperActionException('Unknown setting.');
         }
         if ($value === null) {
