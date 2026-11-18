@@ -2589,26 +2589,7 @@
           <button type="button" class="pm-desc-toggle" aria-expanded={!!descriptionOpen[String(topLevelProject.id)]} on:click={() => toggleDescription(topLevelProject.id)}>
             {t('Goals / description')} <i class="fas {descriptionOpen[String(topLevelProject.id)] ? 'fa-caret-up' : 'fa-caret-down'}" aria-hidden="true"></i>
           </button>
-        </div>
-        {#if descriptionOpen[String(topLevelProject.id)]}
-          {#if topLevelProject.description}
-            <div class="pm-project-description-body">{@html topLevelProject.description}</div>
-          {:else}
-            <p class="pm-muted small mb-0">{t('No description yet.')}</p>
-          {/if}
-        {/if}
-      </div>
-    {/if}
-
-    <div class="pm-subproject-row">
-      {#if subprojectsOfActive.length > 0}
-        <div class="pm-subproject-chips" role="group" aria-label={t('Filter by subproject')}>
-          <button type="button" class="pm-chip" class:active={activeProjectId === effectiveTopLevelId} aria-pressed={activeProjectId === effectiveTopLevelId} on:click={() => selectProject(effectiveTopLevelId)}>{t('All')}</button>
-          {#each subprojectsOfActive as subproject (subproject.id)}
-            <button type="button" class="pm-chip" class:active={activeProjectId === subproject.id} aria-pressed={activeProjectId === subproject.id} on:click={() => selectProject(subproject.id)}>{subproject.name}</button>
-          {/each}
-        </div>
-      {/if}
+          <span class="pm-project-actions">
       <details class="pm-more-menu" bind:open={subprojectMenuOpen}>
         <summary class="pm-manage-btn" title={t('More')} aria-label={t('More')}><i class="fas fa-ellipsis fa-fw" aria-hidden="true"></i></summary>
         <div class="pm-more-pop">
@@ -2628,7 +2609,30 @@
       <button type="button" class="btn btn-link guide-info-btn p-0" data-action="open-guide-card" data-card="guide-collaboration" title={t('About members, assignments and comments in the guide')} aria-label={t('About members, assignments and comments in the guide')}>
         <i class="fas fa-circle-info" aria-hidden="true"></i>
       </button>
+          </span>
+        </div>
+        {#if descriptionOpen[String(topLevelProject.id)]}
+          {#if topLevelProject.description}
+            <div class="pm-project-description-body">{@html topLevelProject.description}</div>
+          {:else}
+            <button type="button" class="pm-desc-add" on:click={() => openProjectDialog(topLevelProject)}>{t('Add description')}</button>
+          {/if}
+        {/if}
+      </div>
+    {/if}
+
+    {#if subprojectsOfActive.length > 0}
+    <div class="pm-subproject-row">
+      {#if subprojectsOfActive.length > 0}
+        <div class="pm-subproject-chips" role="group" aria-label={t('Filter by subproject')}>
+          <button type="button" class="pm-chip" class:active={activeProjectId === effectiveTopLevelId} aria-pressed={activeProjectId === effectiveTopLevelId} on:click={() => selectProject(effectiveTopLevelId)}>{t('All')}</button>
+          {#each subprojectsOfActive as subproject (subproject.id)}
+            <button type="button" class="pm-chip" class:active={activeProjectId === subproject.id} aria-pressed={activeProjectId === subproject.id} on:click={() => selectProject(subproject.id)}>{subproject.name}</button>
+          {/each}
+        </div>
+      {/if}
     </div>
+    {/if}
 
     {#if subprojectsOfActive.length > 0 && !viewingAllSubprojects && activeProject}
       <div class="pm-project-description pm-subproject-description">
@@ -2648,7 +2652,7 @@
           {#if activeProject.description}
             <div class="pm-project-description-body">{@html activeProject.description}</div>
           {:else}
-            <p class="pm-muted small mb-0">{t('No description yet.')}</p>
+            <button type="button" class="pm-desc-add" on:click={() => openProjectDialog(activeProject)}>{t('Add description')}</button>
           {/if}
         {/if}
       </div>

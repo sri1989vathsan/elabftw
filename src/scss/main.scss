@@ -11134,6 +11134,67 @@ button.wp-legend-item {
   }
 }
 
+// Project header: a flat line on the Boards grid (one left edge, a hairline below, no box). The "..." menu and the
+// guide button sit at its right end on the shared control size; the subproject row only exists when there are subprojects.
+.pm-board {
+  .pm-project-description {
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+    border-radius: 0;
+    padding: 0.3rem 0;
+  }
+
+  .pm-project-name-heading {
+    font-size: 1rem;
+  }
+
+  .pm-desc-toggle {
+    font-size: 0.72rem;
+    opacity: 0.6;
+  }
+
+  .pm-project-actions {
+    align-items: center;
+    display: inline-flex;
+    gap: 0.1rem;
+
+    .pm-more-menu {
+      position: relative;
+    }
+
+    .pm-manage-btn,
+    .guide-info-btn {
+      align-items: center;
+      display: inline-flex;
+      height: var(--fx-ctl, 1.4rem);
+      justify-content: center;
+      margin: 0;
+      padding: 0;
+      width: var(--fx-ctl, 1.4rem);
+    }
+
+    .pm-more-pop {
+      left: auto;
+      right: 0;
+    }
+  }
+
+  .pm-desc-add {
+    background: none;
+    border: 0;
+    color: color-mix(in srgb, currentColor 60%, transparent);
+    font-size: 0.75rem;
+    padding: 0.1rem 0;
+    text-decoration: underline;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--primary);
+    }
+  }
+}
+
 // subprojects as chips, and a "..." menu for the secondary actions
 .pm-board {
   .pm-subproject-row {
