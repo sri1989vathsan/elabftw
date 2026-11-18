@@ -2013,11 +2013,17 @@ tr:first-child td {
   z-index: 20050;
 }
 
-// Pin button of the row and board layouts: muted, small, shown a little stronger when pinned
-.entity-row-pin {
-  background: none;
-  border: 0;
-  color: color-mix(in srgb, currentColor 55%, transparent);
+// The pin button, one look everywhere (rows, cards, board, the entry page): a quiet outline-like thumbtack when not pinned, an amber tilted one when pinned,
+// 1.5rem to hit, no button chrome. In the lists the quiet one only shows when you point at the row (always on a touch screen).
+// Pinned is the icon without the 'color-weak' class, which is how all the places that draw the button mark it.
+button[data-action='toggle-pin'] {
+  align-items: center;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 4px;
+  box-shadow: none !important;
+  color: var(--fx-muted, #7a8591) !important;
+  display: inline-flex;
   flex: 0 0 auto;
   height: 1.4rem;
   padding: 0;
@@ -2033,8 +2039,23 @@ tr:first-child td {
   }
 }
 
-.entity-rows .entity-row-pin {
-  margin-left: -0.2rem;
+.entity-row-pin {
+  margin-left: 0;
+}
+
+// in the lists the unpinned pin shows on hover or focus only
+.entity-row-pin:not(.is-pinned) {
+  opacity: 0;
+
+  @media (hover: none) {
+    opacity: 0.55;
+  }
+}
+
+:hover > .entity-row-pin:not(.is-pinned),
+.entity-board-card:hover .entity-row-pin:not(.is-pinned),
+.entity-row-pin:not(.is-pinned):focus-visible {
+  opacity: 0.7;
 }
 
 .entity-rows .entity-row:focus-within,
