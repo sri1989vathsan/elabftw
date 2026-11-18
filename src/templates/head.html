@@ -7,7 +7,7 @@
  * @license AGPL-3.0
  * @package elabftw
 -->
-<html lang='{{ App.getLang()|slice(0, 2) }}' class='{{ App.getThemeVariant().toCssClass() }} theme-palette-{{ App.Users.userData.theme_palette|default("classic") }}'
+<html lang='{{ App.getLang()|slice(0, 2) }}' data-ui-size='{{ App.Users.userData.ui_size|default('') }}' class='{{ App.getThemeVariant().toCssClass() }} theme-palette-{{ App.Users.userData.theme_palette|default("classic") }}'
   {% if App.Users.userData.primary_bg %}
     style='
       --primary: #{{ App.Users.userData.primary_bg }};
@@ -33,6 +33,8 @@
   <title>{{ Entity.entityData.title|default(pageTitle) }} - eLabFTW</title>
   {# see builder.js to see what gets inside these files #}
   {# CSS #}
+  {# the size of the interface (compact or comfortable) is applied before the first paint: a tiny blocking script, no inline code #}
+  <script src='/ui-size.js'></script>
   <link id='main-stylesheet' rel='stylesheet' media='all' href='/assets/main.min.css?v={{ v }}' />
   {# the main JS bundle with all the elabftw TS code (see builder.js) #}
   <script defer src='/assets/main.bundle.js?v={{ v }}'></script>

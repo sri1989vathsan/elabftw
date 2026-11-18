@@ -152,6 +152,7 @@ final class CustomMigrationRunner
         '122_registry_label_formats.sql',
         '123_registry_label_bottom_margin.sql',
         '153_user_ui_prefs.sql',
+        '154_user_ui_size.sql',
     );
 
     private Db $Db;

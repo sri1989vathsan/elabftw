@@ -33,7 +33,8 @@ export default class SidePanel {
     // Always leave enough room to see and interact with the main document.
     const max = Math.max(160, Math.min(SidePanel.MAX_WIDTH, window.innerWidth - 240));
     return {
-      min: Math.min(SidePanel.MIN_WIDTH, max),
+      // a slightly wider minimum in the comfortable size (its text and controls are bigger)
+      min: Math.min(document.documentElement.dataset.uiSize === 'comfortable' ? 250 : SidePanel.MIN_WIDTH, max),
       max,
     };
   }
