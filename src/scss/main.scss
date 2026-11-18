@@ -4789,6 +4789,428 @@ h1:has(> #documentTitle) {
   }
 }
 
+// ---- Contents panel, redesigned: a rail with an active marker, one list in page order, one filter row, a Select mode ----
+// Rail (1px muted line) with indentation per heading level; the section being read has a 2px accent marker on the rail and
+// brighter, medium-weight text; rows are --fx-row high with a small icon column (H1..H6, table, photo with a tiny thumbnail);
+// tables, pictures and spreadsheets are smaller muted rows under their heading. Select mode shows a checkbox column and a bar
+// at the bottom (count, Print, Copy, clear). Everything reads the shared --fx tokens.
+#tocPanel {
+  .toc-heading {
+    align-items: center;
+    color: var(--fx-muted);
+    display: flex;
+    font-size: 0.68rem;
+    font-weight: 600;
+    justify-content: space-between;
+    letter-spacing: 0.03em;
+    margin: 0 0 0.3rem;
+    min-height: var(--fx-row);
+    text-transform: uppercase;
+  }
+
+  .toc-count {
+    background: var(--fx-hover);
+    border-radius: 999px;
+    font-weight: 600;
+    margin-left: 0.3rem;
+    padding: 0 0.4rem;
+  }
+
+  .toc-heading-actions {
+    align-items: center;
+    display: inline-flex;
+    gap: 0.1rem;
+  }
+
+  .toc-icon-btn,
+  .toc-icon-toggle {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    color: var(--fx-muted);
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: var(--fx-ctl);
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    width: var(--fx-ctl);
+
+    .fas {
+      color: inherit;
+      font-size: var(--fx-icon-size);
+    }
+
+    &:hover,
+    &:focus-visible {
+      background: var(--fx-hover);
+      color: var(--fx-fg);
+    }
+
+    &[aria-pressed='true'] {
+      background: var(--primary);
+      color: var(--primary-fg, #fff);
+    }
+  }
+
+  .toc-toggle-input:checked + .toc-icon-toggle {
+    background: var(--primary);
+    color: var(--primary-fg, #fff);
+  }
+
+  .toc-toggle-input:focus-visible + .toc-icon-toggle {
+    outline: 2px solid var(--primary);
+  }
+
+  .toc-leaf-toggle {
+    display: inline-flex;
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  .toc-filter-row {
+    align-items: center;
+    display: flex;
+    gap: 0.2rem;
+    margin-bottom: 0.3rem;
+  }
+
+  .toc-filter-field {
+    align-items: center;
+    background: var(--fx-hover);
+    border-radius: 4px;
+    display: flex;
+    flex: 1 1 auto;
+    height: var(--fx-ctl);
+    min-width: 0;
+  }
+
+  .toc-filter-input {
+    background: transparent;
+    border: 0;
+    color: var(--fx-fg);
+    flex: 1 1 auto;
+    font-size: inherit;
+    height: 100%;
+    min-width: 0;
+    outline: 0;
+    padding: 0;
+  }
+
+  .toc-search-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem;
+    margin-bottom: 0.3rem;
+
+    &:empty {
+      display: none;
+    }
+
+    .toc-search-filter {
+      background: var(--fx-hover);
+      border-radius: 999px;
+      color: var(--fx-fg);
+      font-size: 0.68rem;
+      font-weight: 500;
+      padding: 0.05rem 0.45rem;
+    }
+  }
+
+  .toc-mode-switch {
+    align-items: center;
+    display: inline-flex;
+    gap: 0.1rem;
+    margin-bottom: 0.3rem;
+
+    &[hidden] {
+      display: none;
+    }
+
+    .toc-mode-label {
+      color: var(--fx-muted);
+      font-size: 0.68rem;
+      margin-right: 0.3rem;
+    }
+
+    button {
+      background: var(--fx-hover);
+      border: 0;
+      border-radius: 4px;
+      color: var(--fx-muted);
+      font-size: 0.68rem;
+      height: 1.2rem;
+      padding: 0 0.5rem;
+
+      &[aria-pressed='true'] {
+        background: var(--primary);
+        color: var(--primary-fg, #fff);
+      }
+    }
+  }
+
+  .toc-empty {
+    color: var(--fx-muted);
+    font-size: 0.72rem;
+    margin: 0;
+    padding: 0.3rem var(--fx-pad);
+  }
+
+  // the rail
+  .toc-items-container .toc-list {
+    border-left: 1px solid var(--fx-line);
+    margin: 0 0 0 0.45rem;
+    padding: 0;
+  }
+
+  .toc-items-container .toc-item {
+    padding-left: calc(var(--toc-indent, 0rem) + 0.3rem);
+    position: relative;
+
+    // the active marker: 2px on the rail
+    &:has(.toc-link.active)::before {
+      background: var(--primary);
+      bottom: 0.15rem;
+      content: '';
+      left: -1.5px;
+      position: absolute;
+      top: 0.15rem;
+      width: 2px;
+    }
+  }
+
+  .toc-items-container .toc-entry {
+    align-items: center;
+    border-radius: 3px;
+    display: flex;
+    gap: 0.2rem;
+    min-height: var(--fx-row);
+    position: relative;
+
+    &:hover {
+      background: var(--fx-hover);
+    }
+
+    &:hover .toc-entry-action,
+    &:focus-within .toc-entry-action {
+      opacity: 1;
+    }
+  }
+
+  .toc-items-container .toc-kind {
+    color: var(--fx-muted);
+    flex: 0 0 1.3rem;
+    font-size: 0.58rem;
+    font-weight: 600;
+    text-align: center;
+
+    .fas {
+      font-size: 0.62rem;
+    }
+
+    .toc-thumb {
+      border-radius: 2px;
+      height: 18px;
+      object-fit: cover;
+      vertical-align: middle;
+      width: 26px;
+    }
+  }
+
+  .toc-items-container .toc-item-image .toc-kind {
+    flex-basis: 26px;
+  }
+
+  .toc-items-container .toc-link {
+    background: transparent;
+    color: var(--fx-muted) !important;
+    flex: 1 1 auto;
+    font-size: inherit;
+    font-weight: 400;
+    line-height: var(--fx-row);
+    min-width: 0;
+    overflow: hidden;
+    padding: 0 0.15rem;
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &:hover,
+    &:focus-visible {
+      color: var(--fx-fg) !important;
+    }
+
+    &.active {
+      color: var(--fx-fg) !important;
+      font-weight: 600;
+    }
+  }
+
+  .toc-items-container .toc-item-section .toc-link {
+    color: color-mix(in srgb, var(--fx-fg) 78%, transparent) !important;
+    font-weight: 500;
+  }
+
+  .toc-items-container .toc-item-table .toc-link,
+  .toc-items-container .toc-item-image .toc-link {
+    font-size: 0.72rem;
+  }
+
+  .toc-items-container .toc-entry-action {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    color: var(--fx-muted);
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 1.25rem;
+    justify-content: center;
+    opacity: 0;
+    padding: 0;
+    width: 1.25rem;
+
+    .fas {
+      font-size: 0.65rem;
+    }
+
+    &:hover,
+    &:focus-visible {
+      color: var(--fx-fg);
+    }
+  }
+
+  // select mode: a checkbox column in front of the rows of the sections
+  .toc-items-container .toc-row-check {
+    display: none;
+    flex: 0 0 0.9rem;
+    height: 0.9rem;
+    margin: 0;
+    width: 0.9rem;
+  }
+
+  &.toc-select-mode .toc-items-container .toc-row-check {
+    display: block;
+  }
+
+  .toc-items-container .toc-item.selected > .toc-entry {
+    background: color-mix(in srgb, var(--primary) 18%, transparent);
+  }
+
+  .toc-only-mark {
+    border: 1px solid currentcolor;
+    border-radius: 999px;
+    color: var(--fx-muted);
+    flex: 0 0 auto;
+    font-size: 0.55rem;
+    height: 0.9rem;
+    line-height: 0.8rem;
+    text-align: center;
+    width: 0.9rem;
+  }
+
+  .toc-row-menu {
+    background: var(--chrome-bg, #222);
+    border: 1px solid var(--fx-line);
+    border-radius: 6px;
+    box-shadow: 0 0.3rem 1rem rgba(0, 0, 0, 0.35);
+    display: flex;
+    flex-direction: column;
+    padding: 0.2rem;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    z-index: 10;
+
+    button {
+      background: transparent;
+      border: 0;
+      border-radius: 4px;
+      color: var(--fx-fg);
+      font-size: 0.72rem;
+      padding: 0.2rem 0.5rem;
+      text-align: left;
+      white-space: nowrap;
+
+      &:hover,
+      &:focus-visible {
+        background: var(--fx-hover);
+      }
+    }
+  }
+
+  // the bar at the bottom while sections are ticked
+  .toc-select-bar {
+    align-items: center;
+    background: var(--chrome-bg, #222);
+    border-top: 1px solid var(--fx-line);
+    bottom: 0;
+    display: flex;
+    gap: 0.3rem;
+    padding: 0.3rem var(--fx-pad);
+    position: sticky;
+
+    &[hidden] {
+      display: none;
+    }
+
+    .toc-select-count {
+      background: var(--primary);
+      border-radius: 999px;
+      color: var(--primary-fg, #fff);
+      font-size: 0.68rem;
+      font-weight: 600;
+      min-width: 1.2rem;
+      padding: 0 0.35rem;
+      text-align: center;
+    }
+
+    .toc-select-text {
+      display: flex;
+      flex: 1 1 auto;
+      flex-direction: column;
+      font-size: 0.72rem;
+      line-height: 1.2;
+      min-width: 0;
+    }
+
+    .toc-showing {
+      color: var(--fx-muted);
+      font-size: 0.65rem;
+
+      &:empty {
+        display: none;
+      }
+    }
+
+    .toc-bar-btn {
+      align-items: center;
+      background: var(--fx-hover);
+      border: 0;
+      border-radius: 4px;
+      color: var(--fx-fg);
+      display: inline-flex;
+      font-size: 0.72rem;
+      gap: 0.25rem;
+      height: var(--fx-ctl);
+      padding: 0 0.45rem;
+
+      &:hover:not(:disabled),
+      &:focus-visible {
+        background: var(--primary);
+        color: var(--primary-fg, #fff);
+      }
+
+      &:disabled {
+        opacity: 0.45;
+      }
+    }
+  }
+}
+
 // the message after a file or folder was moved by dragging (folder-dragdrop.ts): on the page, not in the panel
 .folder-move-toast {
   align-items: center;
