@@ -4352,17 +4352,9 @@ h1:has(> #documentTitle) {
       white-space: nowrap;
     }
 
+    // the count is the same small badge as the agenda's group headers (badge badge-secondary)
     .favorite-group-count {
-      background: var(--fx-hover);
-      border-radius: 999px;
-      color: var(--fx-muted);
-      font-size: 0.65rem;
-      font-weight: 600;
-      line-height: 1.1rem;
       margin: 0;
-      min-width: 1.1rem;
-      padding: 0 0.3rem;
-      text-align: center;
     }
   }
 
@@ -4377,7 +4369,7 @@ h1:has(> #documentTitle) {
     display: grid !important;
     grid-auto-columns: var(--sr-action-col);
     grid-template-columns: var(--sr-icon-col) minmax(0, 1fr) var(--sr-date-col);
-    grid-template-rows: 1.55rem auto;
+    grid-template-rows: 1.9rem;
     margin: 0;
     min-height: 0;
     padding: 0 var(--fx-pad) 0 var(--sr-pad);
@@ -4411,7 +4403,7 @@ h1:has(> #documentTitle) {
       font-weight: 600;
       grid-column: 2;
       grid-row: 1;
-      line-height: 1.55rem;
+      line-height: 1.9rem;
       margin: 0;
       min-width: 0;
       overflow: hidden;
@@ -4458,7 +4450,7 @@ h1:has(> #documentTitle) {
 
   // folders and other plain entries: the same grid, one line; the star sits in the action column right after the date column
   .favorite-filter-result.unified-search-result {
-    grid-template-rows: 1.55rem;
+    grid-template-rows: 1.9rem;
 
     > button,
     > .btn {

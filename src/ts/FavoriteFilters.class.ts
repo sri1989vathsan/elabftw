@@ -543,16 +543,14 @@ export default class FavoriteFilters extends SidePanel {
     }
     item.append(heading);
 
+    // One line per result, like the Activity agenda; category, status and owner are in the tooltip
     const metadata = [
       result.category_title,
       result.status_title,
       result.fullname,
     ].filter((value): value is string => Boolean(value));
     if (metadata.length > 0) {
-      const meta = document.createElement('p');
-      meta.className = 'favorite-filter-result-meta mb-0';
-      meta.textContent = metadata.join(' · ');
-      item.append(meta);
+      link.title = `${link.title} · ${metadata.join(' · ')}`;
     }
     return item;
   }
@@ -872,7 +870,7 @@ export default class FavoriteFilters extends SidePanel {
       label.className = 'unified-search-group-title mb-0';
       label.textContent = group.heading;
       const groupCount = document.createElement('span');
-      groupCount.className = 'favorite-group-count';
+      groupCount.className = 'badge badge-secondary favorite-group-count';
       groupCount.textContent = String(groupSize(group));
       summary.append(chevron, groupIcon, label, groupCount);
       section.append(summary);
