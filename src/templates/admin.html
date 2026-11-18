@@ -125,6 +125,8 @@
 
   </div>
 
+  {# the LabCollector connection is hidden from the admin panel while App.showLabcollector is false (one switch, in App.php); the code and the data stay #}
+  {% if App.showLabcollector %}
   <h2 class='p-2 pl-3 section-title' id='labcollectorSettings'>{{ 'LabCollector'|trans }}</h2>
   <div class='pl-3 mt-2 mb-5'>
     <p class='smallgray'>{{ 'Connect this team to a LabCollector instance to browse its records from the Tools menu. The API key is stored encrypted and is never displayed again once saved.'|trans }}</p>
@@ -138,6 +140,7 @@
     </div>
     <p class='smallgray mb-0'>{{ 'Find or generate this token in LabCollector under Admin > Others > Setup > Web services API.'|trans }}</p>
   </div>
+  {% endif %}
 
   <h2 class='p-2 pl-3 section-title' id='ordersSettings'>{{ 'Orders'|trans }}</h2>
   <div class='pl-3 mt-2 mb-5'>
