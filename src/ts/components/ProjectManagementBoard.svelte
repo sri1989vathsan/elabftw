@@ -1208,6 +1208,8 @@
   let draggedTaskId: number | null = null;
   let draggedColumnId: number | null = null;
   let dragOverColumn: number | null = null;
+  // empty columns fold into a narrow strip; the ones the person opened stay open (until the page is reloaded)
+  let openEmptyColumns: Record<number, boolean> = {};
 
   function startTaskDrag(event: DragEvent, id: number): void {
     draggedTaskId = id;
@@ -2758,13 +2760,21 @@
         {@const columnExpanded = !!expandedColumns[column.id]}
         {@const shownTasks = columnExpanded ? columnTasks : columnTasks.slice(0, COLUMN_TASK_LIMIT)}
         {@const hiddenCount = columnTasks.length - shownTasks.length}
+        {@const collapsedColumn = columnTasks.length === 0 && !openEmptyColumns[column.id] && dragOverColumn !== column.id}
         <div
           class="pm-column"
+          class:pm-column-collapsed={collapsedColumn}
+          data-kind={column.kind}
           class:pm-column-drag-over={dragOverColumn === column.id}
           on:dragover={(event) => allowColumnDrop(event, column.id)}
           on:dragleave={() => { if (dragOverColumn === column.id) dragOverColumn = null; }}
           on:drop={(event) => dropOnColumn(event, column.id)}
         >
+          {#if collapsedColumn}
+            <button type="button" class="pm-column-strip" title={`${t('Show')} ${column.name}`} aria-label={`${column.name}, 0 ${t('cards')}. ${t('Show')}`} on:click={() => { openEmptyColumns = { ...openEmptyColumns, [column.id]: true }; }}>
+              <span class="pm-column-strip-name">{column.name}</span><span class="badge badge-secondary">0</span>
+            </button>
+          {:else}
           <div class="d-flex align-items-center pm-column-header">
             <h3
               class="h6 pm-column-title"
@@ -2963,6 +2973,7 @@
             <button type="button" class="btn btn-link btn-sm pm-show-older" on:click={() => toggleColumnExpanded(column.id)}>
               {columnExpanded ? t('Show less') : `${t('Show')} ${hiddenCount} ${t('older')}`}
             </button>
+          {/if}
           {/if}
         </div>
       {/each}

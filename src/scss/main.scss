@@ -10270,3 +10270,75 @@ button.wp-legend-item {
     margin-left: auto !important;
   }
 }
+
+// lighter columns: a quiet sticky header with a thin colour bar and the count; an empty column folds into a narrow strip
+.pm-board .pm-column {
+  --pm-column-color: rgba(128, 128, 128, 0.55);
+
+  &[data-kind='todo'] {
+    --pm-column-color: #6c757d;
+  }
+
+  &[data-kind='in_progress'] {
+    --pm-column-color: #2f7fd1;
+  }
+
+  &[data-kind='done'] {
+    --pm-column-color: #2e8b57;
+  }
+
+  .pm-column-header {
+    background: var(--mainbackground, #fff);
+    border-top: 3px solid var(--pm-column-color);
+    margin-bottom: 0.4rem;
+    padding: 0.3rem 0.1rem 0.2rem;
+  }
+
+  .pm-column-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  .pm-column-title .badge {
+    background: transparent;
+    color: inherit;
+    font-weight: 600;
+    opacity: 0.7;
+  }
+
+  &.pm-column-collapsed {
+    flex: 0 0 2.6rem;
+    min-width: 2.6rem;
+  }
+
+  .pm-column-strip {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-top: 3px solid var(--pm-column-color);
+    color: inherit;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-height: 8rem;
+    padding: 0.4rem 0;
+    width: 100%;
+
+    &:hover,
+    &:focus-visible {
+      background: rgba(128, 128, 128, 0.12);
+    }
+  }
+
+  .pm-column-strip-name {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-orientation: mixed;
+    text-transform: uppercase;
+    writing-mode: vertical-rl;
+  }
+}
