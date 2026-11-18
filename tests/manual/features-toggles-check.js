@@ -22,7 +22,8 @@ window.featuresTogglesCheck = async function featuresTogglesCheck() {
   const menu = async () => {
     const html = await (await fetch('/dashboard.php', { credentials: 'same-origin', cache: 'no-store' })).text();
     const tools = html.includes('id=\'navToolsDropdown\'');
-    return { tools, compounds: /class='dropdown-item[^']*' href='compounds\.php'/.test(html), chem: /class='dropdown-item[^']*' href='chem-editor\.php'/.test(html), syc: /class='dropdown-item[^']*' href='syc\.php'/.test(html), inventory: /class='dropdown-item[^']*' href='inventory\.php'/.test(html) };
+    const seq = /sequence-viewer\/tool\.php/.test(html);
+    return { tools, seq, compounds: /class='dropdown-item[^']*' href='compounds\.php'/.test(html), chem: /class='dropdown-item[^']*' href='chem-editor\.php'/.test(html), syc: /class='dropdown-item[^']*' href='syc\.php'/.test(html), inventory: /class='dropdown-item[^']*' href='inventory\.php'/.test(html) };
   };
   try {
     check('the switches exist on the team', keys.every(k => k in original), keys.filter(k => !(k in original)).join(', '));
@@ -33,7 +34,8 @@ window.featuresTogglesCheck = async function featuresTogglesCheck() {
     await set({ tools_inventory: 1 });
     m = await menu(); check('Inventory on: the entry shows after a reload', m.inventory, JSON.stringify(m));
     await set({ tools_compounds: 0, tools_chem_editor: 0, tools_opencloning: 0, tools_inventory: 0 });
-    m = await menu(); check('everything off: the Tools menu is left out', !m.tools, JSON.stringify(m));
+    m = await menu(); // the database branch always has its Sequence viewer entry in Tools: there the menu stays and holds only that
+    check('everything off: the Tools menu is left out (or holds only the Sequence viewer entry)', !m.tools || m.seq, JSON.stringify(m));
     await set({ tools_compounds: 1, tools_chem_editor: 1 });
 
     // booking: a scratch resource set as bookable
