@@ -10342,3 +10342,15 @@ button.wp-legend-item {
     writing-mode: vertical-rl;
   }
 }
+
+// the project tabs stay on one row; a long list scrolls sideways instead of wrapping
+.pm-board > .pm-project-row {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+
+  > * {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}
