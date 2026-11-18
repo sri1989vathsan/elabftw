@@ -323,6 +323,8 @@ export function getTinymceBaseConfig(page: string): object {
     pagebreak_split_block: true,
     pagebreak_separator: '<div class="page-break"></div>',
     toolbar1: toolbar1,
+    // one slim row: what does not fit goes under the "..." button at its end (nothing is removed)
+    toolbar_mode: 'sliding',
     // this addresses CVE-2024-29881, it defaults to true in 7.0, so can be removed in tiny 7.0 TODO
     convert_unsafe_embeds: true,
     // Keep TinyMCE's general heading/format text patterns disabled. Focused
