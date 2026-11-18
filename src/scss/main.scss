@@ -1681,16 +1681,45 @@ tr:first-child td {
     gap: 0.15rem;
     padding: 0.2rem 0;
 
+    align-items: center;
+
     .btn {
       align-items: center;
       border-radius: 4px;
       display: inline-flex;
       font-size: 0.8rem;
+      height: 1.7rem;
       justify-content: center;
       margin: 0 !important;
-      min-height: 1.9rem;
-      min-width: 1.9rem;
-      padding: 0 0.5rem;
+      min-height: 1.7rem;
+      min-width: 1.7rem;
+      padding: 0 0.45rem;
+
+      .fas,
+      .far {
+        font-size: 0.82rem;
+        width: 1rem;
+      }
+    }
+
+    // Save: a quiet icon like the others; it takes the accent only while there are unsaved changes
+    [data-action='update-entity-body']:not([data-redirect]) {
+      background: transparent;
+      border-color: transparent;
+      color: var(--fx-muted);
+    }
+
+    &:has(#entitySaveState[data-state='unsaved']) [data-action='update-entity-body']:not([data-redirect]),
+    &:has(#entitySaveState[data-state='error']) [data-action='update-entity-body']:not([data-redirect]) {
+      background: var(--primary);
+      color: var(--primary-fg, #fff);
+    }
+
+    // the right-hand group (rating, pin, lock, info, menu): equal gaps, centred on the same line
+    > .ml-auto,
+    > .d-flex:last-child {
+      align-items: center;
+      gap: 0.15rem;
     }
 
     // the icons follow the button's colour (the plain .btn-secondary ones were white on the quiet background)
@@ -1723,6 +1752,120 @@ tr:first-child td {
       font-size: 0.72rem;
     }
   }
+}
+
+// The fields under the bar (Started on, Custom ID, Tags, Folder): one label column, controls of one height, sensible widths
+#main_section {
+  .edit-mode-label,
+  & + .edit-mode-label {
+    color: color-mix(in srgb, currentColor 62%, transparent);
+    font-size: 0.8rem;
+    min-width: 6rem;
+    width: 6rem;
+  }
+
+  .form-control,
+  .input-group .btn {
+    font-size: 0.85rem;
+    height: 1.75rem;
+    min-height: 1.75rem;
+    padding-bottom: 0;
+    padding-top: 0;
+  }
+
+  #date_input {
+    width: 11rem;
+  }
+
+  // Custom ID: the input with a small secondary "Get next" attached, no spinner
+  #custom_id_input {
+    width: 8rem;
+    -moz-appearance: textfield;
+    appearance: textfield;
+
+    &::-webkit-inner-spin-button,
+    &::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+  }
+
+  .input-group-prepend .btn-secondary {
+    background: color-mix(in srgb, currentColor 8%, transparent);
+    border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+    color: inherit;
+    font-size: 0.75rem;
+    padding: 0 0.6rem;
+
+    &:hover {
+      background: color-mix(in srgb, currentColor 14%, transparent);
+    }
+  }
+
+  #createTagInput {
+    width: 14rem;
+  }
+
+  // "Suggested tags" directly under the tags input, not floating at the far right
+  .mathjax-ignore.d-flex {
+    flex-wrap: wrap;
+
+    > .ml-auto {
+      flex: 0 0 100%;
+      margin-left: 0 !important;
+      padding-left: 7rem;
+    }
+  }
+
+  .suggested-tags summary {
+    color: color-mix(in srgb, currentColor 62%, transparent);
+    font-size: 0.75rem;
+  }
+}
+
+// the folder row: a compact segmented control and a select of the same width as the other fields
+.d-flex > label.edit-mode-label {
+  color: color-mix(in srgb, currentColor 62%, transparent);
+  font-size: 0.8rem;
+  min-width: 6rem;
+  width: 6rem;
+}
+
+.btn-group:has(> [data-edit-folder-scope]) {
+  display: inline-flex !important;
+  margin-bottom: 0.3rem !important;
+  width: auto;
+
+  > .btn {
+    align-items: center;
+    background: transparent;
+    border-color: color-mix(in srgb, currentColor 22%, transparent);
+    color: inherit;
+    display: inline-flex;
+    flex: 0 0 auto !important;
+    font-size: 0.75rem;
+    height: var(--fx-ctl, 1.4rem);
+    padding: 0 0.6rem;
+
+    .fas {
+      color: inherit;
+    }
+
+    &.active {
+      background: color-mix(in srgb, var(--primary) 20%, transparent);
+      border-color: var(--primary);
+      color: inherit;
+      font-weight: 600;
+    }
+  }
+}
+
+#folderSelect {
+  font-size: 0.85rem;
+  height: 1.75rem;
+  max-width: 24rem;
+  padding-bottom: 0;
+  padding-top: 0;
 }
 
 // Goals / Conclusion / Notes as three soft tiles above the body
