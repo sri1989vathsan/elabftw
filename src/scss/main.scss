@@ -1647,8 +1647,7 @@ h1:has(> #documentTitle) {
   margin-bottom: 0.4rem;
 }
 
-.entity-summary-edit,
-.entity-summary-strip {
+.entity-summary-edit {
   --fx-muted: color-mix(in srgb, currentColor 62%, transparent);
 
   display: grid;
@@ -1676,23 +1675,34 @@ h1:has(> #documentTitle) {
   background: color-mix(in srgb, currentColor 5%, transparent);
   border-left: 3px solid var(--primary);
   border-radius: 4px;
-  padding: 0.45rem 0.7rem;
+  margin-bottom: 0.6rem;
+  padding: 0.4rem 0.7rem 0.15rem;
+}
 
-  .entity-summary-label {
-    color: var(--fx-muted);
-    font-size: 0.72rem;
-    font-weight: 600;
-    text-transform: uppercase;
+// Started on / Owner / Team / Tags: label column with the icon, value column; one left edge with the title.
+.entity-meta-grid {
+  align-items: baseline;
+  column-gap: 0.5rem;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  margin-bottom: 0.5rem;
+  row-gap: 0.3rem;
+
+  .entity-meta-label {
+    color: color-mix(in srgb, currentColor 62%, transparent);
+    font-size: 0.82rem;
+    white-space: nowrap;
+
+    .fas {
+      margin-right: 0.35rem;
+      text-align: center;
+      width: 1rem;
+    }
   }
 
-  .entity-summary-text {
-    -webkit-box-orient: vertical;
-    display: -webkit-box;
-    font-size: 0.85rem;
-    -webkit-line-clamp: 4;
-    line-clamp: 4;
-    overflow: hidden;
-    white-space: pre-wrap;
+  .entity-meta-value {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 }
 

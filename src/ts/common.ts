@@ -2170,6 +2170,13 @@ on('unack-notif', (el: HTMLElement) => {
 });
 
 // CREATE EXPERIMENT, TEMPLATE or DATABASE item: main create button in top right
+// Show more / Show less of a clamped Goals, Conclusion or Notes block (see fx-field.html)
+on('toggle-field-more', (el: HTMLElement) => {
+  const open = el.closest('.fx-field')?.classList.toggle('is-open') ?? false;
+  el.setAttribute('aria-expanded', open ? 'true' : 'false');
+  el.textContent = (open ? el.dataset.less : el.dataset.more) ?? '';
+});
+
 on('create-entity', async (el: HTMLElement, event: Event) => {
   event.preventDefault();
   const form = document.getElementById('createNewForm') as HTMLFormElement;
