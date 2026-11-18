@@ -7,7 +7,7 @@
     "title": "Admins can switch the Database creation rights",
     "summary": "Two team switches decide who may create Database entries and who may create and edit Modules.",
     "details": [
-      "In Admin panel, Team, Features, the Database has two switches: Allow users to create Database entries, and Allow users to create and edit Modules. Both are on by default.",
+      "In Admin panel, Team, the Database sub-heading has two switches: Allow users to create Database entries, and Allow users to create and edit Modules. Both are on by default.",
       "With Modules on, any user of the team can create and edit a module. Turn it off and only admins can. Deleting a module stays with admins, and your personal modules are not affected.",
       "Turn Create Database entries off and the New entry button is hidden for people who are not admins. Who can read or edit an entry does not change.",
       "The Database list itself is unchanged."
