@@ -8,6 +8,12 @@
   if (!root) {
     return;
   }
+  if (!document.querySelector('link[href^="planned.css?v=lf"]')) {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'planned.css?v=lf' + Math.floor(Date.now() / 60000);
+    document.head.append(link);
+  }
   // the fields that exist only for the entries of the Database are shown only where the Database exists
   const hasDatabase = Boolean(document.getElementById('navRegistryDropdown'));
   const token = function () {
@@ -131,7 +137,7 @@
 
     // the printer
     const printer = element('section', 'lf-section');
-    printer.append(heading('The printer'));
+    printer.append(heading('Printer'));
     const host = input('text', data.settings.printer_host, { placeholder: 'for example 192.168.1.50' });
     const port = input('number', data.settings.printer_port, { min: 1, max: 65535 });
     const dpi = element('select', 'form-control lf-input lf-number');
@@ -164,23 +170,19 @@
     const list = element('div', 'lf-formats');
     data.formats.forEach(function (format) {
       const row = element('div', 'lf-format');
-      row.append(element('span', 'lf-format-name', format.name));
-      const sizeText = Number(format.width_mm) + ' x ' + Number(format.height_mm) + ' mm';
-      // a name that already says the size (31 x 15 mm) does not need it twice
-      if (!format.name.replace(/\s+/g, '').toLowerCase().includes(sizeText.replace(/\s+/g, '').toLowerCase())) {
-        row.append(element('span', 'lf-format-size', sizeText));
-      }
-      if (Number(format.is_default) === 1) {
-        row.append(element('span', 'lf-badge', 'default'));
-      }
+      const nameCell = element('span', 'lf-format-name', format.name);
+      nameCell.title = format.name;
+      row.append(nameCell, element('span', 'lf-format-size', Number(format.width_mm) + ' x ' + Number(format.height_mm) + ' mm'));
+      row.append(Number(format.is_default) === 1 ? element('span', 'lf-badge', 'default') : element('span', ''));
       const tools = element('span', 'lf-format-tools');
-      const edit = iconButton('fas fa-pen fa-fw', 'Edit ' + format.name, 'outline-secondary');
+      const edit = iconButton('fas fa-pen fa-fw', 'Edit ' + format.name, 'link');
       edit.addEventListener('click', function () {
         form(format);
       });
       tools.append(edit);
       if (Number(format.id) > 0) {
-        const remove = iconButton('fas fa-trash-can fa-fw', 'Delete ' + format.name, 'outline-danger');
+        const remove = iconButton('fas fa-trash-can fa-fw', 'Delete ' + format.name, 'link');
+        remove.classList.add('lf-danger');
         remove.addEventListener('click', async function () {
           if (remove.dataset.armed !== '1') {
             remove.dataset.armed = '1';
@@ -265,8 +267,13 @@
       const checks = element('div', 'lf-checks');
       checks.append(check(qr, 'A QR code to the entry on the label'), check(rotate, 'Printed turned by 180 degrees (the label is read upside down)'), check(isDefault, 'The format that is chosen first'));
       const left_ = element('div', 'lf-edit-fields');
+      const cancel = button('Cancel', 'secondary');
+      cancel.addEventListener('click', function () {
+        holder.hidden = true;
+        holder.textContent = '';
+      });
       const saveRow = element('div', 'lf-actions');
-      saveRow.append(save);
+      saveRow.append(save, cancel);
       left_.append(fieldsGrid, checks, saveRow);
       // a template of the label: the margins are the dashed lines, drag them to change the margins; the sample can be printed to check them
       const SVGNS = 'http://www.w3.org/2000/svg';
