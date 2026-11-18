@@ -14,7 +14,7 @@
   if (!document.querySelector('link[href^="planned.css"]')) {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
-    link.href = 'planned.css?v=' + Math.floor(Date.now() / 3600000);
+    link.href = 'planned.css?v=' + Math.floor(Date.now() / 300000);
     document.head.append(link);
   }
   const token = function () {

@@ -31,12 +31,19 @@
 /* The Labels tab of the Admin panel (label-formats.js), on the shared --fx look: a label / value grid, small controls, quiet help text */
 .lf-app {
   --lf-ctl: var(--fx-ctl, 1.5rem);
+  --lf-label: 9rem;
+  container-type: inline-size;
   font-size: 0.9rem;
+  max-width: 42rem;
+  min-width: 0;
+}
+
+.lf-app * {
+  box-sizing: border-box;
 }
 
 .lf-intro {
-  color: inherit;
-  margin-bottom: 0.9rem;
+  margin-bottom: 1rem;
 }
 
 .lf-fields > summary {
@@ -62,17 +69,16 @@
   padding: 0.05rem 0.4rem;
 }
 
-.lf-hint {
+.lf-app .lf-hint {
   color: var(--fx-muted, #7a8591);
   font-size: 0.75rem;
   line-height: 1.3;
-  margin-top: 0.15rem;
+  margin: 0.2rem 0 0;
 }
 
 .lf-message {
   font-size: 0.8rem;
   margin: 0 0 0.5rem;
-  min-height: 0;
 }
 
 .lf-message:empty {
@@ -80,31 +86,31 @@
 }
 
 .lf-section {
-  margin-bottom: 1.2rem;
+  margin-bottom: 1.5rem;
 }
 
-.lf-h {
+.lf-app .lf-h {
   border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
   color: var(--fx-muted, #7a8591);
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.04em;
-  margin: 0 0 0.6rem;
-  padding-bottom: 0.25rem;
+  line-height: 1.3;
+  margin: 0 0 0.8rem;
+  padding: 0 0 0.25rem;
   text-transform: uppercase;
 }
 
 .lf-grid {
   display: grid;
-  gap: 0.35rem 0.8rem;
-  grid-template-columns: 1fr;
+  gap: 0.6rem;
 }
 
 .lf-row {
   align-items: start;
   display: grid;
   gap: 0.8rem;
-  grid-template-columns: 8rem minmax(0, 1fr);
+  grid-template-columns: var(--lf-label) minmax(0, 1fr);
 }
 
 .lf-label {
@@ -119,10 +125,14 @@
 }
 
 .lf-app .lf-input {
+  border-width: 1px;
   font-size: 0.9rem;
   height: var(--lf-ctl);
   line-height: 1.2;
+  max-width: 100%;
+  min-width: 0;
   padding: 0 0.45rem;
+  width: 100%;
 }
 
 .lf-app textarea.lf-input {
@@ -155,8 +165,9 @@
 
 .lf-checks {
   display: grid;
-  gap: 0.25rem;
-  margin: 0.6rem 0;
+  gap: 0.35rem;
+  margin: 0.8rem 0;
+  padding-left: calc(var(--lf-label) + 0.8rem);
 }
 
 .lf-check {
@@ -174,8 +185,12 @@
   width: 0.9rem;
 }
 
+/* the buttons sit under the controls column */
 .lf-actions {
-  margin-top: 0.6rem;
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+  padding-left: calc(var(--lf-label) + 0.8rem);
 }
 
 .lf-app .lf-btn {
@@ -184,18 +199,9 @@
   font-size: 0.85rem;
   gap: 0.35rem;
   height: var(--lf-ctl);
+  line-height: 1;
   padding: 0 0.8rem;
   width: auto;
-}
-
-.lf-app .lf-icon-btn {
-  align-items: center;
-  display: inline-flex;
-  font-size: 0.8rem;
-  height: var(--lf-ctl);
-  justify-content: center;
-  min-width: var(--lf-ctl);
-  padding: 0 0.4rem;
 }
 
 .lf-formats {
@@ -205,40 +211,76 @@
 .lf-format {
   align-items: center;
   border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
-  display: flex;
-  gap: 0.6rem;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: minmax(0, 1fr) 6.5rem 4rem auto;
   min-height: 1.9rem;
-  padding: 0.15rem 0;
+}
+
+.lf-format:last-child {
+  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
 }
 
 .lf-format-name {
-  font-weight: 600;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .lf-format-size {
   color: var(--fx-muted, #7a8591);
   font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .lf-badge {
   background: color-mix(in srgb, var(--fx-accent, #2b5cab) 18%, transparent);
   border-radius: 999px;
   font-size: 0.7rem;
-  padding: 0 0.5rem;
+  justify-self: start;
+  line-height: 1.2;
+  padding: 0.05rem 0.5rem;
 }
 
 .lf-format-tools {
   display: inline-flex;
-  gap: 0.3rem;
-  margin-left: auto;
+  gap: 0.15rem;
+  justify-content: flex-end;
+  min-width: 3.4rem;
 }
 
-.lf-app {
-  container-type: inline-size;
+/* muted icon buttons; the delete one turns danger only on hover */
+.lf-app .lf-icon-btn {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--fx-muted, #7a8591);
+  display: inline-flex;
+  font-size: 0.8rem;
+  height: var(--lf-ctl);
+  justify-content: center;
+  min-width: var(--lf-ctl);
+  padding: 0 0.3rem;
+  text-decoration: none;
+}
+
+.lf-app .lf-icon-btn:hover,
+.lf-app .lf-icon-btn:focus-visible {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  color: inherit;
+}
+
+.lf-app .lf-icon-btn.lf-danger:hover,
+.lf-app .lf-icon-btn.lf-danger:focus-visible,
+.lf-app .lf-icon-btn.lf-armed {
+  background: color-mix(in srgb, #d9534f 15%, transparent);
+  color: #d9534f;
 }
 
 .lf-edit:not([hidden]) {
-  align-items: start;
   display: grid;
   gap: 0.8rem;
   grid-template-columns: minmax(0, 1fr);
@@ -246,6 +288,7 @@
 
 .lf-edit > .lf-h {
   margin-bottom: 0;
+  order: -2;
 }
 
 .lf-preview {
@@ -259,30 +302,12 @@
   max-width: 100%;
 }
 
-.lf-edit > .lf-h {
-  order: -2;
-}
-
-/* wide enough (the width of the tab, not of the window, because the side panels take room): the fields and the preview side by side */
-@container (min-width: 760px) {
-  .lf-edit:not([hidden]) {
-    gap: 0.8rem 1.5rem;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 24rem);
-  }
-
-  .lf-edit > .lf-h {
-    grid-column: 1 / -1;
-  }
-
-  .lf-preview {
-    order: 0;
-    position: sticky;
-    top: calc(var(--navbar-height, 43px) + 0.5rem);
-  }
-}
-
 @media (max-width: 800px) {
-  .lf-row {
-    grid-template-columns: 6.5rem minmax(0, 1fr);
+  .lf-app {
+    --lf-label: 6.5rem;
+  }
+
+  .lf-format {
+    grid-template-columns: minmax(0, 1fr) 5.5rem 3.6rem auto;
   }
 }
