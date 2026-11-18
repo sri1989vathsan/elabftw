@@ -17,6 +17,9 @@ use Elabftw\Enums\State;
 use Elabftw\Models\Users\Users;
 use PDO;
 
+use function in_array;
+use function sprintf;
+
 /**
  * The small counters on the dashboard. They only ever count the requester's own, non deleted experiments, so there is no
  * permission to check per row, and each is one prepared query that is served by an existing index
@@ -29,6 +32,32 @@ final class DashboardStats
     public function __construct(private Users $Users)
     {
         $this->Db = Db::getConnection();
+    }
+
+    /**
+     * How many of my own, non deleted entries there are per status or category: id (0 for "not set") => count.
+     * Table and column come from fixed lists, never from input.
+     *
+     * @return array<int, int>
+     */
+    public function countsBy(string $table, string $column): array
+    {
+        if (!in_array($table, array('experiments', 'items'), true) || !in_array($column, array('status', 'category'), true)) {
+            return array();
+        }
+        $req = $this->Db->prepare(sprintf(
+            'SELECT COALESCE(%2$s, 0) AS id, COUNT(*) AS n FROM %1$s WHERE userid = :userid AND state = :state GROUP BY id',
+            $table,
+            $column,
+        ));
+        $req->bindValue(':userid', $this->Users->userid, PDO::PARAM_INT);
+        $req->bindValue(':state', State::Normal->value, PDO::PARAM_INT);
+        $this->Db->execute($req);
+        $out = array();
+        foreach ($req->fetchAll() as $row) {
+            $out[(int) $row['id']] = (int) $row['n'];
+        }
+        return $out;
     }
 
     /** How many of my resources were modified in the last seven days */

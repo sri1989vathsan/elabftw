@@ -60,7 +60,7 @@
       <h4>{{ 'Browse by category'|trans }}</h4>
       <div class='d-flex my-2 flex-wrap lh-150'>
         {% for category in App.experimentsCategoryArr|filter(c => c.is_current_team == 1) -%}
-          <a href='experiments.php?mode=show&amp;category={{ category.id }}' class='btn mr-2 catstat-btn category-btn mb-1' style='--bg: #{{ category.color }}'>{{ category.title }}</a>
+          <a href='experiments.php?mode=show&amp;category={{ category.id }}&amp;owner={{ meId }}' class='btn mr-2 catstat-btn category-btn mb-1' style='--bg: #{{ category.color }}'>{{ category.title }} <span class='catstat-count'>{{ countExpCategory[category.id]|default(0) }}</span></a>
         {%- endfor %}
       </div>
       <hr>
@@ -69,7 +69,7 @@
       <h4>{{ 'Browse by status'|trans }}</h4>
       <div class='d-flex my-2 flex-wrap lh-150'>
         {% for status in experimentsStatusArr|filter(c => c.is_current_team == 1) -%}
-          <a href='experiments.php?mode=show&amp;status={{ status.id }}' class='btn mr-2 catstat-btn status-btn mb-1' style='--bg: #{{ status.color }}'><i class='fas fa-circle fa-fw' style='--bg:#{{ status.color }}'></i> {{ status.title }}</a>
+          <a href='experiments.php?mode=show&amp;status={{ status.id }}&amp;owner={{ meId }}' class='btn mr-2 catstat-btn status-btn mb-1' style='--bg: #{{ status.color }}'><i class='fas fa-circle fa-fw' style='--bg:#{{ status.color }}'></i> {{ status.title }} <span class='catstat-count'>{{ countExpStatus[status.id]|default(0) }}</span></a>
         {%- endfor %}
       </div>
       <hr>
@@ -111,7 +111,7 @@
     <h4>{{ 'Browse by category'|trans }}</h4>
     <div class='d-flex my-2 flex-wrap lh-150'>
       {% for category in App.itemsCategoryArr|filter(c => c.is_current_team == 1) -%}
-        <a href='database.php?mode=show&amp;category={{ category.id }}' class='btn mr-2 catstat-btn category-btn lh-normal mb-1' style='--bg: #{{ category.color }}'>{{ category.title }}</a>
+        <a href='database.php?mode=show&amp;category={{ category.id }}&amp;owner={{ meId }}' class='btn mr-2 catstat-btn category-btn lh-normal mb-1' style='--bg: #{{ category.color }}'>{{ category.title }} <span class='catstat-count'>{{ countResCategory[category.id]|default(0) }}</span></a>
       {%- endfor %}
     </div>
     <hr>
@@ -119,7 +119,7 @@
       <h4>{{ 'Browse by status'|trans }}</h4>
       <div class='d-flex my-2 flex-wrap lh-150'>
         {% for status in itemsStatusArr|filter(c => c.is_current_team == 1) -%}
-          <a href='database.php?mode=show&amp;status={{ status.id }}' class='btn mr-2 catstat-btn status-btn lh-normal border-0 mb-1' style='--bg: #{{ status.color }}'><i class='fas fa-circle fa-fw' style='--bg:#{{ status.color }}'></i> {{ status.title }}</a>
+          <a href='database.php?mode=show&amp;status={{ status.id }}&amp;owner={{ meId }}' class='btn mr-2 catstat-btn status-btn lh-normal border-0 mb-1' style='--bg: #{{ status.color }}'><i class='fas fa-circle fa-fw' style='--bg:#{{ status.color }}'></i> {{ status.title }} <span class='catstat-count'>{{ countResStatus[status.id]|default(0) }}</span></a>
         {%- endfor %}
       </div>
       <hr>

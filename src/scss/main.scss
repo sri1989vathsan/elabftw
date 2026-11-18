@@ -1583,6 +1583,14 @@ tr:first-child td {
   }
 }
 
+// the number of my entries next to a category or status on the dashboard
+.catstat-btn .catstat-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  margin-left: 0.25rem;
+  opacity: 0.85;
+}
+
 // Pin button of the row and board layouts: muted, small, shown a little stronger when pinned
 .entity-row-pin {
   background: none;
