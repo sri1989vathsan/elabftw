@@ -46,7 +46,7 @@ final class DashboardStats
             return array();
         }
         $req = $this->Db->prepare(sprintf(
-            'SELECT COALESCE(%2$s, 0) AS id, COUNT(*) AS n FROM %1$s WHERE userid = :userid AND state = :state GROUP BY id',
+            'SELECT COALESCE(%2$s, 0) AS group_id, COUNT(*) AS n FROM %1$s WHERE userid = :userid AND state = :state GROUP BY group_id',
             $table,
             $column,
         ));
@@ -55,7 +55,7 @@ final class DashboardStats
         $this->Db->execute($req);
         $out = array();
         foreach ($req->fetchAll() as $row) {
-            $out[(int) $row['id']] = (int) $row['n'];
+            $out[(int) $row['group_id']] = (int) $row['n'];
         }
         return $out;
     }
