@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -2100,6 +2100,46 @@ async function spreadsheetSoak(options = {}) {
     },
     // The editor's Find and replace marks its matches in the stored table, hidden behind the grid: the grid cells that hold a match
     // must be marked too (the current one stronger), and the marks must go when the search is closed.
+    // A sheet wider than the popup must scroll sideways, with the scrollbar inside the visible dialog (not below the fold), and the
+    // last column must be reachable: the element that overflows has overflow-x auto/scroll, scrollLeft can be set, and the last
+    // column letter becomes visible. The vertical scroll bar and the toolbar stay where they are.
+    async 'popup-wide-scroll'() {
+      const uid = await createTable('wide popup sheet', { rows: 6, cols: 26 });
+      if (!uid) return;
+      await typeInto(uid, 1, 25, 'last');
+      const dialog = await openPopupFor(uid);
+      const container = dialog.querySelector('.inline-spreadsheet-container');
+      if (!container) { fail('popup-wide-scroll: no .inline-spreadsheet-container'); return; }
+      // the element that has the overflow: the first of the container and its descendants whose content is wider than its box
+      const candidates = [container, ...container.querySelectorAll('.jss_container, .jss_content')];
+      const scroller = candidates.find(el => el.scrollWidth > el.clientWidth + 1 && /auto|scroll/.test(getComputedStyle(el).overflowX));
+      const overflowing = candidates.filter(el => el.scrollWidth > el.clientWidth + 1);
+      const info = overflowing.map(el => `${el.className.split(' ')[0] || el.tagName}: overflow-x ${getComputedStyle(el).overflowX}, ${el.scrollWidth}>${el.clientWidth}`).join('; ');
+      if (overflowing.length === 0) { fail('popup-wide-scroll: a 26-column sheet does not overflow the popup (nothing to scroll)', { info }); }
+      else if (!scroller) { dataLoss.push({ context, table: 'wide popup sheet', problem: `a sheet wider than the popup has no horizontal scrolling (${info})` }); }
+      else {
+        // the scroll bar sits at the bottom edge of the scroller: that edge must be inside the dialog and the window
+        const box = scroller.getBoundingClientRect(); const dbox = dialog.getBoundingClientRect();
+        if (box.bottom > dbox.bottom + 1 || box.bottom > window.innerHeight + 1) {
+          dataLoss.push({ context, table: 'wide popup sheet', problem: `the horizontal scroll bar is below the visible dialog (scroller bottom ${Math.round(box.bottom)}, dialog bottom ${Math.round(dbox.bottom)}, window ${window.innerHeight})` });
+        }
+        scroller.scrollLeft = scroller.scrollWidth;
+        await sleep(200);
+        const lastHeader = dialog.querySelector('.jss_worksheet thead td[data-x="25"]');
+        const sbox = scroller.getBoundingClientRect(); const hbox = lastHeader && lastHeader.getBoundingClientRect();
+        if (!lastHeader || hbox.right > sbox.right + 2 || hbox.left < sbox.left) {
+          dataLoss.push({ context, table: 'wide popup sheet', problem: 'after scrolling right the last column is not visible' });
+        }
+        // the column letters scroll with the content, the toolbar does not move
+        const toolbarBefore = (dialog.querySelector('button') || dialog).getBoundingClientRect().top;
+        scroller.scrollLeft = 0; await sleep(100);
+        const toolbarAfter = (dialog.querySelector('button') || dialog).getBoundingClientRect().top;
+        if (Math.abs(toolbarBefore - toolbarAfter) > 1) dataLoss.push({ context, table: 'wide popup sheet', problem: 'the toolbar moved while scrolling sideways' });
+      }
+      [...dialog.querySelectorAll('button')].find(b => /^Cancel/.test(b.textContent.trim()))?.click();
+      await waitPopupGone();
+    },
+
     async 'find-in-grid'() {
       // a word no earlier run left in this page: matches in other tables would hold the one "current" mark instead
       const word = 'zebrafinch' + Math.random().toString(36).slice(2, 7);
