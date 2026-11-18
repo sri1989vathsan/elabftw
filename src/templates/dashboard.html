@@ -25,7 +25,7 @@
           </a>
         {% endfor %}
         {% if statsByStatus[0] is defined and statsByStatus[0] > 0 %}
-          <a class='dashboard-stat-chip' href='experiments.php?mode=show&amp;owner={{ meId }}'><i class='fas fa-circle fa-fw' style='color:#bdbdbd' aria-hidden='true'></i>{{ 'not-set'|trans }} <strong>{{ statsByStatus[0] }}</strong></a>
+          <a class='dashboard-stat-chip' href='experiments.php?mode=show&amp;owner={{ meId }}'><i class='fas fa-circle fa-fw' style='color:#bdbdbd' aria-hidden='true'></i>{{ 'Not set'|trans }} <strong>{{ statsByStatus[0] }}</strong></a>
         {% endif %}
       </div>
     </div>
