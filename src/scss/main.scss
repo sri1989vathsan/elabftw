@@ -195,6 +195,25 @@ body::before {
 }
 
 // A column's title and its Create button wrap onto two lines instead of overlapping when the column is narrow.
+.dashboard-create {
+  align-items: center;
+  display: inline-flex;
+  flex: none;
+  font-size: 0.85rem;
+  gap: 0.35rem;
+  height: var(--fx-ctl, 1.5rem);
+  line-height: 1;
+  padding: 0 0.7rem;
+  white-space: nowrap;
+}
+
+/* a narrow card: the same button, the icon alone, on all three cards */
+@media (max-width: 420px) {
+  .dashboard-create .dashboard-create-text {
+    display: none;
+  }
+}
+
 .dashboard-heading {
   flex-wrap: wrap;
   gap: 0.25rem 0.75rem;
