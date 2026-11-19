@@ -73,6 +73,8 @@ class MakePdf extends AbstractMakePdf
 
     // positions (1 based, document order) of the headings of the sections to export; empty exports everything
     protected array $selectedSections = array();
+    // what to do with a spreadsheet wider than the page, see PdfBodyPrep::spreadsheets()
+    protected string $sheetsMode = PdfBodyPrep::MODE_LANDSCAPE;
 
     protected AbstractEntity $Entity;
 
@@ -126,6 +128,11 @@ class MakePdf extends AbstractMakePdf
     public function setSelectedSections(array $sections): void
     {
         $this->selectedSections = $sections;
+    }
+
+    public function setSheetsMode(string $mode): void
+    {
+        $this->sheetsMode = PdfBodyPrep::parseMode($mode);
     }
 
     /**
@@ -323,7 +330,12 @@ class MakePdf extends AbstractMakePdf
 
         // only the sections picked in the Contents panel, when there are some; spreadsheets drawn as the grid on screen
         // the printable width of the page in pixels (96 per inch): a wider sheet is scaled to it
-        $body = PdfBodyPrep::spreadsheets(PdfBodyPrep::selectSections($body, $this->selectedSections), $this->mpdf->pgwidth * 96 / 25.4);
+        $body = PdfBodyPrep::spreadsheets(
+            PdfBodyPrep::selectSections($body, $this->selectedSections),
+            $this->mpdf->pgwidth * 96 / 25.4,
+            $this->sheetsMode,
+            ($this->mpdf->pgwidth + $this->mpdf->h - $this->mpdf->w) * 96 / 25.4,
+        );
         if ($this->selectedSections !== []) {
             $body = PdfBodyPrep::selectedNote() . $body;
         }
