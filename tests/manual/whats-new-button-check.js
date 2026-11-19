@@ -31,7 +31,7 @@ window.whatsNewButtonCheck = async function whatsNewButtonCheck() {
   const shownPopup = () => { const p = popupEl(); return p && p.classList.contains('show') ? p : null; };
   const button = document.getElementById('navWhatsNewButton');
   const dot = () => document.querySelector('[data-whats-new-dot]');
-  const closeAny = async () => { if (shownPopup()) { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true })); await waitFor(() => !popupEl(), 2000); } };
+  const closeAny = async () => { if (shownPopup()) { (shownPopup() ?? document).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, which: 27, bubbles: true })); await waitFor(() => !popupEl(), 2000); } };
   const unseenAll = JSON.stringify({ id: '__none__', date: '2000-01-01' });
 
   // 1. the button on the pages
