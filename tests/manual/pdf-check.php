@@ -57,5 +57,33 @@ $check('a spreadsheet inside a selected section stays', str_contains($withSheet,
 $check('the sections of the request are read as positions', PdfBodyPrep::parseSections('3, 4,x,,9') === array(3, 4, 9), 'parse');
 $check('a body without headings is left alone when sections are asked', PdfBodyPrep::selectSections('<p>text</p>', [1]) === '' || str_contains(PdfBodyPrep::selectSections('<p>text</p>', [1]), 'text') === false, 'kept');
 
+// --- the scaling rule: wider than the page -> exactly the page width (everything scaled together); narrower -> untouched
+$wide = static function (int $cols, int $width = 100) use ($cell, $coord): string {
+    $colgroup = '<col style="width:42px">' . str_repeat('<col style="width:' . $width . 'px">', $cols);
+    $head = $coord('') . implode('', array_map(static fn(int $i): string => $coord((string) ($i + 1)), range(0, $cols - 1)));
+    $row = static fn(int $r): string => '<tr style="height:33px">' . $coord((string) $r) . implode('', array_map(static fn(int $i): string => $cell('v' . $i, 'height:33px;'), range(0, $cols - 1))) . '</tr>';
+    return '<table class="elabftw-spreadsheet" style="width:100%"><colgroup>' . $colgroup . '</colgroup><thead><tr>' . $head . '</tr></thead><tbody>' . $row(1) . $row(2) . '</tbody></table>';
+};
+$page = 700.0;
+foreach (array(4 => 'a 4-column sheet', 12 => 'a 12-column sheet', 30 => 'a 30-column sheet') as $n => $label) {
+    $natural = 42 + $n * 100;
+    $out = PdfBodyPrep::spreadsheets($wide($n), $page);
+    if ($natural <= $page) {
+        $check("$label ($natural px) is not scaled", str_contains($out, 'width:' . $natural . 'px') && !str_contains($out, 'font-size'), 'scaled or wrong width');
+    } else {
+        $check("$label ($natural px) is scaled to the page width", str_contains($out, 'width:700px;') && str_contains($out, 'font-size:'), 'not scaled to 700');
+        preg_match_all('/<col style="width:([\d.]+)px"/', $out, $m);
+        $sum = array_sum(array_map('floatval', $m[1]));
+        $check("$label: the columns add up to the page width (no cut column)", abs($sum - $page) <= 1.0, "sum $sum");
+        preg_match('/font-size:([\d.]+)pt/', $out, $f);
+        $check("$label: text, row heights and padding are scaled together", str_contains($out, 'height:' . round(33 * $page / $natural, 2) . 'px'), 'row height not scaled');
+        echo "     smallest text at $n columns: " . ($f[1] ?? '?') . " pt (base 9 pt)\n";
+    }
+}
+$long = '<table class="elabftw-spreadsheet" style="width:100%"><colgroup><col style="width:42px"><col style="width:100px"></colgroup><thead><tr>' . $coord('') . $coord('A') . '</tr></thead><tbody>'
+    . implode('', array_map(static fn(int $r): string => '<tr>' . $coord((string) $r) . $cell('row ' . $r) . '</tr>', range(1, 200))) . '</tbody></table>';
+$outLong = PdfBodyPrep::spreadsheets($long, $page);
+$check('a very long sheet keeps its 200 rows, the header in <thead> (repeated by the PDF engine), rows not split', substr_count($outLong, '<tr') === 201 && str_contains($outLong, '<thead>') && substr_count($outLong, 'page-break-inside:avoid') >= 200, 'rows lost or not kept together');
+
 echo $failed === 0 ? "ALL PASSED\n" : "$failed FAILED\n";
 exit($failed === 0 ? 0 : 1);

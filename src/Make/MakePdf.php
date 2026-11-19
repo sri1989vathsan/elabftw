@@ -322,7 +322,8 @@ class MakePdf extends AbstractMakePdf
         }
 
         // only the sections picked in the Contents panel, when there are some; spreadsheets drawn as the grid on screen
-        $body = PdfBodyPrep::spreadsheets(PdfBodyPrep::selectSections($body, $this->selectedSections));
+        // the printable width of the page in pixels (96 per inch): a wider sheet is scaled to it
+        $body = PdfBodyPrep::spreadsheets(PdfBodyPrep::selectSections($body, $this->selectedSections), $this->mpdf->pgwidth * 96 / 25.4);
         if ($this->selectedSections !== []) {
             $body = PdfBodyPrep::selectedNote() . $body;
         }

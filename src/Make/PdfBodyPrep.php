@@ -105,8 +105,11 @@ final class PdfBodyPrep
         return '<p style="color:#555;font-size:9pt;margin:0 0 6pt 0;">Selected sections only</p>';
     }
 
-    /** Draws every spreadsheet of the body like the grid on screen. */
-    public static function spreadsheets(string $html): string
+    /**
+     * Draws every spreadsheet of the body like the grid on screen. A sheet wider than the printable page width ($pageWidthPx) is scaled
+     * down, text, borders, padding and row heights together, so that it is exactly as wide as the page; a narrower one is left at 100%.
+     */
+    public static function spreadsheets(string $html, ?float $pageWidthPx = null): string
     {
         if (!str_contains($html, 'elabftw-spreadsheet')) {
             return $html;
@@ -118,7 +121,7 @@ final class PdfBodyPrep
                 return $html;
             }
             foreach ($body->querySelectorAll('table.elabftw-spreadsheet') as $table) {
-                self::prepareTable($table);
+                self::prepareTable($table, $pageWidthPx);
             }
             return self::bodyHtml($body);
         } catch (Throwable) {
@@ -177,7 +180,7 @@ final class PdfBodyPrep
         }
     }
 
-    private static function prepareTable(Element $table): void
+    private static function prepareTable(Element $table, ?float $pageWidthPx = null): void
     {
         $table->removeAttribute('data-spreadsheet');
         self::removeHidden($table);
@@ -193,13 +196,22 @@ final class PdfBodyPrep
         if ($total > 0) {
             $style .= 'width:' . $total . 'px;';
         }
+        $scale = ($pageWidthPx !== null && $total > $pageWidthPx) ? $pageWidthPx / $total : 1.0;
+        if ($scale < 1.0) {
+            // wider than the page: every size shrinks by the same factor, so the table is exactly as wide as the page
+            $style = (string) preg_replace('/width:\d+px;/', 'width:' . (int) floor($pageWidthPx) . 'px;', $style) . 'font-size:' . round(9 * $scale, 2) . 'pt;';
+            foreach ($table->querySelectorAll('colgroup > col') as $col) {
+                $col->setAttribute('style', 'width:' . round(self::pixels((string) $col->getAttribute('style')) * $scale, 2) . 'px');
+            }
+        }
         $table->setAttribute('style', $style);
         foreach ($table->querySelectorAll('tr') as $row) {
-            $row->setAttribute('style', trim((string) $row->getAttribute('style'), "; ") . ';background-color:#ffffff;page-break-inside:avoid;');
+            $rowStyle = self::scalePixels(trim((string) $row->getAttribute('style'), "; "), $scale);
+            $row->setAttribute('style', $rowStyle . ';background-color:#ffffff;page-break-inside:avoid;');
         }
         foreach ($table->querySelectorAll('th, td') as $cell) {
             $coordinate = $cell->classList->contains('spreadsheet-coordinate');
-            $extra = 'border:' . self::GRID_LINE . ';padding:3px 5px;overflow:hidden;';
+            $extra = 'border:' . self::GRID_LINE . ';padding:' . round(3 * $scale, 2) . 'px ' . round(5 * $scale, 2) . 'px;overflow:hidden;';
             if ($coordinate) {
                 $extra .= 'text-align:center;text-transform:none;font-weight:normal;';
                 if (!preg_match('/background(?:-color)?\s*:/i', (string) $cell->getAttribute('style'))) {
@@ -214,8 +226,17 @@ final class PdfBodyPrep
                 $extra .= 'background-color:#ffffff;';
             }
             // what the person set on the cell (fill, bold, colour, alignment, number format) comes last and wins
-            $cell->setAttribute('style', $extra . trim((string) $cell->getAttribute('style'), "; ") . ';');
+            $cell->setAttribute('style', $extra . self::scalePixels(trim((string) $cell->getAttribute('style'), "; "), $scale) . ';');
         }
+    }
+
+    /** The pixel sizes of a style attribute (heights, widths, font sizes, paddings) multiplied by $scale; 1 leaves it as it is. */
+    private static function scalePixels(string $style, float $scale): string
+    {
+        if ($scale >= 1.0 || $style === '') {
+            return $style;
+        }
+        return (string) preg_replace_callback('/(\d+(?:\.\d+)?)px/', static fn(array $m): string => round((float) $m[1] * $scale, 2) . 'px', $style);
     }
 
     private static function pixels(string $style): int
