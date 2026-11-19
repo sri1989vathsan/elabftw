@@ -54,7 +54,7 @@ async function startChrome() {
       await sleep(120);
     },
     async resize(w, h) { await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false }); await sleep(300); },
-    async close() { try { ws.close(); } catch { /* */ } proc.kill(); },
+    async close() { try { ws.close(); } catch { /* */ } proc.kill(); await sleep(1000); fs.rmSync(dir, { recursive: true, force: true }); },
   };
 }
 
@@ -114,7 +114,7 @@ async function startFirefox() {
       await sleep(250);
     },
     resize: async (w, h) => { await setViewport(w, h); await sleep(300); },
-    async close() { try { sock.destroy(); } catch { /* */ } proc.kill(); },
+    async close() { try { sock.destroy(); } catch { /* */ } proc.kill(); await sleep(1500); fs.rmSync(dir, { recursive: true, force: true }); },
   };
 }
 
