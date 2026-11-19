@@ -12,7 +12,14 @@
       "In Contents, Print and PDF are in the header, and the select bar at the bottom keeps the count, Copy and Clear."
     ],
     "image": "side-panel-refresh.jpg",
-    "imageAlt": "The Contents panel with the headings of the experiment, ticks for each section, and Print and PDF buttons in its header"
+    "imageAlt": "The top of the Contents side panel with the Refresh and Close buttons in the top corner, where every side panel has them",
+    "highlight": {
+      "x": 86.5,
+      "y": 2.7,
+      "w": 22.1,
+      "h": 16.0,
+      "label": "Refresh and Close"
+    }
   },
   {
     "id": "print-pdf-match-sheet",
@@ -96,7 +103,14 @@
       "Text in a column that was never sized by hand is fitted to the text and starts at the left."
     ],
     "image": "sheet-frame-fits.jpg",
-    "imageAlt": "An experiment page with a spreadsheet of demo samples in the main text"
+    "imageAlt": "A spreadsheet in the text of an experiment showing all five of its columns and its rows inside the text frame",
+    "highlight": {
+      "x": 3.2,
+      "y": 18.8,
+      "w": 72.9,
+      "h": 42.0,
+      "label": "All columns visible"
+    }
   },
   {
     "id": "folder-explorer",
@@ -217,7 +231,7 @@
       "Printing goes to the label printer of the lab over the network. It needs the printer address, which only an admin can set."
     ],
     "image": "print-label.jpg",
-    "imageAlt": "The Print a label window: format, preview with margins, text lines and a box for pasted table cells"
+    "imageAlt": "The Print a label window with the label format, copies, the preview with dashed margins and the lines of text"
   },
   {
     "id": "google-calendar-tasks",
@@ -234,7 +248,14 @@
       "Google Tasks sync of the to-do list is optional and off by default. It runs in your browser and needs an admin to switch it on: set GOOGLE_SYNC_CSP=true in the server settings and restart, which lets the page use Google sign-in. This was only tested with a stand-in for Google, not a real account."
     ],
     "image": "google-calendar-tasks.jpg",
-    "imageAlt": "The Calendar page in week view with demo tasks and the Calendars menu"
+    "imageAlt": "The Calendar settings window opened from the gear in the To-do panel, with working hours, the Google section with Connect Google, calendars from a web address and the private link",
+    "highlight": {
+      "x": 1.9,
+      "y": 27.7,
+      "w": 97.1,
+      "h": 33.1,
+      "label": "Google settings"
+    }
   },
   {
     "id": "mind-map",
@@ -250,8 +271,15 @@
       "A task card follows its task: move the task to another project and the card goes with it. The map refreshes by itself, and the Refresh button reloads it. A card has a button to remove it from the map.",
       "A card's popup is only as tall as its content."
     ],
-    "image": "",
-    "imageAlt": ""
+    "image": "mind-map.jpg",
+    "imageAlt": "The Boards page as a mind map: question, experiment and task cards joined by arrows inside the project frame",
+    "highlight": {
+      "x": 84.0,
+      "y": 11.6,
+      "w": 3.9,
+      "h": 6.1,
+      "label": "Mind map button"
+    }
   },
   {
     "id": "steps-and-tasks",
@@ -312,8 +340,15 @@
       "Pasting a copied formula in a spreadsheet moves its references like Excel, and pasting and resizing rows or columns are part of Undo.",
       "Printing from the edit page no longer puts plates and tables on top of each other."
     ],
-    "image": "",
-    "imageAlt": ""
+    "image": "plate-view-and-copy.jpg",
+    "imageAlt": "A well plate in an experiment: the Plate and Spreadsheet switch and the copy button above the wells",
+    "highlight": {
+      "x": 31.2,
+      "y": 10.8,
+      "w": 68.1,
+      "h": 8.1,
+      "label": "Plate or Spreadsheet"
+    }
   },
   {
     "id": "link-to-data",
@@ -328,7 +363,14 @@
       "The label keeps a long path readable. Remove a link with the trash icon while editing."
     ],
     "image": "link-to-data.jpg",
-    "imageAlt": "The sections under the main text of an experiment on the edit page: Data, Links, Web links and Files"
+    "imageAlt": "The Data section of an experiment with a network folder link labelled Raw data folder and the path and label fields to add another",
+    "highlight": {
+      "x": 3.5,
+      "y": 3.7,
+      "w": 48.1,
+      "h": 34.3,
+      "label": "Data section"
+    }
   },
   {
     "id": "quick-links",
@@ -358,7 +400,14 @@
       "Open a template to see its version history and restore an older version; the other versions are kept."
     ],
     "image": "link-templates-and-versions.jpg",
-    "imageAlt": "The experiment templates list with the demo template Standard cloning protocol"
+    "imageAlt": "The Search panel with Experiment templates selected: each template has a button to link it to the experiment and a button to add its text",
+    "highlight": {
+      "x": 83.9,
+      "y": 39.2,
+      "w": 20.3,
+      "h": 7.2,
+      "label": "Link or add to text"
+    }
   },
   {
     "id": "spreadsheet-previews",
@@ -371,8 +420,15 @@
       "The preview matches the editor's look, column widths and row heights, so nothing jumps when you click.",
       "The cell you clicked is selected straight away, and the table you are editing stays live while you scroll."
     ],
-    "imageAlt": "An experiment page with a spreadsheet of demo samples in the main text",
-    "image": "spreadsheet-previews.jpg"
+    "imageAlt": "A spreadsheet in the text of an experiment with the small bar above it for collapsing, fitting and copying",
+    "image": "spreadsheet-previews.jpg",
+    "highlight": {
+      "x": 3.9,
+      "y": 4.0,
+      "w": 20.0,
+      "h": 7.2,
+      "label": "Sheet bar"
+    }
   },
   {
     "id": "list-indent",
@@ -385,12 +441,12 @@
       "Nested lists move one level per press."
     ],
     "image": "list-indent.jpg",
-    "imageAlt": "Several bullet lines selected in the editor; Tab indents them together",
+    "imageAlt": "Three numbered lines selected in the editor; pressing Tab indents all of them together",
     "highlight": {
-      "x": 4.0,
-      "y": 9.5,
-      "w": 89.0,
-      "h": 79.5,
+      "x": 2.1,
+      "y": 26.8,
+      "w": 70.0,
+      "h": 15.8,
       "label": "Select lines, press Tab"
     }
   },
@@ -406,7 +462,7 @@
       "Each version has its own edit history that you can restore individually."
     ],
     "image": "template-version-history.jpg",
-    "imageAlt": "The experiment templates list with the demo template Standard cloning protocol"
+    "imageAlt": "The Version history window of a template listing its saved versions with who and when, and buttons to restore one"
   },
   {
     "id": "spreadsheet-insert-and-view",
@@ -420,7 +476,14 @@
       "Row heights now grow when a narrower column needs more wrapped lines."
     ],
     "image": "spreadsheet-insert-and-view.jpg",
-    "imageAlt": "An experiment page with a spreadsheet of demo samples in the main text"
+    "imageAlt": "The Insert menu of the editor with Spreadsheet open: a grid where you point at the number of columns and rows",
+    "highlight": {
+      "x": 42.0,
+      "y": 28.8,
+      "w": 49.4,
+      "h": 38.7,
+      "label": "Pick the size"
+    }
   },
   {
     "id": "boards",
@@ -472,13 +535,20 @@
       "A table below the one you add rows to no longer jumps for a moment, and the editor no longer slides a wide plate out of view sideways."
     ],
     "image": "spreadsheet-editing.jpg",
-    "imageAlt": "An experiment page with a spreadsheet of demo samples in the main text",
+    "imageAlt": "A spreadsheet in edit mode with its tool bar above the grid: undo, redo, add rows and columns, copy and delete",
     "screenshots": [
       {
         "image": "spreadsheet-editing-plate-13b3f11b.png",
         "caption": "A normal spreadsheet has the Add rows bar under it. A well plate keeps its size, so it has none, and both show their row and column labels"
       }
-    ]
+    ],
+    "highlight": {
+      "x": 2.5,
+      "y": 16.4,
+      "w": 62.5,
+      "h": 7.2,
+      "label": "Sheet tools"
+    }
   },
   {
     "id": "navigation",
@@ -780,7 +850,7 @@
       "fa-paperclip::Files / folders and Local files: attach files or refer to files kept elsewhere.",
       "Compounds and Custom fields: record chemicals from the compound database and the extra fields your team defined."
     ],
-    "imageAlt": "The sections under the main text of an experiment on the edit page: Data, Links, Web links and Files",
+    "imageAlt": "The Links section of an experiment with experiment links, associated experimental templates with their version, and resource links",
     "featured": false,
     "guide": true,
     "order": 80,
@@ -793,7 +863,14 @@
     "news": "New: the Data section for network folders, and order, template and LabCollector links in these sections.",
     "shot": "An experiment page scrolled to the sections under the main text with the Data section open",
     "image": "guide-experiment-sections.jpg",
-    "screenshots": []
+    "screenshots": [],
+    "highlight": {
+      "x": 1.2,
+      "y": 6.2,
+      "w": 68.2,
+      "h": 6.2,
+      "label": "Links section"
+    }
   },
   {
     "id": "guide-steps",
@@ -985,7 +1062,7 @@
       "fa-list-check::Checklist: type [ ] and a space for tick boxes. Format painter and Clear formatting sit by the colour buttons.",
       "fa-keyboard::Ctrl+Shift+D date and time, Ctrl+Alt+T title, Ctrl+Alt+N note, Ctrl+Shift+H line. The three dots at the end hold buttons that do not fit."
     ],
-    "imageAlt": "The editor toolbar: menu bar, undo, headings, font size, bold, colours and alignment",
+    "imageAlt": "The editor of an experiment with its menu bar and the toolbar: Save, Insert, formatting, colours, lists and indent buttons",
     "featured": false,
     "guide": true,
     "order": 85,
@@ -1011,7 +1088,14 @@
         "image": "guide-editor-spreadsheet-tools-13a25130.png",
         "caption": "Spreadsheet tools appears while a spreadsheet is selected: edit and format it from here. A well plate below has its size fixed, so it has no Add rows bar"
       }
-    ]
+    ],
+    "highlight": {
+      "x": 1.4,
+      "y": 8.7,
+      "w": 96.0,
+      "h": 13.5,
+      "label": "Editor toolbar"
+    }
   },
   {
     "id": "guide-spreadsheets",
@@ -1027,7 +1111,7 @@
       "fa-print::Print and PDF show the sheet like the grid you see. Choose how wide sheets print in the PDF window (see Print and PDF).",
       "fa-rotate-left::Ctrl+Z in a spreadsheet undoes spreadsheet edits only. A sheet wider than the page has a scroll bar under it."
     ],
-    "imageAlt": "An experiment page with a spreadsheet of demo samples in the main text",
+    "imageAlt": "A spreadsheet in edit mode with its tool bar above the grid: undo, redo, add rows and columns, copy and delete",
     "featured": false,
     "guide": true,
     "order": 86,
@@ -1053,7 +1137,14 @@
         "image": "guide-spreadsheet-bars.jpg",
         "caption": "The table’s toolbar, the formatting bar (fill and text colours, font, alignment) and the formula bar, open above a spreadsheet"
       }
-    ]
+    ],
+    "highlight": {
+      "x": 2.5,
+      "y": 16.4,
+      "w": 62.5,
+      "h": 7.2,
+      "label": "Sheet tools"
+    }
   },
   {
     "id": "guide-collaboration",
@@ -1112,7 +1203,7 @@
     "image": "guide-todo.jpg",
     "screenshots": [
       {
-        "image": "guide-todo-repeat-0bf4a653.png",
+        "image": "guide-todo-repeat.jpg",
         "caption": "Adding a task that repeats every week on Monday and Thursday: Repeat, with a Today button next to the date"
       }
     ]
@@ -1340,7 +1431,7 @@
       "fa-floppy-disk::Your view, hidden projects and Google choices are saved with your account. The Google sign-in stays in the browser.",
       "fa-list-check::Google Tasks sync is optional and off; an admin must set GOOGLE_SYNC_CSP=true and restart. Tested only with a stand-in for Google."
     ],
-    "imageAlt": "The Calendar page in week view with demo tasks and the Calendars menu",
+    "imageAlt": "The Calendar settings window opened from the gear in the To-do panel, with working hours, the Google section with Connect Google, calendars from a web address and the private link",
     "featured": false,
     "guide": true,
     "order": 42,
@@ -1353,7 +1444,14 @@
     "news": "New: link a project to a Google calendar, choose the calendar of each task, and keep the choices per user.",
     "shot": "",
     "image": "guide-google-calendar.jpg",
-    "screenshots": []
+    "screenshots": [],
+    "highlight": {
+      "x": 1.9,
+      "y": 27.7,
+      "w": 97.1,
+      "h": 33.1,
+      "label": "Google settings"
+    }
   },
   {
     "id": "guide-print-pdf",

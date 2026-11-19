@@ -23,14 +23,15 @@
     "alt": "The Boards page with the Plasmid project tab, the card filters and the To do column with demo cards and deadlines"
   },
   "list-indent": {
+    "source": "list-indent",
+    "alt": "Three numbered lines selected in the editor; pressing Tab indents all of them together",
     "highlight": [
-      0.0402,
-      0.0947,
-      0.8898,
-      0.7955
+      0.0213,
+      0.268,
+      0.7,
+      0.1583
     ],
-    "label": "Select lines, press Tab",
-    "alt": "Several bullet lines selected in the editor; Tab indents them together"
+    "label": "Select lines, press Tab"
   },
   "navigation": {
     "source": "more-menu",
@@ -45,34 +46,41 @@
     "alt": "The Orders page with the request form on the left and the list of orders with their status on the right"
   },
   "spreadsheet-editing": {
-    "alt": "An experiment page with a spreadsheet of demo samples in the main text",
-    "crop": [
-      0,
-      0.2,
-      0.85,
-      0.8
-    ]
+    "source": "sheet-edit",
+    "alt": "A spreadsheet in edit mode with its tool bar above the grid: undo, redo, add rows and columns, copy and delete",
+    "highlight": [
+      0.025,
+      0.164,
+      0.625,
+      0.072
+    ],
+    "label": "Sheet tools"
   },
   "spreadsheet-insert-and-view": {
-    "alt": "An experiment page with a spreadsheet of demo samples in the main text",
-    "crop": [
-      0,
-      0.2,
-      0.85,
-      0.8
-    ]
+    "source": "sheet-insert",
+    "alt": "The Insert menu of the editor with Spreadsheet open: a grid where you point at the number of columns and rows",
+    "highlight": [
+      0.4196,
+      0.2879,
+      0.4941,
+      0.387
+    ],
+    "label": "Pick the size"
   },
   "spreadsheet-previews": {
-    "alt": "An experiment page with a spreadsheet of demo samples in the main text",
-    "crop": [
-      0,
+    "source": "sheet-view2",
+    "alt": "A spreadsheet in the text of an experiment with the small bar above it for collapsing, fitting and copying",
+    "highlight": [
+      0.0394,
+      0.0398,
       0.2,
-      0.85,
-      0.8
-    ]
+      0.072
+    ],
+    "label": "Sheet bar"
   },
   "template-version-history": {
-    "alt": "The experiment templates list with the demo template Standard cloning protocol"
+    "source": "template-version-modal",
+    "alt": "The Version history window of a template listing its saved versions with who and when, and buttons to restore one"
   },
   "guide-folder-views": {
     "source": "folder-views",
@@ -162,12 +170,24 @@
     "alt": "The Contents panel with the headings of the experiment, ticks for each section, and Print and PDF buttons in its header"
   },
   "print-pdf-selected-sections": {
-    "source": "toc-panel",
-    "alt": "The Contents panel with the headings of the experiment, ticks for each section, and Print and PDF buttons in its header"
+    "alt": "The Contents panel in Select mode with two headings ticked, Print and PDF in its header",
+    "crop": [
+      0,
+      0,
+      1,
+      0.64
+    ]
   },
   "side-panel-refresh": {
-    "source": "toc-panel",
-    "alt": "The Contents panel with the headings of the experiment, ticks for each section, and Print and PDF buttons in its header"
+    "source": "toc-top",
+    "alt": "The top of the Contents side panel with the Refresh and Close buttons in the top corner, where every side panel has them",
+    "highlight": [
+      0.8654,
+      0.0273,
+      0.2213,
+      0.1599
+    ],
+    "label": "Refresh and Close"
   },
   "guide-list-layouts": {
     "source": "list-layouts",
@@ -223,7 +243,15 @@
     "alt": "The Experiment templates page listing two templates, PCR reaction setup and Western blot"
   },
   "link-templates-and-versions": {
-    "alt": "The experiment templates list with the demo template Standard cloning protocol"
+    "source": "template-link-panel",
+    "alt": "The Search panel with Experiment templates selected: each template has a button to link it to the experiment and a button to add its text",
+    "highlight": [
+      0.8387,
+      0.3916,
+      0.2027,
+      0.072
+    ],
+    "label": "Link or add to text"
   },
   "guide-create-entry": {
     "source": "create-dialog",
@@ -264,43 +292,81 @@
     "alt": "The More menu in the top bar with Orders and other links"
   },
   "guide-editor-toolbar": {
-    "alt": "The editor toolbar: menu bar, undo, headings, font size, bold, colours and alignment"
+    "source": "editor-toolbar",
+    "alt": "The editor of an experiment with its menu bar and the toolbar: Save, Insert, formatting, colours, lists and indent buttons",
+    "highlight": [
+      0.0135,
+      0.0867,
+      0.9596,
+      0.1354
+    ],
+    "label": "Editor toolbar"
   },
   "guide-print-pdf": {
-    "source": "toc-panel",
-    "alt": "The Contents panel with the headings of the experiment, ticks for each section, and Print and PDF buttons in its header"
+    "alt": "The Contents panel in Select mode with two sections ticked; Print and PDF sit in its header",
+    "crop": [
+      0,
+      0,
+      1,
+      0.64
+    ]
   },
   "print-pdf-match-sheet": {
-    "source": "toc-panel",
-    "alt": "The Contents panel with the headings of the experiment, ticks for each section, and Print and PDF buttons in its header"
+    "alt": "The Contents panel in Select mode; Print and PDF in its header act on the ticked sections",
+    "crop": [
+      0,
+      0,
+      1,
+      0.64
+    ]
   },
   "guide-spreadsheets": {
-    "alt": "An experiment page with a spreadsheet of demo samples in the main text",
-    "crop": [
-      0,
-      0.2,
-      0.85,
-      0.8
-    ]
+    "source": "sheet-edit",
+    "alt": "A spreadsheet in edit mode with its tool bar above the grid: undo, redo, add rows and columns, copy and delete",
+    "highlight": [
+      0.025,
+      0.164,
+      0.625,
+      0.072
+    ],
+    "label": "Sheet tools"
   },
   "sheet-frame-fits": {
-    "alt": "An experiment page with a spreadsheet of demo samples in the main text",
-    "crop": [
-      0,
-      0.2,
-      0.85,
-      0.8
-    ]
+    "source": "sheet-view",
+    "alt": "A spreadsheet in the text of an experiment showing all five of its columns and its rows inside the text frame",
+    "highlight": [
+      0.0319,
+      0.1878,
+      0.7288,
+      0.42
+    ],
+    "label": "All columns visible"
   },
   "entry-pages": {
     "source": "entry-view",
     "alt": "An experiment page: title with category and status, the toolbar, the details block and the main text with its headings"
   },
   "guide-experiment-sections": {
-    "alt": "The sections under the main text of an experiment on the edit page: Data, Links, Web links and Files"
+    "source": "links-section",
+    "alt": "The Links section of an experiment with experiment links, associated experimental templates with their version, and resource links",
+    "highlight": [
+      0.0125,
+      0.0618,
+      0.6818,
+      0.0618
+    ],
+    "label": "Links section"
   },
   "link-to-data": {
-    "alt": "The sections under the main text of an experiment on the edit page: Data, Links, Web links and Files"
+    "source": "data-section",
+    "alt": "The Data section of an experiment with a network folder link labelled Raw data folder and the path and label fields to add another",
+    "highlight": [
+      0.0346,
+      0.0367,
+      0.4808,
+      0.3434
+    ],
+    "label": "Data section"
   },
   "guide-labels": {
     "alt": "The Print a label window: format, text size, copies, preview with margins, text lines and a box for pasted table cells",
@@ -312,31 +378,30 @@
     ]
   },
   "print-label": {
-    "alt": "The Print a label window: format, preview with margins, text lines and a box for pasted table cells",
-    "crop": [
-      0.29,
-      0.03,
-      0.42,
-      0.94
-    ]
+    "source": "label-dialog",
+    "alt": "The Print a label window with the label format, copies, the preview with dashed margins and the lines of text"
   },
   "guide-google-calendar": {
-    "alt": "The Calendar page in week view with demo tasks and the Calendars menu",
-    "crop": [
-      0,
-      0.04,
-      1,
-      0.95
-    ]
+    "source": "calendar-settings",
+    "alt": "The Calendar settings window opened from the gear in the To-do panel, with working hours, the Google section with Connect Google, calendars from a web address and the private link",
+    "highlight": [
+      0.0192,
+      0.2769,
+      0.9712,
+      0.3308
+    ],
+    "label": "Google settings"
   },
   "google-calendar-tasks": {
-    "alt": "The Calendar page in week view with demo tasks and the Calendars menu",
-    "crop": [
-      0,
-      0.04,
-      1,
-      0.95
-    ]
+    "source": "calendar-settings",
+    "alt": "The Calendar settings window opened from the gear in the To-do panel, with working hours, the Google section with Connect Google, calendars from a web address and the private link",
+    "highlight": [
+      0.0192,
+      0.2769,
+      0.9712,
+      0.3308
+    ],
+    "label": "Google settings"
   },
   "guide-whats-new-popup": {
     "source": "whats-new-setting",
@@ -389,5 +454,27 @@
       0.25
     ],
     "label": "Steps and tasks"
+  },
+  "plate-view-and-copy": {
+    "source": "plate-view",
+    "alt": "A well plate in an experiment: the Plate and Spreadsheet switch and the copy button above the wells",
+    "highlight": [
+      0.3125,
+      0.1085,
+      0.6813,
+      0.0808
+    ],
+    "label": "Plate or Spreadsheet"
+  },
+  "mind-map": {
+    "source": "mind-map",
+    "alt": "The Boards page as a mind map: question, experiment and task cards joined by arrows inside the project frame",
+    "highlight": [
+      0.8401,
+      0.1155,
+      0.0388,
+      0.0606
+    ],
+    "label": "Mind map button"
   }
 }
