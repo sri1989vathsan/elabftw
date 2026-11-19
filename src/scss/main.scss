@@ -2492,6 +2492,12 @@ h1:has(> #documentTitle) {
   }
 }
 
+/* "Back to ..." after following an internal link (back-to-link.ts). With a side panel open it moves to the right of the panel, where it
+   used to cover the bottom of the panel (the Print/PDF buttons of the Contents bar). */
+body:has(.side-panel:not([hidden])) .elabftw-back-button {
+  left: calc(var(--side-panel-width, max(24%, 330px)) + 1rem);
+}
+
 /* "Back to ..." after following an internal link (back-to-link.ts) */
 .elabftw-back-button {
   align-items: stretch;
@@ -5909,9 +5915,25 @@ html[data-ui-size='comfortable'] {
     border-top: 1px solid var(--fx-line);
     bottom: 0;
     display: flex;
+    // two rows in the narrow panel: the count and what is selected, then Print, PDF, Copy and clear: nothing cut off
+    flex-wrap: wrap;
     gap: 0.3rem;
-    padding: 0.3rem 1rem;
+    padding: 0.4rem 1rem 0.5rem;
     position: sticky;
+    // above anything floating over the page and the panel
+    z-index: 1040;
+
+    .toc-select-actions {
+      align-items: center;
+      display: flex;
+      flex: 1 0 100%;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+    }
+
+    #tocSelectClear {
+      margin-left: auto;
+    }
 
     &[hidden] {
       display: none;

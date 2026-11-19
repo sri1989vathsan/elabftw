@@ -7,6 +7,9 @@
     <h3 class='toc-heading'>
       <span class='toc-heading-title'>{{ 'Contents'|trans }} <span id='tocCount' class='toc-count' aria-label='{{ 'Sections'|trans }}'>0</span></span>
       <span class='toc-heading-actions'>
+        {# always there: with nothing ticked they print / export the whole entry, with sections ticked only those #}
+        <button type='button' class='toc-icon-btn' id='tocPrintAll' title='{{ 'Print whole entry'|trans }}' aria-label='{{ 'Print whole entry'|trans }}'><i class='fas fa-print fa-fw' aria-hidden='true'></i></button>
+        <button type='button' class='toc-icon-btn' id='tocPdfAll' title='{{ 'PDF of the whole entry'|trans }}' aria-label='{{ 'PDF of the whole entry'|trans }}'><i class='fas fa-file-pdf fa-fw' aria-hidden='true'></i></button>
         <button type='button' class='toc-icon-btn' data-action='refresh-toc' title='{{ 'Refresh'|trans }}' aria-label='{{ 'Refresh'|trans }}'><i class='fas fa-rotate fa-fw' aria-hidden='true'></i></button>
         {{ guide.info('guide-toc', 'Contents') }}
       </span>
@@ -57,9 +60,11 @@
       <span id='tocSelectedLabel' role='status' aria-live='polite'>0 selected</span>
       <span id='tocShowingLabel' class='toc-showing'></span>
     </span>
-    <button type='button' id='tocPrintSelection' class='toc-bar-btn' title='{{ 'Print selection'|trans }}'><i class='fas fa-print fa-fw' aria-hidden='true'></i>{{ 'Print'|trans }}</button>
-    <button type='button' id='tocPdfSelection' class='toc-bar-btn' title='{{ 'Export the selected sections as a PDF'|trans }}'><i class='fas fa-file-pdf fa-fw' aria-hidden='true'></i>{{ 'PDF'|trans }}</button>
-    <button type='button' id='tocCopySelection' class='toc-bar-btn' title='{{ 'Copy filtered content'|trans }}'><i class='fas fa-copy fa-fw' aria-hidden='true'></i>{{ 'Copy'|trans }}</button>
-    <button type='button' id='tocSelectClear' class='toc-icon-btn' title='{{ 'Clear selection'|trans }}' aria-label='{{ 'Clear selection'|trans }}'><i class='fas fa-xmark fa-fw' aria-hidden='true'></i></button>
+    <span class='toc-select-actions'>
+      <button type='button' id='tocPrintSelection' class='toc-bar-btn' title='{{ 'Print selection'|trans }}'><i class='fas fa-print fa-fw' aria-hidden='true'></i>{{ 'Print'|trans }}</button>
+      <button type='button' id='tocPdfSelection' class='toc-bar-btn' title='{{ 'Export the selected sections as a PDF'|trans }}'><i class='fas fa-file-pdf fa-fw' aria-hidden='true'></i>{{ 'PDF'|trans }}</button>
+      <button type='button' id='tocCopySelection' class='toc-bar-btn' title='{{ 'Copy filtered content'|trans }}'><i class='fas fa-copy fa-fw' aria-hidden='true'></i>{{ 'Copy'|trans }}</button>
+      <button type='button' id='tocSelectClear' class='toc-icon-btn' title='{{ 'Clear selection'|trans }}' aria-label='{{ 'Clear selection'|trans }}'><i class='fas fa-xmark fa-fw' aria-hidden='true'></i></button>
+    </span>
   </div>
 </div>

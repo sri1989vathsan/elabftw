@@ -64,6 +64,31 @@ window.printCheck = async function printCheck() {
         click(document.getElementById('tocSelectAll')); await sleep(300); click(document.getElementById('tocSelectNone')); await sleep(400);
       }
     }
+    // print-whole-entry / pdf-whole-entry: the buttons in the panel header are always there; with nothing ticked they take the whole entry
+    const headerPrint = document.getElementById('tocPrintAll');
+    const headerPdf = document.getElementById('tocPdfAll');
+    check('print-whole-entry: Print is in the Contents panel header with nothing ticked', !!headerPrint && getComputedStyle(headerPrint).display !== 'none', 'no #tocPrintAll');
+    check('pdf-whole-entry: PDF is in the Contents panel header with nothing ticked', !!headerPdf && getComputedStyle(headerPdf).display !== 'none', 'no #tocPdfAll');
+    check('print-whole-entry: the tooltip says whole entry', /whole entry/i.test(headerPrint?.title || ''), headerPrint?.title);
+    if (headerPrint) {
+      headerPrint.click(); await sleep(600);
+      const entirePrint = printed.pop();
+      const entireText = entirePrint ? entirePrint.textContent || '' : '';
+      const headingTexts = [...(body ? body.querySelectorAll('h1,h2,h3,h4,h5,h6') : [])].map(h => h.textContent.trim()).filter(Boolean);
+      check('print-whole-entry: nothing ticked prints every heading of the entry', !!entirePrint && headingTexts.every(t => entireText.includes(t)), `missing: ${headingTexts.filter(t => !entireText.includes(t)).join(', ')}`);
+    }
+    const entryMenuPrint = document.querySelector("[data-action='print-entry']");
+    check('the Export menu of the entry has Print', !!entryMenuPrint, 'no print-entry item');
+    const exporter = document.querySelector("[data-action='export-to'][data-format='pdf']");
+    if (exporter) {
+      const url = `/api/v2/${exporter.dataset.type}/${exporter.dataset.id}?format=pdf`;
+      const whole = await fetch(url, { credentials: 'same-origin' });
+      const wholeSize = (await whole.arrayBuffer()).byteLength;
+      check('pdf-whole-entry: no sections gives a PDF of the whole entry', whole.status === 200 && /pdf/.test(whole.headers.get('content-type') || '') && wholeSize > 5000, `status ${whole.status}, ${wholeSize} bytes`);
+      const part = await fetch(url + '&sections=1', { credentials: 'same-origin' });
+      const partSize = (await part.arrayBuffer()).byteLength;
+      check('pdf-selected-sections: sections=1 gives a PDF (a different one)', part.status === 200 && /pdf/.test(part.headers.get('content-type') || '') && partSize > 2000 && partSize !== wholeSize, `status ${part.status}, ${partSize} vs ${wholeSize} bytes`);
+    }
     // the whole text, spreadsheets included
     const trigger = document.getElementById('tocPrintSelection');
     if (trigger) { trigger.disabled = false; click(trigger); await sleep(500); }
