@@ -155,7 +155,7 @@ function keepClearOfSidePanels(bar: HTMLElement): void {
     }
   };
   const observer = new MutationObserver(place);
-  observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden', 'class', 'style'], childList: true });
+  observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });
   const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(place) : null;
   document.querySelectorAll('.side-panel, #sidepanel-buttons').forEach(element => resizeObserver?.observe(element));
   window.addEventListener('resize', place);
