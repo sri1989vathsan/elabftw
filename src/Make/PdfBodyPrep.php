@@ -261,7 +261,8 @@ final class PdfBodyPrep
                 }
             }
         }
-        if ($drop === []) {
+        // merged cells (colspan/rowspan) break the "same column index in every row" assumption: such a sheet keeps its columns
+        if ($drop === [] || self::hasMergedCells($table)) {
             return;
         }
         foreach ($table->querySelectorAll('tr') as $row) {
@@ -284,6 +285,11 @@ final class PdfBodyPrep
                 $cols[$index]->remove();
             }
         }
+    }
+
+    private static function hasMergedCells(Element $table): bool
+    {
+        return $table->querySelector('td[colspan], td[rowspan], th[colspan]:not(.spreadsheet-coordinate), th[rowspan]') !== null;
     }
 
     private static function isHidden(Element $element): bool
@@ -347,7 +353,7 @@ final class PdfBodyPrep
             }
         }
         $keep = max(1, $lastUsed);
-        if ($keep >= $width) {
+        if ($keep >= $width || self::hasMergedCells($table)) {
             return;
         }
         foreach ($rowCells as $cells) {
