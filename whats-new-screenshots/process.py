@@ -61,7 +61,15 @@ def process(entry: dict, region: dict, source: Path) -> None:
     if image.width > MAX_WIDTH:
         image = image.resize((MAX_WIDTH, round(image.height * MAX_WIDTH / image.width)), Image.LANCZOS)
     OUT.mkdir(parents=True, exist_ok=True)
-    image.save(OUT / f"{entry['id']}.jpg", quality=90, optimize=True)
+    # keep every picture under about 145 KB: lower the quality first, then the size
+    target = OUT / f"{entry['id']}.jpg"
+    for quality in (90, 82, 74, 66):
+        image.save(target, quality=quality, optimize=True)
+        if target.stat().st_size <= 145 * 1024:
+            break
+    while target.stat().st_size > 145 * 1024 and image.width > 600:
+        image = image.resize((round(image.width * 0.85), round(image.height * 0.85)), Image.LANCZOS)
+        image.save(target, quality=74, optimize=True)
 
     entry['image'] = f"{entry['id']}.jpg"
     if 'alt' in region:

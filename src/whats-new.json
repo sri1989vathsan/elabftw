@@ -11,8 +11,8 @@
       "The two buttons no longer move when you switch tabs, and the panel keeps the room for its scroll bar.",
       "In Contents, Print and PDF are in the header, and the select bar at the bottom keeps the count, Copy and Clear."
     ],
-    "image": "",
-    "imageAlt": ""
+    "image": "side-panel-refresh.jpg",
+    "imageAlt": "The top of the Contents panel with the Refresh and Close buttons in the top corner"
   },
   {
     "id": "print-pdf-match-sheet",
@@ -27,8 +27,8 @@
       "Empty rows and columns at the end of a sheet are not printed, and rows are only as high as their text. Hidden columns and rows, scrollbars and toolbars are left out too.",
       "Firefox cannot switch a single page to landscape when printing: there a wide sheet is fitted to the portrait width. The PDF file has landscape pages in every browser."
     ],
-    "image": "",
-    "imageAlt": ""
+    "image": "print-pdf-match-sheet.jpg",
+    "imageAlt": "The Contents panel in Select mode; Print and PDF in its header act on the ticked sections"
   },
   {
     "id": "whats-new-popup",
@@ -42,8 +42,8 @@
       "fa-link::“and N more” opens the full What’s new page.",
       "fa-toggle-off::“Don’t show these popups” turns it off. Settings > Appearance > What’s new has a switch to turn it back on."
     ],
-    "image": "",
-    "imageAlt": ""
+    "image": "whats-new-popup.jpg",
+    "imageAlt": "Settings, Appearance: the What’s new switch that turns the popup after login on or off"
   },
   {
     "id": "reminder-chip",
@@ -57,8 +57,8 @@
       "Click the chip to open the list. A task from a step links to it. Esc, the title or Collapse fold it again after a few seconds on its own; Dismiss all clears the list.",
       "The chip stays the way you left it for the rest of the session, so it does not open itself on every page."
     ],
-    "image": "",
-    "imageAlt": ""
+    "image": "reminder-chip.jpg",
+    "imageAlt": "The deadline reminder opened from the clock chip: two tasks due soon, with Dismiss all"
   },
   {
     "id": "print-pdf-selected-sections",
@@ -73,8 +73,8 @@
       "Spreadsheets print and export like the grid on screen: grid lines, grey row and column labels, fills and bold kept, rows never split over a page, empty filler columns and rows left out.",
       "Plain tables made in the text editor are not spreadsheets and stay ordinary tables."
     ],
-    "image": "",
-    "imageAlt": ""
+    "image": "print-pdf-selected-sections.jpg",
+    "imageAlt": "The Contents panel in Select mode with two headings ticked, Print and PDF in its header"
   },
   {
     "id": "sheet-frame-fits",
@@ -88,8 +88,8 @@
       "The row of column letters is as high as the other rows, and no empty strip is left above the header or under the last row.",
       "Text in a column that was never sized by hand is fitted to the text and starts at the left."
     ],
-    "image": "",
-    "imageAlt": ""
+    "image": "sheet-frame-fits.jpg",
+    "imageAlt": "An experiment page with a spreadsheet of demo samples in the main text"
   },
   {
     "id": "folder-explorer",
@@ -105,8 +105,8 @@
       "Exp, Res and All choose which entries the panel shows.",
       "The Create window has a Folder choice too, so a new entry can start in a folder."
     ],
-    "image": "",
-    "imageAlt": ""
+    "image": "folder-explorer.jpg",
+    "imageAlt": "The Folders panel in the Cards view with two folders"
   },
   {
     "id": "list-layouts",
@@ -122,8 +122,8 @@
       "Tabular is a table you can sort. Experiments and resources each keep their own choice.",
       "The choice is saved with your account, so it is the same in another browser."
     ],
-    "image": "",
-    "imageAlt": ""
+    "image": "list-layouts.jpg",
+    "imageAlt": "The experiments list in Rows with preview: Pinned group first, entries by month, preview on the right"
   },
   {
     "id": "dashboard-tiles",
@@ -138,8 +138,8 @@
       "Experiments, Resources and (for admins) Announcements each have the same Create button at the right of the card title.",
       "The Scheduled bookings card is hidden."
     ],
-    "image": "",
-    "imageAlt": ""
+    "image": "dashboard-tiles.jpg",
+    "imageAlt": "The dashboard with the four tiles at the top and the status chips with counts"
   },
   {
     "id": "create-with-folder",
@@ -154,8 +154,8 @@
       "The window starts on the folder you have open, or on the folder of the entry you created last. Starting from a template, the folder you choose wins.",
       "A new entry opens in edit mode, as before."
     ],
-    "image": "",
-    "imageAlt": ""
+    "image": "create-with-folder.jpg",
+    "imageAlt": "The Create a new entry window with the Folder choice, My folders, Bookmarked and All folders"
   },
   {
     "id": "entry-pages",
@@ -170,8 +170,8 @@
       "On the edit page, Save keeps your changes and Save and go back saves and opens the view page of the entry.",
       "The editor toolbar is one row. The three dots at its end open the rest of the buttons."
     ],
-    "image": "",
-    "imageAlt": ""
+    "image": "entry-pages.jpg",
+    "imageAlt": "An experiment page: Goals, Conclusion and Notes as three tiles under the title, a pin, tags and the toolbar"
   },
   {
     "id": "print-label",
@@ -188,8 +188,8 @@
       "Fisher (37 x 15 mm) is the first format by default. An admin adds or changes formats and sets the printer in Admin panel, Labels: the address and port of the printer, its resolution and the web address for the QR code.",
       "Printing goes to the label printer of the lab over the network. It needs the printer address, which only an admin can set."
     ],
-    "image": "",
-    "imageAlt": ""
+    "image": "print-label.jpg",
+    "imageAlt": "The Print a label window: format, preview with margins, text lines and a box for pasted table cells"
   },
   {
     "id": "google-calendar-tasks",
@@ -205,8 +205,8 @@
       "Your calendar view, hidden projects and Google choices are saved with your account and follow you to another browser. The Google sign-in itself stays in the browser.",
       "Google Tasks sync of the to-do list is optional and off by default. It runs in your browser and needs an admin to switch it on: set GOOGLE_SYNC_CSP=true in the server settings and restart, which lets the page use Google sign-in. This was only tested with a stand-in for Google, not a real account."
     ],
-    "image": "",
-    "imageAlt": ""
+    "image": "google-calendar-tasks.jpg",
+    "imageAlt": "The Calendar page in week view with demo tasks and the Calendars menu"
   },
   {
     "id": "mind-map",
@@ -285,8 +285,8 @@
       "Each link has buttons to open it on a Mac, to copy the Windows path to paste into Explorer, and to insert a reference to it in the main text.",
       "The label keeps a long path readable. Remove a link with the trash icon while editing."
     ],
-    "image": "",
-    "imageAlt": ""
+    "image": "link-to-data.jpg",
+    "imageAlt": "The sections under the main text of an experiment on the edit page: Data, Links, Web links and Files"
   },
   {
     "id": "quick-links",
@@ -299,8 +299,8 @@
       "Open Links in the top bar to reach LabCollector, OpenIRIS, MoorLab Wiki, ETHIS and MoorLab Zoom. They open in a new tab.",
       "A team admin can change any of these addresses with the pencil icon next to it, so the link always points to the right place."
     ],
-    "image": "",
-    "imageAlt": ""
+    "image": "quick-links.jpg",
+    "imageAlt": "The More menu in the top bar with Orders and the Links section"
   },
   {
     "id": "link-templates-and-versions",
@@ -315,8 +315,8 @@
       "Associated templates are listed under Links, each with its version number and how many times it was inserted. Click one to open the template.",
       "Open a template to see its version history and restore an older version; the other versions are kept."
     ],
-    "image": "",
-    "imageAlt": ""
+    "image": "link-templates-and-versions.jpg",
+    "imageAlt": "The experiment templates list with the demo template Standard cloning protocol"
   },
   {
     "id": "spreadsheet-previews",
@@ -329,14 +329,7 @@
       "The preview matches the editor's look, column widths and row heights, so nothing jumps when you click.",
       "The cell you clicked is selected straight away, and the table you are editing stays live while you scroll."
     ],
-    "imageAlt": "A spreadsheet shown as a light preview with its toolbar; clicking it opens the full editor",
-    "highlight": {
-      "x": 1.1,
-      "y": 3.5,
-      "w": 97.7,
-      "h": 85.4,
-      "label": "Click a table to edit it"
-    },
+    "imageAlt": "An experiment page with a spreadsheet of demo samples in the main text",
     "image": "spreadsheet-previews.jpg"
   },
   {
@@ -371,14 +364,7 @@
       "Each version has its own edit history that you can restore individually."
     ],
     "image": "template-version-history.jpg",
-    "imageAlt": "The template version history popup listing versions, each with a Restore button and its edit history, outlined",
-    "highlight": {
-      "x": 1.4,
-      "y": 8.5,
-      "w": 95.7,
-      "h": 53.0,
-      "label": "Each version, with Restore and its edit history"
-    }
+    "imageAlt": "The experiment templates list with the demo template Standard cloning protocol"
   },
   {
     "id": "spreadsheet-insert-and-view",
@@ -391,15 +377,8 @@
       "Copy the whole table in one click, and auto-fit rows or columns to their content.",
       "Row heights now grow when a narrower column needs more wrapped lines."
     ],
-    "image": "spreadsheet-insert-and-view-cf3e9c49.png",
-    "imageAlt": "The Insert menu with the Spreadsheet size grid and its options, outlined",
-    "highlight": {
-      "x": 60.6,
-      "y": 37.9,
-      "w": 34.9,
-      "h": 58,
-      "label": "Drag to pick a size"
-    }
+    "image": "spreadsheet-insert-and-view.jpg",
+    "imageAlt": "An experiment page with a spreadsheet of demo samples in the main text"
   },
   {
     "id": "boards",
@@ -414,14 +393,7 @@
       "Duplicate a card into another project, and open a card straight into edit mode."
     ],
     "image": "boards.jpg",
-    "imageAlt": "The Boards page with a card showing its steps and linked experiments, outlined",
-    "highlight": {
-      "x": 4.9,
-      "y": 60.6,
-      "w": 29.3,
-      "h": 39.4,
-      "label": "A card with its steps and linked items"
-    },
+    "imageAlt": "The Boards page with the Plasmid project and its demo cards with deadlines",
     "featured": true
   },
   {
@@ -436,14 +408,7 @@
       "Notes support bulleted and numbered lists, and long titles and file names wrap properly."
     ],
     "image": "orders.jpg",
-    "imageAlt": "The Orders request form with bullet and numbered list buttons above the notes field, outlined",
-    "highlight": {
-      "x": 7.6,
-      "y": 34.2,
-      "w": 89.9,
-      "h": 22.6,
-      "label": "Notes with list buttons"
-    }
+    "imageAlt": "The Orders page: request form on the left, status tabs and the first order on the right"
   },
   {
     "id": "spreadsheet-editing",
@@ -465,14 +430,7 @@
       "A table below the one you add rows to no longer jumps for a moment, and the editor no longer slides a wide plate out of view sideways."
     ],
     "image": "spreadsheet-editing.jpg",
-    "imageAlt": "A spreadsheet with a selected cell and its fill handle, outlined, under the spreadsheet toolbar",
-    "highlight": {
-      "x": 40.5,
-      "y": 45.2,
-      "w": 25.6,
-      "h": 15.4,
-      "label": "Selected cell with its fill handle"
-    },
+    "imageAlt": "An experiment page with a spreadsheet of demo samples in the main text",
     "screenshots": [
       {
         "image": "spreadsheet-editing-plate-13b3f11b.png",
@@ -491,14 +449,7 @@
       "The LabCollector link keeps its URL editable from the Tools menu."
     ],
     "image": "navigation.jpg",
-    "imageAlt": "The top bar with the More menu open, listing Boards, Orders, Links and Tools",
-    "highlight": {
-      "x": 41.2,
-      "y": 7.7,
-      "w": 27.3,
-      "h": 88.9,
-      "label": "The More menu"
-    }
+    "imageAlt": "The More menu in the top bar with Orders and the Links section"
   },
   {
     "id": "cards-linked-experiments",
@@ -514,14 +465,7 @@
       "Click a linked item to open the experiment or resource itself."
     ],
     "image": "cards-linked-experiments.jpg",
-    "imageAlt": "A card's detail view with linked experiments and steps, next to the search panel used to link them",
-    "highlight": {
-      "x": 41.3,
-      "y": 42.3,
-      "w": 55.3,
-      "h": 46.6,
-      "label": "Linked items and steps"
-    },
+    "imageAlt": "The Boards page with the Plasmid project and its demo cards",
     "featured": true
   },
   {
@@ -562,14 +506,7 @@
       "Subscribe to your deadlines from Google Calendar or Apple Calendar with a private link from the Calendar tab. The link is read-only, and you can regenerate or revoke it at any time."
     ],
     "image": "activity-calendar.jpg",
-    "imageAlt": "The activity calendar panel in the left sidebar: month grid, Day/Week/Month buttons and legend, outlined",
-    "highlight": {
-      "x": 18.9,
-      "y": 25.2,
-      "w": 72.7,
-      "h": 57.6,
-      "label": "Month grid, views and legend"
-    },
+    "imageAlt": "The Activity calendar panel with Day, Week and Month buttons and the month grid",
     "featured": true
   },
   {
@@ -588,14 +525,7 @@
       "The rail stays put while you scroll, and the last panel you opened is remembered."
     ],
     "image": "left-sidebar.jpg",
-    "imageAlt": "The left sidebar: the rail of tabs (folders, search, quick search, to-do, calendar) next to an open panel, rail outlined",
-    "highlight": {
-      "x": 0.2,
-      "y": 26.2,
-      "w": 8.0,
-      "h": 64.8,
-      "label": "Sidebar tabs"
-    },
+    "imageAlt": "The left sidebar with the To-do panel open next to the row of panel buttons",
     "featured": true
   },
   {
@@ -612,7 +542,7 @@
       "fa-user-shield::Permissions (owner and admins): set Can see and Can edit as on an entry, tick Include subfolders, press Apply and confirm.",
       "fa-star::Star a folder to bookmark it. The Refresh button at the top of the panel loads the tree again."
     ],
-    "imageAlt": "The Folders panel with a project folder, its subfolders, and the star, README and menu icons beside each folder",
+    "imageAlt": "The Folders panel in the left sidebar: a tree of demo folders with item counts",
     "featured": false,
     "guide": true,
     "order": 10,
@@ -624,14 +554,7 @@
     ],
     "news": "Folders now hold resources as well as experiments, can be bookmarked, have READMEs, can be exported, and can remember permissions that apply to everything inside.",
     "shot": "The Folders tab with a project folder open and its README beside it, and the Folder permissions dialog with the Can see tab open",
-    "highlight": {
-      "x": 71.3,
-      "y": 73.2,
-      "w": 21.5,
-      "h": 5.2,
-      "label": "Star, README and menu"
-    },
-    "image": "guide-folders-62ac3ca6.png",
+    "image": "guide-folders.jpg",
     "screenshots": [
       {
         "image": "guide-folders-6ccb267c.png",
@@ -656,7 +579,7 @@
       "fa-up-down-left-right::Drag a file or folder onto a folder, the “..” row, All (folders only) or Unfiled (files only). A message with Undo appears.",
       "fa-ellipsis::The three dots at the top switch Favourites, Files and Counts on or off. Drag the panel’s right edge to make it narrower."
     ],
-    "imageAlt": "The Folders panel in the List view inside the folder Cell culture, with a file picked and its details shown below the list",
+    "imageAlt": "The Folders panel in the Cards view with two folders",
     "featured": false,
     "guide": true,
     "order": 11,
@@ -669,14 +592,7 @@
     "news": "New: List with a file preview and Cards views, an Exp / Res / All switch, a favourites list, drag to move with Undo, and a panel that can be slim.",
     "shot": "The Folders panel in the List view inside a folder, with a file picked and its details below",
     "screenshots": [],
-    "image": "guide-folder-views.jpg",
-    "highlight": {
-      "x": 11.8,
-      "y": 42.9,
-      "w": 84.5,
-      "h": 25.4,
-      "label": "Pick a file to see its details"
-    }
+    "image": "guide-folder-views.jpg"
   },
   {
     "id": "guide-sidebar",
@@ -692,7 +608,7 @@
       "fa-rotate::Every panel has Close and Refresh in the top corner, in the same place. Refresh reloads that panel without leaving the page.",
       "fa-bars::On a narrow window the row folds into one button left of the logo."
     ],
-    "imageAlt": "The left sidebar buttons: folders, quick search, quick actions, to-do, activity calendar and guide",
+    "imageAlt": "The left sidebar with the To-do panel open next to the row of panel buttons",
     "featured": false,
     "guide": true,
     "order": 30,
@@ -704,7 +620,7 @@
     ],
     "news": "One row of buttons with all of these tools on every page, and a keyboard-first quick search and command window.",
     "shot": "The left sidebar with the Folders panel open and the row of buttons outlined, and the quick search window open over a page",
-    "image": "guide-sidebar-79701a77.png",
+    "image": "guide-sidebar.jpg",
     "screenshots": []
   },
   {
@@ -721,7 +637,7 @@
       "The User and Team buttons switch between your items and the team’s. Add a task with a date, time and reminder from the panel.",
       "fa-link::Subscribe from Google or Apple Calendar with the private, read-only link on the Calendar tab; you can regenerate or revoke it."
     ],
-    "imageAlt": "The Activity calendar panel with a month grid, coloured dots for tasks, experiments and overdue items, and the User and Team switch",
+    "imageAlt": "The Activity calendar panel with Day, Week and Month buttons and the month grid",
     "featured": false,
     "guide": true,
     "order": 40,
@@ -733,14 +649,7 @@
     ],
     "news": "New: an activity calendar that combines tasks and experiment steps, with reminders and calendar subscriptions.",
     "shot": "The Activity calendar panel with the month grid, the Day/Week/Month buttons and the agenda below",
-    "highlight": {
-      "x": 23.6,
-      "y": 25.8,
-      "w": 46.3,
-      "h": 3.2,
-      "label": "Day, Week or Month"
-    },
-    "image": "guide-calendar-14617795.png",
+    "image": "guide-calendar.jpg",
     "screenshots": []
   },
   {
@@ -757,7 +666,7 @@
       "Drag a project tab to reorder it. A project can hold subprojects. Archive a finished project from its edit dialog.",
       "fa-floppy-disk::Columns or mind map, card size (compact or expanded) of each project and the last project tab are saved with your account."
     ],
-    "imageAlt": "A project board with project tabs, the goals, Add subproject and All links buttons, and cards in the To do column",
+    "imageAlt": "The Boards page with the Plasmid project and its demo cards with deadlines",
     "featured": false,
     "guide": true,
     "order": 50,
@@ -769,14 +678,7 @@
     ],
     "news": "New: the mind map, and your Boards view is remembered.",
     "shot": "The Boards page with a project open and one card showing its steps and linked experiments, and the search panel used to link them",
-    "highlight": {
-      "x": 1,
-      "y": 48.4,
-      "w": 14.3,
-      "h": 5.1,
-      "label": "Add a card"
-    },
-    "image": "guide-boards-89b465b4.png",
+    "image": "guide-boards.jpg",
     "screenshots": []
   },
   {
@@ -793,7 +695,7 @@
       "fa-clipboard-check::Order Status lists each procurement with its orders and how many items were collected. Templates keep texts such as supplier emails.",
       "fa-thumbtack::Pin an order to keep it at the top. Pinned for all is shared with the team; Reference is only yours. Admins can turn auto-collect off."
     ],
-    "imageAlt": "Orders in three statuses (Requested, Ordered, Received) with their colored status dropdowns and the copy, edit and archive buttons",
+    "imageAlt": "The Orders page: request form on the left, status tabs and the first order on the right",
     "featured": false,
     "guide": true,
     "order": 70,
@@ -805,14 +707,7 @@
     ],
     "news": "New: drop the signed collection sheets to mark orders Collected and notify the requesters, the Order Status tab with items collected per procurement, and a setting for the collected notification. Received is now called In storage.",
     "shot": "The Orders page with a few orders at different stages and one order open",
-    "highlight": {
-      "x": 4.9,
-      "y": 20.5,
-      "w": 15,
-      "h": 6.6,
-      "label": "Status"
-    },
-    "image": "guide-orders-49cd1ce3.png",
+    "image": "guide-orders.jpg",
     "screenshots": []
   },
   {
@@ -829,7 +724,7 @@
       "fa-paperclip::Files / folders and Local files: attach files or refer to files kept elsewhere.",
       "Compounds and Custom fields: record chemicals from the compound database and the extra fields your team defined."
     ],
-    "imageAlt": "An experiment page with the Steps and tasks section and the Links section showing a linked experiment and a linked resource",
+    "imageAlt": "The sections under the main text of an experiment on the edit page: Data, Links, Web links and Files",
     "featured": false,
     "guide": true,
     "order": 80,
@@ -841,14 +736,7 @@
     ],
     "news": "New: the Data section for network folders, and order, template and LabCollector links in these sections.",
     "shot": "An experiment page scrolled to the sections under the main text with the Data section open",
-    "highlight": {
-      "x": 1,
-      "y": 36.6,
-      "w": 13,
-      "h": 5.1,
-      "label": "Links section"
-    },
-    "image": "guide-experiment-sections-2bef0027.png",
+    "image": "guide-experiment-sections.jpg",
     "screenshots": []
   },
   {
@@ -900,7 +788,7 @@
       "fa-code-compare::Tick two entries and press Compare revisions. Each version also has an Edit history you can restore from.",
       "fa-star::Star the templates you use most to find them quickly."
     ],
-    "imageAlt": "The version history of a template: a named version with notes and its Edit history, each with a Restore button",
+    "imageAlt": "The experiment templates list with the demo template Standard cloning protocol",
     "featured": false,
     "guide": true,
     "order": 110,
@@ -912,14 +800,7 @@
     ],
     "news": "New: template versions with names and notes, version history, restoring a version or a single edit, and template links on experiments.",
     "shot": "The template version history with the list of versions and the Restore buttons",
-    "highlight": {
-      "x": 4.5,
-      "y": 50,
-      "w": 92,
-      "h": 38,
-      "label": "Restore a single edit"
-    },
-    "image": "guide-templates-3aa028c1.png",
+    "image": "guide-templates.jpg",
     "screenshots": []
   },
   {
@@ -935,7 +816,7 @@
       "fa-comment::Open an item to comment; type @ and a name to mention a colleague.",
       "fa-pen::The author or a team admin can edit an item, change its type and status (open, planned, done or declined) and delete it."
     ],
-    "imageAlt": "The Feedback board with the form to post a feature or bug, the filter tabs and one post with its vote button and comments",
+    "imageAlt": "The Feedback board with the post form and a demo feature request",
     "featured": false,
     "guide": true,
     "order": 120,
@@ -947,14 +828,7 @@
     ],
     "news": "New: a feedback board with votes, statuses and comments.",
     "shot": "The Feedback board sorted by votes, with one item open and its comments",
-    "highlight": {
-      "x": 3,
-      "y": 79,
-      "w": 7,
-      "h": 10.5,
-      "label": "Vote"
-    },
-    "image": "guide-feedback-c4b35c02.png",
+    "image": "guide-feedback.jpg",
     "screenshots": []
   },
   {
@@ -970,7 +844,7 @@
       "For templates, the link button records the template and the second button inserts its content.",
       "With a board card open, results also have buttons to link them to the card or add them as a step."
     ],
-    "imageAlt": "The Search panel open beside an experiment being edited, listing results with a link button and a paste-a-link button on each",
+    "imageAlt": "The Search panel with the type buttons and grouped results for experiments, resources, templates and folders",
     "featured": false,
     "guide": true,
     "order": 130,
@@ -982,14 +856,7 @@
     ],
     "news": "New: filters you can favourite, shared by search across experiments, resources and templates, plus attach and paste-a-link buttons on every result.",
     "shot": "The Search panel next to an experiment being edited, with the attach and paste-a-link buttons on a result outlined",
-    "highlight": {
-      "x": 20.5,
-      "y": 46,
-      "w": 7,
-      "h": 5.5,
-      "label": "Link or paste"
-    },
-    "image": "guide-search-filters-8ac714ba.png",
+    "image": "guide-search-filters.jpg",
     "screenshots": []
   },
   {
@@ -1006,7 +873,7 @@
       "fa-copy::Copy, in the bar at the bottom, copies the ticked sections. Clear drops the selection.",
       "fa-rotate::Refresh and Close sit in the top corner of the panel, as on every side panel."
     ],
-    "imageAlt": "An experiment with the Table of Contents panel open: the heading filter box, the list of headings with Goal, Procedure and Results ticked, the Print selection and Copy filtered content buttons, and the page showing only those three sections",
+    "imageAlt": "The Contents panel in Select mode with two headings ticked, Print and PDF in its header, next to the experiment",
     "featured": false,
     "guide": true,
     "order": 150,
@@ -1018,14 +885,7 @@
     ],
     "news": "New: Print, PDF and Copy for the sections you tick.",
     "shot": "An experiment with the Table of Contents panel open, three headings ticked in the list and only those sections shown",
-    "highlight": {
-      "x": 5.5,
-      "y": 29.4,
-      "w": 30.5,
-      "h": 51,
-      "label": "Tick headings to filter, print or copy"
-    },
-    "image": "guide-toc-155544b1.png",
+    "image": "guide-toc.jpg",
     "screenshots": []
   },
   {
@@ -1076,7 +936,7 @@
       "fa-list-check::Checklist: type [ ] and a space for tick boxes. Format painter and Clear formatting sit by the colour buttons.",
       "fa-keyboard::Ctrl+Shift+D date and time, Ctrl+Alt+T title, Ctrl+Alt+N note, Ctrl+Shift+H line. The three dots at the end hold buttons that do not fit."
     ],
-    "imageAlt": "The editor toolbar with the Insert menu open, listing Insert note, Divider, Tables, Spreadsheet, Well plate, Image, Links and Insert template",
+    "imageAlt": "The editor toolbar: menu bar, undo, headings, font size, bold, colours and alignment",
     "featured": false,
     "guide": true,
     "order": 85,
@@ -1088,14 +948,7 @@
     ],
     "news": "New: one Insert menu (note, divider, tables, spreadsheets, well plates, links and templates), a Note options button that appears while a note is selected, Spreadsheet tools that appear while a spreadsheet is selected, checklists, and a format painter next to the colours.",
     "shot": "The editor toolbar with the Insert menu open",
-    "highlight": {
-      "x": 21.5,
-      "y": 62,
-      "w": 39.8,
-      "h": 35.5,
-      "label": "Spreadsheet, Well plate, Image, Links and Insert template"
-    },
-    "image": "guide-editor-toolbar-8c4c9482.png",
+    "image": "guide-editor-toolbar.jpg",
     "screenshots": [
       {
         "image": "guide-editor-note-options-5bdcb685.png",
@@ -1125,7 +978,7 @@
       "fa-print::Print and PDF show the sheet like the grid you see. Choose how wide sheets print in the PDF window (see Print and PDF).",
       "fa-rotate-left::Ctrl+Z in a spreadsheet undoes spreadsheet edits only. A sheet wider than the page has a scroll bar under it."
     ],
-    "imageAlt": "The Insert menu open on Spreadsheet, with the squares for picking a size",
+    "imageAlt": "An experiment page with a spreadsheet of demo samples in the main text",
     "featured": false,
     "guide": true,
     "order": 86,
@@ -1137,14 +990,7 @@
     ],
     "news": "New: pick a colour and it applies as you choose it, the formula and formatting bars stay as you left them, and Undo and Redo cover typing, formatting, added rows and columns, and sizes.",
     "shot": "The Insert menu with the squares for picking a spreadsheet size",
-    "highlight": {
-      "x": 60.6,
-      "y": 37.9,
-      "w": 34.9,
-      "h": 58,
-      "label": "Drag to pick a size"
-    },
-    "image": "spreadsheet-insert-and-view-cf3e9c49.png",
+    "image": "guide-spreadsheets.jpg",
     "screenshots": [
       {
         "image": "guide-editor-spreadsheet-tools-13a25130.png",
@@ -1173,7 +1019,7 @@
       "fa-comment::Every card has Comments. Type @ and a name to mention someone; they are notified. Cards show a comment count.",
       "The same comments work on tasks in the To-do list and on posts in Feedback. You can edit or delete your own."
     ],
-    "imageAlt": "A board card with two assigned people and a comment that mentions a colleague with @",
+    "imageAlt": "The Boards page with the Plasmid project, Assigned to me and Created by me filters and the cards",
     "featured": false,
     "guide": true,
     "order": 55,
@@ -1185,14 +1031,7 @@
     ],
     "news": "New: project members, several people per card, comments with @mentions, and notifications when you are assigned or mentioned.",
     "shot": "A card open with the Assigned to field and the Comments section showing an @mention",
-    "highlight": {
-      "x": 4.1,
-      "y": 80.1,
-      "w": 62.1,
-      "h": 4.1,
-      "label": "@ mention a colleague"
-    },
-    "image": "guide-collaboration-8ee40614.png",
+    "image": "guide-collaboration.jpg",
     "screenshots": []
   },
   {
@@ -1209,7 +1048,7 @@
       "Click a title for notes, linked items, steps and comments. Archive, Duplicate and Delete are at the bottom of the details.",
       "fa-calendar::The Calendar tab shows a month and has Create private link for Google or Apple Calendar. Calendar settings are under the gear."
     ],
-    "imageAlt": "The To-do panel with the add-task box and tasks grouped by Today, Tomorrow and a later day",
+    "imageAlt": "The To-do panel grouped by due date with demo tasks and steps",
     "featured": false,
     "guide": true,
     "order": 35,
@@ -1221,14 +1060,7 @@
     ],
     "news": "New: one list for tasks and step deadlines with reminders, steps and comments on tasks, linked items, a completed and archived history, a calendar view, and a calendar subscription.",
     "shot": "The To-do panel open next to a page, with the add-task box and the groups Overdue, Today and Tomorrow",
-    "highlight": {
-      "x": 16.4,
-      "y": 22,
-      "w": 75.2,
-      "h": 8.9,
-      "label": "Add a task"
-    },
-    "image": "guide-todo-58a3f88e.png",
+    "image": "guide-todo.jpg",
     "screenshots": [
       {
         "image": "guide-todo-repeat-0bf4a653.png",
@@ -1249,7 +1081,7 @@
       "fa-face-smile::React with the face button under an announcement; you can pick several.",
       "See previous announcements lists older ones. Team admins add announcements with the plus button, and can edit and pin them."
     ],
-    "imageAlt": "The Announcements feed on the dashboard with pinned announcements, their reactions and the plus button to write one",
+    "imageAlt": "The Announcements card on the dashboard with a pinned warning and an information announcement",
     "featured": false,
     "guide": true,
     "order": 121,
@@ -1261,14 +1093,7 @@
     ],
     "news": "New: an announcement feed on the dashboard with reactions, pinning, pictures and files.",
     "shot": "The dashboard with the Announcements feed on the right, showing a pinned announcement and its reactions",
-    "highlight": {
-      "x": 8,
-      "y": 42,
-      "w": 68,
-      "h": 5,
-      "label": "Reactions"
-    },
-    "image": "guide-announcements-1eeccb7b.png",
+    "image": "guide-announcements.jpg",
     "screenshots": []
   },
   {
@@ -1285,7 +1110,7 @@
       "fa-pencil::Edit opens the edit page. The view page shows Goals, Conclusion and Notes as three tiles under the title.",
       "fa-ellipsis-vertical::Duplicate, Lock and Timestamp are buttons; the three dots hold changelog, Transfer ownership, Archive and Delete."
     ],
-    "imageAlt": "The Experiments list with two experiments ticked and the bulk-action bar open above them",
+    "imageAlt": "The experiments list with a pinned demo experiment, its Goals, Conclusion and Notes, and the layout buttons",
     "featured": false,
     "guide": true,
     "order": 90,
@@ -1297,14 +1122,7 @@
     ],
     "news": "Experiments can be organised in folders, linked to orders and resources, and read in a table of contents.",
     "shot": "The Experiments list with the search bar, a few experiments ticked, and the bulk-action bar open",
-    "highlight": {
-      "x": 1.1,
-      "y": 30.5,
-      "w": 71,
-      "h": 30.5,
-      "label": "Act on ticked experiments"
-    },
-    "image": "guide-experiments-b4e3dbba.png",
+    "image": "guide-experiments.jpg",
     "screenshots": []
   },
   {
@@ -1321,7 +1139,7 @@
       "fa-calendar-plus::Book item opens the scheduler, only when an admin has switched Bookable resources on (Admin panel, Team, Features).",
       "fa-link::Link resources from an experiment’s Links section so anyone can follow the trail."
     ],
-    "imageAlt": "A resource opened for reading, with its toolbar: edit, duplicate, book, sign, timestamp, order and download",
+    "imageAlt": "The resources list with three demo resources",
     "featured": false,
     "guide": true,
     "order": 95,
@@ -1333,14 +1151,7 @@
     ],
     "news": "Resources can be organised in folders, linked to experiments and orders, and found from the left sidebar.",
     "shot": "The Resources list with a few resources, and one open with its toolbar",
-    "highlight": {
-      "x": 1.1,
-      "y": 31,
-      "w": 54,
-      "h": 15.5,
-      "label": "Resource actions"
-    },
-    "image": "guide-resources-bc394e18.png",
+    "image": "guide-resources.jpg",
     "screenshots": []
   },
   {
@@ -1356,7 +1167,7 @@
       "fa-thumbtack::Pinned entries come first in their own Pinned group in every layout.",
       "fa-floppy-disk::The layout is saved with your account, for experiments and resources separately."
     ],
-    "imageAlt": "",
+    "imageAlt": "The experiments list in Rows with preview: Pinned group first, entries by month, preview on the right",
     "featured": false,
     "guide": true,
     "order": 9,
@@ -1368,7 +1179,7 @@
     ],
     "news": "New: five layouts for the lists, saved per user.",
     "shot": "",
-    "image": "",
+    "image": "guide-list-layouts.jpg",
     "screenshots": []
   },
   {
@@ -1383,7 +1194,7 @@
       "fa-plus::Each card has a Create button. For Announcements it is for admins and opens the Announcements tab of the Admin panel.",
       "fa-magnifying-glass::The search box on a card searches experiments or resources."
     ],
-    "imageAlt": "",
+    "imageAlt": "The dashboard: four tiles, the Experiments, Resources and Announcements cards with their Create buttons",
     "featured": false,
     "guide": true,
     "order": 8,
@@ -1395,7 +1206,7 @@
     ],
     "news": "New: tiles, counts on the chips and one Create button on every card.",
     "shot": "",
-    "image": "",
+    "image": "guide-dashboard.jpg",
     "screenshots": []
   },
   {
@@ -1410,7 +1221,7 @@
       "fa-clock-rotate-left::It starts on the folder you have open, or the one you used last. Starting from a template, your folder choice wins.",
       "fa-pencil::The new entry opens in edit mode."
     ],
-    "imageAlt": "",
+    "imageAlt": "The Create a new entry window with the Folder choice, My folders, Bookmarked and All folders",
     "featured": false,
     "guide": true,
     "order": 91,
@@ -1422,7 +1233,7 @@
     ],
     "news": "New: a Folder choice in the Create window on every page.",
     "shot": "",
-    "image": "",
+    "image": "guide-create-entry.jpg",
     "screenshots": []
   },
   {
@@ -1438,7 +1249,7 @@
       "fa-table::To print many labels, paste cells from a spreadsheet and click the columns you want. Each row is one label.",
       "fa-gear::Admins set the printer address, port, resolution and formats in Admin panel, Labels. Without a printer address nothing prints."
     ],
-    "imageAlt": "",
+    "imageAlt": "The Print a label window: format, text size, copies, preview with margins, text lines and a box for pasted table cells",
     "featured": false,
     "guide": true,
     "order": 125,
@@ -1450,7 +1261,7 @@
     ],
     "news": "New: Print a label in the plus menu, and the Labels tab for admins.",
     "shot": "",
-    "image": "",
+    "image": "guide-labels.jpg",
     "screenshots": []
   },
   {
@@ -1466,7 +1277,7 @@
       "fa-floppy-disk::Your view, hidden projects and Google choices are saved with your account. The Google sign-in stays in the browser.",
       "fa-list-check::Google Tasks sync is optional and off; an admin must set GOOGLE_SYNC_CSP=true and restart. Tested only with a stand-in for Google."
     ],
-    "imageAlt": "",
+    "imageAlt": "The Calendar page in week view with demo tasks and the Calendars menu",
     "featured": false,
     "guide": true,
     "order": 42,
@@ -1478,7 +1289,7 @@
     ],
     "news": "New: link a project to a Google calendar, choose the calendar of each task, and keep the choices per user.",
     "shot": "",
-    "image": "",
+    "image": "guide-google-calendar.jpg",
     "screenshots": []
   },
   {
@@ -1505,8 +1316,8 @@
     "featured": false,
     "guide": true,
     "screenshots": [],
-    "image": "",
-    "imageAlt": "",
+    "image": "guide-print-pdf.jpg",
+    "imageAlt": "The Contents panel in Select mode with two sections ticked; Print and PDF sit in its header",
     "shot": ""
   },
   {
@@ -1532,8 +1343,8 @@
     "featured": false,
     "guide": true,
     "screenshots": [],
-    "image": "",
-    "imageAlt": "",
+    "image": "guide-pins.jpg",
+    "imageAlt": "The experiments list with the Pinned group first, then the entries of November 2026",
     "shot": ""
   },
   {
@@ -1560,8 +1371,8 @@
     "featured": false,
     "guide": true,
     "screenshots": [],
-    "image": "",
-    "imageAlt": "",
+    "image": "guide-admin-settings.jpg",
+    "imageAlt": "The admin Team tab: usage tiles, the Find a setting box and settings in boxed cards",
     "shot": ""
   },
   {
@@ -1587,8 +1398,8 @@
     "featured": false,
     "guide": true,
     "screenshots": [],
-    "image": "",
-    "imageAlt": "",
+    "image": "guide-whats-new-popup.jpg",
+    "imageAlt": "Settings, Appearance: the What’s new switch that turns the popup after login on or off",
     "shot": ""
   },
   {
@@ -1614,8 +1425,8 @@
     "featured": false,
     "guide": true,
     "screenshots": [],
-    "image": "",
-    "imageAlt": "",
+    "image": "guide-reminders.jpg",
+    "imageAlt": "The deadline reminder opened from the clock chip: two tasks due soon, with Dismiss all",
     "shot": ""
   }
 ]
