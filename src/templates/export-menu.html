@@ -1,9 +1,10 @@
+{% import 'guide-info.html' as guide -%}
 {# Modal for PDF export #}
 <div class='modal fade' id='pdfExportModal' tabindex='-1' role='dialog' aria-labelledby='pdfExportModalLabel'>
   <div class='modal-dialog' role='document'>
     <div class='modal-content'>
       <div class='modal-header'>
-        <h5 class='modal-title' id='pdfExportModalLabel'><i class='fas fa-fw fa-file-pdf mr-1'></i>{{ 'Export as PDF'|trans }}</h5>
+        <h5 class='modal-title' id='pdfExportModalLabel'><i class='fas fa-fw fa-file-pdf mr-1'></i>{{ 'Export as PDF'|trans }}{{ guide.info('guide-print-pdf', 'Print and PDF') }}</h5>
         <button type='button' class='close' data-dismiss='modal' aria-label='{{ 'Close'|trans }}'>
           <span aria-hidden='true'>&times;</span>
         </button>

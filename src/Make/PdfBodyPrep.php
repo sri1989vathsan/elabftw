@@ -117,7 +117,7 @@ final class PdfBodyPrep
      * next page (first column, row numbers and header row repeated). A narrower sheet is left at 100% in every mode.
      * $landscapeWidthPx is the printable width of a landscape page.
      */
-    public static function spreadsheets(string $html, ?float $pageWidthPx = null, string $mode = self::MODE_LANDSCAPE, ?float $landscapeWidthPx = null): string
+    public static function spreadsheets(string $html, ?float $pageWidthPx = null, string $mode = self::MODE_LANDSCAPE, ?float $landscapeWidthPx = null, string $pageFormat = 'A4'): string
     {
         if (!str_contains($html, 'elabftw-spreadsheet')) {
             return $html;
@@ -131,11 +131,17 @@ final class PdfBodyPrep
             foreach ($body->querySelectorAll('table.elabftw-spreadsheet') as $table) {
                 self::prepareTable($table, $pageWidthPx, $mode, $landscapeWidthPx);
             }
-            // mPDF switches the page orientation with <pagebreak>
-            return str_replace(
+            $out = self::bodyHtml($body);
+            if (!str_contains($out, 'pdf-landscape-begin')) {
+                return str_replace('<div class="pdf-page-break"></div>', '<pagebreak />', $out);
+            }
+            // mPDF switches the page size with named pages (<pagebreak page-selector>), which also works with the @page rule of the
+            // template (a plain orientation="L" is overridden by it); the footer and margin are those of the template's page
+            $rules = '<style>@page sheetland { sheet-size: ' . $pageFormat . '-L; margin: 1cm; footer: html_footer; } @page sheetport { sheet-size: ' . $pageFormat . '; margin: 1cm; footer: html_footer; }</style>';
+            return $rules . str_replace(
                 array('<div class="pdf-landscape-begin"></div>', '<div class="pdf-landscape-end"></div>', '<div class="pdf-page-break"></div>'),
-                array('<pagebreak orientation="L" />', '<pagebreak orientation="P" />', '<pagebreak />'),
-                self::bodyHtml($body),
+                array('<pagebreak page-selector="sheetland" />', '<pagebreak page-selector="sheetport" />', '<pagebreak />'),
+                $out,
             );
         } catch (Throwable) {
             return $html;
@@ -201,6 +207,7 @@ final class PdfBodyPrep
 
     private static function prepareTable(Element $table, ?float $pageWidthPx, string $mode, ?float $landscapeWidthPx): void
     {
+        self::ensureColgroup($table);
         $table->removeAttribute('data-spreadsheet');
         self::removeHidden($table);
         self::trimEmptyEdges($table);
@@ -247,6 +254,78 @@ final class PdfBodyPrep
             $table->before($begin);
             $table->after($end);
         }
+    }
+
+    /**
+     * The HTML the editor saves has no <colgroup> (the purifier drops it), so the column widths come from the sheet's own stored data
+     * (data-spreadsheet: colWidths, rowIndexWidth), then from the width of the table, then from the length of the text in the cells.
+     * A <colgroup> is built from them so that scaling, trimming and splitting work on saved entries like on the made-up ones.
+     */
+    private static function ensureColgroup(Element $table): void
+    {
+        if ($table->querySelector('colgroup > col') !== null) {
+            return;
+        }
+        $first = $table->querySelector('tbody tr') ?? $table->querySelector('tr');
+        if ($first === null) {
+            return;
+        }
+        $cells = self::kids($first);
+        $gutter = ($cells !== array() && $cells[0]->classList->contains('spreadsheet-coordinate')) ? 1 : 0;
+        $count = count($cells) - $gutter;
+        if ($count < 1) {
+            return;
+        }
+        $meta = array();
+        $blob = (string) $table->getAttribute('data-spreadsheet');
+        if ($blob !== '') {
+            $json = base64_decode(strtr($blob, '-_', '+/'), false);
+            $decoded = $json === false ? null : json_decode($json, true);
+            $meta = is_array($decoded) ? $decoded : array();
+        }
+        $stored = is_array($meta['colWidths'] ?? null) ? $meta['colWidths'] : array();
+        $gutterWidth = $gutter === 1 ? (float) (is_array($meta['appearance'] ?? null) ? ($meta['appearance']['rowIndexWidth'] ?? 42) : 42) : 0.0;
+        $widths = array();
+        $unknown = array();
+        for ($i = 0; $i < $count; $i++) {
+            if (isset($stored[(string) $i]) && (float) $stored[(string) $i] > 0) {
+                $widths[$i] = (float) $stored[(string) $i];
+            } else {
+                $unknown[] = $i;
+            }
+        }
+        if ($unknown !== array()) {
+            $tableWidth = preg_match('/(?:^|;)\s*width\s*:\s*(\d+(?:\.\d+)?)px/i', (string) $table->getAttribute('style'), $m) === 1 ? (float) $m[1] : 0.0;
+            $room = $tableWidth - $gutterWidth - array_sum($widths);
+            foreach ($unknown as $i) {
+                if ($room > 0) {
+                    $widths[$i] = max(40.0, $room / count($unknown));
+                    continue;
+                }
+                // measured from the text: about 7 px a character plus the padding, between 60 and 300 px
+                $longest = 0;
+                foreach ($table->querySelectorAll('tbody tr') as $row) {
+                    $kids = self::kids($row);
+                    if (isset($kids[$i + $gutter])) {
+                        $longest = max($longest, mb_strlen(trim($kids[$i + $gutter]->textContent ?? '')));
+                    }
+                }
+                $widths[$i] = (float) min(300, max(60, $longest * 7 + 20));
+            }
+        }
+        $doc = $table->ownerDocument;
+        $group = $doc->createElement('colgroup');
+        if ($gutter === 1) {
+            $col = $doc->createElement('col');
+            $col->setAttribute('style', 'width:' . round($gutterWidth, 2) . 'px');
+            $group->append($col);
+        }
+        for ($i = 0; $i < $count; $i++) {
+            $col = $doc->createElement('col');
+            $col->setAttribute('style', 'width:' . round($widths[$i], 2) . 'px');
+            $group->append($col);
+        }
+        $table->prepend($group);
     }
 
     /** Grid lines, white cells, grey coordinate cells and tight padding; sizes multiplied by $scale. */

@@ -1,157 +1,39 @@
 {
   "activity-calendar": {
+    "alt": "The Activity calendar panel with Day, Week and Month buttons and the month grid",
     "crop": [
-      0.0265,
-      0.0,
-      0.9735,
-      1.0
-    ],
-    "highlight": [
-      0.2102,
-      0.2523,
-      0.708,
-      0.5757
-    ],
-    "label": "Month grid, views and legend",
-    "alt": "The activity calendar panel in the left sidebar: month grid, Day/Week/Month buttons and legend, outlined"
+      0,
+      0,
+      0.6,
+      1
+    ]
   },
   "left-sidebar": {
+    "alt": "The left sidebar with the To-do panel open next to the row of panel buttons",
     "crop": [
-      0.0066,
-      0.0,
-      0.9934,
-      0.4375
-    ],
-    "mask": [
-      [
-        0.1363,
-        0.3594,
-        0.4396,
-        0.0208
-      ],
-      [
-        0.1319,
-        0.3917,
-        0.8681,
-        0.0458
-      ]
-    ],
-    "highlight": [
-      0.0088,
-      0.1146,
-      0.0791,
-      0.2833
-    ],
-    "label": "Sidebar tabs",
-    "alt": "The left sidebar: the rail of tabs (folders, search, quick search, to-do, calendar) next to an open panel, rail outlined"
+      0,
+      0,
+      1,
+      0.8
+    ]
   },
   "boards": {
-    "mask": [
-      [
-        0.016,
-        0.4144,
-        0.0875,
-        0.0181
-      ],
-      [
-        0.057,
-        0.9639,
-        0.137,
-        0.0155
-      ],
-      [
-        0.364,
-        0.9699,
-        0.152,
-        0.0155
-      ],
-      [
-        0.6705,
-        0.8091,
-        0.161,
-        0.0155
-      ]
-    ],
-    "highlight": [
-      0.049,
-      0.6062,
-      0.293,
-      0.3938
-    ],
-    "label": "A card with its steps and linked items",
-    "alt": "The Boards page with a card showing its steps and linked experiments, outlined"
+    "alt": "The Boards page with the Plasmid project and its demo cards with deadlines",
+    "crop": [
+      0,
+      0,
+      1,
+      0.8
+    ]
   },
   "cards-linked-experiments": {
+    "alt": "The Boards page with the Plasmid project and its demo cards",
     "crop": [
-      0.0183,
-      0.0,
-      0.9817,
-      1.0
-    ],
-    "mask": [
-      [
-        0.4241,
-        0.2144,
-        0.1776,
-        0.0193
-      ],
-      [
-        0.0656,
-        0.3859,
-        0.2116,
-        0.0193
-      ],
-      [
-        0.0656,
-        0.4523,
-        0.2116,
-        0.0193
-      ],
-      [
-        0.0656,
-        0.5284,
-        0.2116,
-        0.0193
-      ],
-      [
-        0.0656,
-        0.5949,
-        0.2116,
-        0.0193
-      ],
-      [
-        0.0656,
-        0.6613,
-        0.2116,
-        0.0193
-      ],
-      [
-        0.0656,
-        0.7374,
-        0.2116,
-        0.0193
-      ],
-      [
-        0.0656,
-        0.8039,
-        0.2116,
-        0.0193
-      ],
-      [
-        0.0656,
-        0.88,
-        0.2116,
-        0.0193
-      ]
-    ],
-    "highlight": [
-      0.4241,
-      0.4234,
-      0.5427,
-      0.4662
-    ],
-    "label": "Linked items and steps",
-    "alt": "A card's detail view with linked experiments and steps, next to the search panel used to link them"
+      0,
+      0,
+      1,
+      0.8
+    ]
   },
   "list-indent": {
     "highlight": [
@@ -164,20 +46,7 @@
     "alt": "Several bullet lines selected in the editor; Tab indents them together"
   },
   "navigation": {
-    "crop": [
-      0.012,
-      0.0155,
-      0.988,
-      0.9845
-    ],
-    "highlight": [
-      0.419,
-      0.0914,
-      0.27,
-      0.8753
-    ],
-    "label": "The More menu",
-    "alt": "The top bar with the More menu open, listing Boards, Orders, Links and Tools"
+    "alt": "The More menu in the top bar with Orders and the Links section"
   },
   "notifications-feedback": {
     "crop": [
@@ -196,141 +65,288 @@
     "alt": "The notifications dropdown, with a notification that someone gave you access to a resource, outlined"
   },
   "orders": {
-    "crop": [
-      0.0,
-      0.1552,
-      0.335,
-      0.6874
-    ],
-    "mask": [
-      [
-        0.303,
-        0.2461,
-        0.083,
-        0.0266
-      ]
-    ],
-    "highlight": [
-      0.0255,
-      0.3902,
-      0.301,
-      0.1552
-    ],
-    "label": "Notes with list buttons",
-    "alt": "The Orders request form with bullet and numbered list buttons above the notes field, outlined"
+    "alt": "The Orders page: request form on the left, status tabs and the first order on the right"
   },
   "spreadsheet-editing": {
-    "mask": [
-      [
-        0.126,
-        0.0981,
-        0.155,
-        0.0101
-      ],
-      [
-        0.126,
-        0.1082,
-        0.155,
-        0.0303
-      ]
-    ],
-    "highlight": [
-      0.4045,
-      0.4517,
-      0.2555,
-      0.1544
-    ],
-    "label": "Selected cell with its fill handle",
-    "alt": "A spreadsheet with a selected cell and its fill handle, outlined, under the spreadsheet toolbar"
+    "alt": "An experiment page with a spreadsheet of demo samples in the main text",
+    "crop": [
+      0,
+      0.2,
+      0.85,
+      0.8
+    ]
   },
   "spreadsheet-insert-and-view": {
-    "highlight": [
-      0.4238,
-      0.1942,
-      0.565,
-      0.7835
-    ],
-    "label": "Drag to pick a size",
-    "alt": "The Insert menu with the Spreadsheet size grid and its options, outlined"
+    "alt": "An experiment page with a spreadsheet of demo samples in the main text",
+    "crop": [
+      0,
+      0.2,
+      0.85,
+      0.8
+    ]
   },
   "spreadsheet-previews": {
-    "highlight": [
-      0.011,
-      0.0347,
-      0.9765,
-      0.8542
-    ],
-    "label": "Click a table to edit it",
-    "alt": "A spreadsheet shown as a light preview with its toolbar; clicking it opens the full editor"
+    "alt": "An experiment page with a spreadsheet of demo samples in the main text",
+    "crop": [
+      0,
+      0.2,
+      0.85,
+      0.8
+    ]
   },
   "template-version-history": {
-    "mask": [
-      [
-        0.3872,
-        0.1067,
-        0.2009,
-        0.0242
-      ],
-      [
-        0.3681,
-        0.303,
-        0.2009,
-        0.0242
-      ],
-      [
-        0.3681,
-        0.3879,
-        0.2009,
-        0.0242
-      ],
-      [
-        0.3597,
-        0.4727,
-        0.2009,
-        0.0242
-      ],
-      [
-        0.3597,
-        0.557,
-        0.2009,
-        0.0242
-      ],
-      [
-        0.3872,
-        0.6588,
-        0.2009,
-        0.0242
-      ],
-      [
-        0.3872,
-        0.8612,
-        0.2009,
-        0.0242
-      ]
-    ],
-    "highlight": [
-      0.0135,
-      0.0848,
-      0.9574,
-      0.5303
-    ],
-    "label": "Each version, with Restore and its edit history",
-    "alt": "The template version history popup listing versions, each with a Restore button and its edit history, outlined"
+    "alt": "The experiment templates list with the demo template Standard cloning protocol"
   },
   "guide-folder-views": {
+    "alt": "The Folders panel in the Cards view with two folders",
     "crop": [
-      0.0,
-      0.0,
-      0.3667,
-      1.0
-    ],
-    "highlight": [
-      0.0433,
-      0.4285,
-      0.31,
-      0.254
-    ],
-    "label": "Switch on, then click a folder",
-    "alt": "The Folders panel in the Details view: the Show experiments/resources switch is on and the folder Cell culture is open, listing its two experiments"
+      0,
+      0,
+      0.6,
+      1
+    ]
+  },
+  "guide-dashboard": {
+    "alt": "The dashboard: four tiles, the Experiments, Resources and Announcements cards with their Create buttons"
+  },
+  "dashboard-tiles": {
+    "alt": "The dashboard with the four tiles at the top and the status chips with counts"
+  },
+  "guide-announcements": {
+    "alt": "The Announcements card on the dashboard with a pinned warning and an information announcement"
+  },
+  "guide-experiments": {
+    "alt": "The experiments list with a pinned demo experiment, its Goals, Conclusion and Notes, and the layout buttons"
+  },
+  "guide-resources": {
+    "alt": "The resources list with three demo resources"
+  },
+  "guide-folders": {
+    "alt": "The Folders panel in the left sidebar: a tree of demo folders with item counts",
+    "crop": [
+      0,
+      0,
+      0.6,
+      1
+    ]
+  },
+  "folder-explorer": {
+    "alt": "The Folders panel in the Cards view with two folders",
+    "crop": [
+      0,
+      0,
+      0.6,
+      1
+    ]
+  },
+  "guide-sidebar": {
+    "alt": "The left sidebar with the To-do panel open next to the row of panel buttons",
+    "crop": [
+      0,
+      0,
+      1,
+      0.8
+    ]
+  },
+  "guide-todo": {
+    "alt": "The To-do panel grouped by due date with demo tasks and steps",
+    "crop": [
+      0,
+      0,
+      1,
+      0.8
+    ]
+  },
+  "guide-calendar": {
+    "alt": "The Activity calendar panel with Day, Week and Month buttons and the month grid",
+    "crop": [
+      0,
+      0,
+      0.6,
+      1
+    ]
+  },
+  "guide-search-filters": {
+    "alt": "The Search panel with the type buttons and grouped results for experiments, resources, templates and folders",
+    "crop": [
+      0,
+      0,
+      1,
+      0.88
+    ]
+  },
+  "guide-toc": {
+    "alt": "The Contents panel in Select mode with two headings ticked, Print and PDF in its header, next to the experiment",
+    "crop": [
+      0,
+      0,
+      1,
+      0.64
+    ]
+  },
+  "print-pdf-selected-sections": {
+    "alt": "The Contents panel in Select mode with two headings ticked, Print and PDF in its header",
+    "crop": [
+      0,
+      0,
+      1,
+      0.64
+    ]
+  },
+  "side-panel-refresh": {
+    "alt": "The top of the Contents panel with the Refresh and Close buttons in the top corner"
+  },
+  "guide-list-layouts": {
+    "alt": "The experiments list in Rows with preview: Pinned group first, entries by month, preview on the right"
+  },
+  "list-layouts": {
+    "alt": "The experiments list in Rows with preview: Pinned group first, entries by month, preview on the right"
+  },
+  "guide-pins": {
+    "alt": "The experiments list with the Pinned group first, then the entries of November 2026"
+  },
+  "guide-boards": {
+    "alt": "The Boards page with the Plasmid project and its demo cards with deadlines",
+    "crop": [
+      0,
+      0,
+      1,
+      0.8
+    ]
+  },
+  "guide-collaboration": {
+    "alt": "The Boards page with the Plasmid project, Assigned to me and Created by me filters and the cards",
+    "crop": [
+      0,
+      0,
+      1,
+      0.8
+    ]
+  },
+  "guide-orders": {
+    "alt": "The Orders page: request form on the left, status tabs and the first order on the right"
+  },
+  "guide-feedback": {
+    "alt": "The Feedback board with the post form and a demo feature request"
+  },
+  "guide-templates": {
+    "alt": "The experiment templates list with the demo template Standard cloning protocol"
+  },
+  "link-templates-and-versions": {
+    "alt": "The experiment templates list with the demo template Standard cloning protocol"
+  },
+  "guide-create-entry": {
+    "alt": "The Create a new entry window with the Folder choice, My folders, Bookmarked and All folders"
+  },
+  "create-with-folder": {
+    "alt": "The Create a new entry window with the Folder choice, My folders, Bookmarked and All folders"
+  },
+  "guide-admin-settings": {
+    "alt": "The admin Team tab: usage tiles, the Find a setting box and settings in boxed cards"
+  },
+  "guide-reminders": {
+    "alt": "The deadline reminder opened from the clock chip: two tasks due soon, with Dismiss all"
+  },
+  "reminder-chip": {
+    "alt": "The deadline reminder opened from the clock chip: two tasks due soon, with Dismiss all"
+  },
+  "quick-links": {
+    "alt": "The More menu in the top bar with Orders and the Links section"
+  },
+  "guide-editor-toolbar": {
+    "alt": "The editor toolbar: menu bar, undo, headings, font size, bold, colours and alignment"
+  },
+  "guide-print-pdf": {
+    "alt": "The Contents panel in Select mode with two sections ticked; Print and PDF sit in its header",
+    "crop": [
+      0,
+      0,
+      1,
+      0.64
+    ]
+  },
+  "print-pdf-match-sheet": {
+    "alt": "The Contents panel in Select mode; Print and PDF in its header act on the ticked sections",
+    "crop": [
+      0,
+      0,
+      1,
+      0.64
+    ]
+  },
+  "guide-spreadsheets": {
+    "alt": "An experiment page with a spreadsheet of demo samples in the main text",
+    "crop": [
+      0,
+      0.2,
+      0.85,
+      0.8
+    ]
+  },
+  "sheet-frame-fits": {
+    "alt": "An experiment page with a spreadsheet of demo samples in the main text",
+    "crop": [
+      0,
+      0.2,
+      0.85,
+      0.8
+    ]
+  },
+  "entry-pages": {
+    "alt": "An experiment page: Goals, Conclusion and Notes as three tiles under the title, a pin, tags and the toolbar",
+    "crop": [
+      0,
+      0,
+      1,
+      0.58
+    ]
+  },
+  "guide-experiment-sections": {
+    "alt": "The sections under the main text of an experiment on the edit page: Data, Links, Web links and Files"
+  },
+  "link-to-data": {
+    "alt": "The sections under the main text of an experiment on the edit page: Data, Links, Web links and Files"
+  },
+  "guide-labels": {
+    "alt": "The Print a label window: format, text size, copies, preview with margins, text lines and a box for pasted table cells",
+    "crop": [
+      0.29,
+      0.03,
+      0.42,
+      0.94
+    ]
+  },
+  "print-label": {
+    "alt": "The Print a label window: format, preview with margins, text lines and a box for pasted table cells",
+    "crop": [
+      0.29,
+      0.03,
+      0.42,
+      0.94
+    ]
+  },
+  "guide-google-calendar": {
+    "alt": "The Calendar page in week view with demo tasks and the Calendars menu",
+    "crop": [
+      0,
+      0.04,
+      1,
+      0.95
+    ]
+  },
+  "google-calendar-tasks": {
+    "alt": "The Calendar page in week view with demo tasks and the Calendars menu",
+    "crop": [
+      0,
+      0.04,
+      1,
+      0.95
+    ]
+  },
+  "guide-whats-new-popup": {
+    "alt": "Settings, Appearance: the What’s new switch that turns the popup after login on or off"
+  },
+  "whats-new-popup": {
+    "alt": "Settings, Appearance: the What’s new switch that turns the popup after login on or off"
   }
 }

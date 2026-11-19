@@ -123,7 +123,7 @@ $land = 1030.0;
 $m1 = PdfBodyPrep::spreadsheets($sample, $page, PdfBodyPrep::MODE_LANDSCAPE, $land);
 $check('trim: empty trailing rows 11-14 and the empty column H are not printed (a zebra tint is not data)', !str_contains($m1, '>11</th>') && !str_contains($m1, '>H</th>') && str_contains($m1, '>10</th>') && str_contains($m1, '>G</th>'), 'rows/column kept');
 $check('trim: the rows are as high as their content (no 33px row height left)', !str_contains($m1, 'height:33px'), 'row height kept');
-$check('mode 1 landscape: the sample (portrait scale < 70%) is on a landscape page and the text after it is back on portrait', str_contains($m1, '<pagebreak orientation="L" />') && str_contains($m1, '<pagebreak orientation="P" />') && strpos($m1, 'orientation="L"') < strpos($m1, '<table') && strpos($m1, 'orientation="P"') > strpos($m1, '</table>'), 'no orientation switch');
+$check('mode 1 landscape: the sample (portrait scale < 70%) is on a landscape page and the text after it is back on portrait', str_contains($m1, '<pagebreak page-selector="sheetland" />') && str_contains($m1, '<pagebreak page-selector="sheetport" />') && strpos($m1, 'page-selector="sheetland"') < strpos($m1, '<table') && strpos($m1, 'page-selector="sheetport"') > strpos($m1, '</table>'), 'no orientation switch');
 preg_match('/font-size:([\d.]+)pt/', $m1, $f1);
 $m2 = PdfBodyPrep::spreadsheets($sample, $page, PdfBodyPrep::MODE_FIT, $land);
 preg_match('/font-size:([\d.]+)pt/', $m2, $f2);
@@ -135,10 +135,10 @@ $m1n = PdfBodyPrep::spreadsheets($near, $page, PdfBodyPrep::MODE_LANDSCAPE, $lan
 $check('mode 1: a sheet that keeps 70% or more on a portrait page stays portrait', !str_contains($m1n, 'pagebreak') && str_contains($m1n, 'width:700px;'), 'went landscape');
 $huge = $wide(40);
 $mh = PdfBodyPrep::spreadsheets($huge, $page, PdfBodyPrep::MODE_LANDSCAPE, $land);
-$check('mode 1: wider than a landscape page it is scaled to exactly the landscape width (no cut column)', str_contains($mh, '<pagebreak orientation="L" />') && str_contains($mh, 'width:1030px;'), 'not scaled to 1030');
+$check('mode 1: wider than a landscape page it is scaled to exactly the landscape width (no cut column)', str_contains($mh, '<pagebreak page-selector="sheetland" />') && str_contains($mh, 'width:1030px;'), 'not scaled to 1030');
 $check('mode 1: a 4-column sheet is unchanged (portrait, 100%)', !str_contains(PdfBodyPrep::spreadsheets($wide(4), $page, PdfBodyPrep::MODE_LANDSCAPE, $land), 'pagebreak') && !str_contains(PdfBodyPrep::spreadsheets($wide(4), $page, PdfBodyPrep::MODE_LANDSCAPE, $land), 'font-size'), 'changed');
 $m3 = PdfBodyPrep::spreadsheets($sample, $page, PdfBodyPrep::MODE_SPLIT, $land);
-$check('mode 3 split: actual size, no orientation switch, no scaling', !str_contains($m3, 'orientation') && substr_count($m3, 'font-size') === 3, 'scaled or switched (only the three notes carry a font size)');
+$check('mode 3 split: actual size, no orientation switch, no scaling', !str_contains($m3, 'sheetland') && substr_count($m3, 'font-size') === 3, 'scaled or switched (only the three notes carry a font size)');
 $check('mode 3 split: the sheet continues in blocks of columns, one table and one page break per later block', substr_count($m3, '<table') === 3 && substr_count($m3, '<pagebreak />') === 2, 'blocks: ' . substr_count($m3, '<table'));
 $check('mode 3 split: every block names its columns', str_contains($m3, 'columns A-C') && str_contains($m3, 'columns D-F') && str_contains($m3, 'column G'), 'notes missing');
 $tables = array_slice(explode('<table', $m3), 1);
@@ -155,6 +155,29 @@ $check('mode 3 split: each block repeats the row numbers (1-10) and the header r
 $check('mode 3 split: no column is lost or cut (A-G each once)', substr_count($allLetters, 'A,') === 1 && substr_count($allLetters, 'G,') === 1 && substr_count($allLetters, 'D,') === 1, $allLetters);
 $check('mode 3 split: rows are not split over a page', substr_count($m3, 'page-break-inside:avoid') >= 30, 'rows can split');
 $check('the request value is read: sheets=fit|split, anything else is the default', PdfBodyPrep::parseMode('fit') === 'fit' && PdfBodyPrep::parseMode('split') === 'split' && PdfBodyPrep::parseMode('x') === 'landscape' && PdfBodyPrep::parseMode('') === 'landscape', 'parseMode');
+
+// --- saved entries: the editor's purifier drops <colgroup>, the widths come from the sheet's own data (data-spreadsheet)
+$saved = static function (int $cols, int $widthEach, bool $withStyleWidth = true, bool $withColWidths = true) use ($cell, $coord): string {
+    $meta = array('colWidths' => $withColWidths ? array_fill(0, $cols, $widthEach) : array(), 'appearance' => array('rowIndexWidth' => 42), 'kind' => 'standard');
+    $blob = base64_encode((string) json_encode($meta));
+    $head = $coord('') . implode('', array_map(static fn(int $i): string => $coord(chr(65 + $i % 26)), range(0, $cols - 1)));
+    $rows = implode('', array_map(static fn(int $r): string => '<tr>' . $coord((string) $r) . implode('', array_map(static fn(int $c): string => $cell('pGEX-6P-1-GST-PreScission-' . $c), range(0, $cols - 1))) . '</tr>', range(1, 3)));
+    return '<table class="elabftw-spreadsheet" style="border-collapse:collapse;' . ($withStyleWidth ? 'width:' . (42 + $cols * $widthEach) . 'px;' : '') . '" data-spreadsheet="' . $blob . '" data-spreadsheet-style="standard"><thead><tr>' . $head . '</tr></thead><tbody>' . $rows . '</tbody></table>';
+};
+$savedNarrow = $saved(4, 100);
+$savedWide = $saved(14, 150);
+$sn = PdfBodyPrep::spreadsheets($savedNarrow, $page, PdfBodyPrep::MODE_LANDSCAPE, $land);
+$check('saved narrow sheet (no colgroup, 4 columns, 442 px): taken from the stored widths, stays portrait at 100%', str_contains($sn, 'width:442px') && !str_contains($sn, 'pagebreak') && !str_contains($sn, 'font-size') && substr_count($sn, '<col ') === 5, 'not measured');
+$sl = PdfBodyPrep::spreadsheets($savedWide, $page, PdfBodyPrep::MODE_LANDSCAPE, $land);
+$check('saved wide sheet (14 columns, 2142 px), landscape mode: on a landscape page, scaled to the landscape width', str_contains($sl, '<pagebreak page-selector="sheetland" />') && str_contains($sl, 'width:1030px;'), 'no landscape');
+$sf = PdfBodyPrep::spreadsheets($savedWide, $page, PdfBodyPrep::MODE_FIT, $land);
+$check('saved wide sheet, fit mode: portrait, scaled to the page width', !str_contains($sf, 'pagebreak') && str_contains($sf, 'width:700px;'), 'not fitted');
+$ss = PdfBodyPrep::spreadsheets($savedWide, $page, PdfBodyPrep::MODE_SPLIT, $land);
+$check('saved wide sheet, split mode: actual size in blocks, none wider than the page', substr_count($ss, '<table') >= 3 && str_contains($ss, 'columns A-') && !str_contains($ss, 'sheetland'), 'not split');
+$noStored = PdfBodyPrep::spreadsheets($saved(14, 150, true, false), $page, PdfBodyPrep::MODE_LANDSCAPE, $land);
+$check('saved sheet with no stored widths: the width of the table is shared out (fallback)', str_contains($noStored, '<pagebreak page-selector="sheetland" />'), 'fallback not used');
+$measured = PdfBodyPrep::spreadsheets($saved(14, 150, false, false), $page, PdfBodyPrep::MODE_LANDSCAPE, $land);
+$check('saved sheet with neither: widths measured from the text (about 7 px a character), still scaled', str_contains($measured, '<col ') && (str_contains($measured, 'width:1030px;') || str_contains($measured, 'width:700px;')), 'not measured');
 
 echo $failed === 0 ? "ALL PASSED\n" : "$failed FAILED\n";
 exit($failed === 0 ? 0 : 1);
