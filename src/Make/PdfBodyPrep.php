@@ -189,7 +189,7 @@ final class PdfBodyPrep
         $style = (string) $table->getAttribute('style');
         // the grid has no outer frame of its own; the lines come from the cells
         $style = (string) preg_replace('/(?:^|;)\s*(?:width|max-width|min-width|height|border(?:-[a-z]+)?)\s*:[^;]*/i', '', $style);
-        $style = trim($style, "; \t\n") . ';border-collapse:collapse;table-layout:fixed;border:' . self::GRID_LINE . ';';
+        $style = trim($style, "; \t\n") . ';border-collapse:collapse;table-layout:fixed;border:' . self::GRID_LINE . ';margin:6px 0;';
         if ($total > 0) {
             $style .= 'width:' . $total . 'px;';
         }
@@ -208,6 +208,10 @@ final class PdfBodyPrep
                 if (!preg_match('/(?:^|;)\s*color\s*:/i', (string) $cell->getAttribute('style'))) {
                     $extra .= 'color:#555555;';
                 }
+            }
+            // a cell with no fill of its own is white (the page's zebra rule would stripe it otherwise)
+            if (!$coordinate && !preg_match('/background(?:-color)?\s*:/i', (string) $cell->getAttribute('style'))) {
+                $extra .= 'background-color:#ffffff;';
             }
             // what the person set on the cell (fill, bold, colour, alignment, number format) comes last and wins
             $cell->setAttribute('style', $extra . trim((string) $cell->getAttribute('style'), "; ") . ';');

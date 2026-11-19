@@ -320,6 +320,88 @@ function usesOverlayScrollbars(): boolean {
   return overlay;
 }
 
+/**
+ * A sheet in the text that is wider than its frame shows a horizontal bar under it that is always there, drawn by the page:
+ * the bars of macOS (and phones) only appear while scrolling, so a cut-off table gave no hint that it scrolls. The bar sits in
+ * the layout below the grid and only exists while the table is wider than the frame.
+ */
+function installViewScrollbar(sheetContainer: HTMLElement): () => void {
+  if (!usesOverlayScrollbars()) return () => undefined;
+  const track = document.createElement('div');
+  track.className = 'elabftw-view-xbar';
+  track.setAttribute('role', 'scrollbar');
+  track.setAttribute('aria-orientation', 'horizontal');
+  track.hidden = true;
+  const thumb = document.createElement('div');
+  thumb.className = 'elabftw-view-xbar-thumb';
+  track.append(thumb);
+  sheetContainer.append(track);
+  let scroller: HTMLElement | null = null;
+  const update = (): void => {
+    if (!scroller) return;
+    const view = scroller.clientWidth;
+    const total = scroller.scrollWidth;
+    const wider = total > view + 1;
+    track.hidden = !wider;
+    scroller.classList.toggle('has-view-xbar', wider);
+    if (!wider) return;
+    const length = Math.min(track.clientWidth, Math.max(28, track.clientWidth * view / total));
+    const room = total - view;
+    thumb.style.width = `${length}px`;
+    thumb.style.transform = `translateX(${room > 0 ? scroller.scrollLeft / room * (track.clientWidth - length) : 0}px)`;
+  };
+  const scrollTo = (value: number): void => {
+    if (scroller) scroller.scrollLeft = Math.max(0, Math.min(scroller.scrollWidth - scroller.clientWidth, value));
+  };
+  thumb.addEventListener('pointerdown', event => {
+    if (!scroller) return;
+    event.preventDefault();
+    event.stopPropagation();
+    try { thumb.setPointerCapture(event.pointerId); } catch { /* a synthetic pointer has nothing to capture */ }
+    const startX = event.clientX;
+    const startLeft = scroller.scrollLeft;
+    const ratio = (scroller.scrollWidth - scroller.clientWidth) / Math.max(1, track.clientWidth - thumb.offsetWidth);
+    const move = (ev: PointerEvent): void => scrollTo(startLeft + (ev.clientX - startX) * ratio);
+    const up = (): void => {
+      thumb.removeEventListener('pointermove', move);
+      thumb.removeEventListener('pointerup', up);
+      thumb.removeEventListener('pointercancel', up);
+    };
+    thumb.addEventListener('pointermove', move);
+    thumb.addEventListener('pointerup', up);
+    thumb.addEventListener('pointercancel', up);
+  });
+  track.addEventListener('pointerdown', event => {
+    if (event.target !== track || !scroller) return;
+    scrollTo(scroller.scrollLeft + (event.clientX < thumb.getBoundingClientRect().left ? -1 : 1) * scroller.clientWidth * 0.9);
+  });
+  const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(update) : null;
+  const bind = (): void => {
+    const found = sheetContainer.querySelector<HTMLElement>('.jss_content');
+    if (found === scroller) return;
+    scroller?.removeEventListener('scroll', update);
+    resize?.disconnect();
+    scroller = found;
+    if (scroller) {
+      scroller.addEventListener('scroll', update, { passive: true });
+      resize?.observe(scroller);
+      resize?.observe(sheetContainer);
+      const table = scroller.querySelector('.jss_worksheet');
+      if (table) resize?.observe(table);
+    }
+    update();
+  };
+  const mutation = new MutationObserver(() => { bind(); update(); });
+  mutation.observe(sheetContainer, { childList: true, subtree: true });
+  bind();
+  return () => {
+    mutation.disconnect();
+    resize?.disconnect();
+    scroller?.removeEventListener('scroll', update);
+    track.remove();
+  };
+}
+
 function installOverlayScrollbars(host: HTMLElement): () => void {
   if (!usesOverlayScrollbars()) return () => undefined;
   host.classList.add('has-own-scrollbars');
@@ -3008,6 +3090,8 @@ function matchHeaderRowToDataRows(container: HTMLElement, appearance: Spreadshee
     ? appearance.columnIndexHeight
     : Math.round(firstRow.getBoundingClientRect().height);
   if (!(wanted > 0)) return;
+  // the stylesheet fixes the header cells to this variable (with !important): follow the data rows through it
+  container.closest<HTMLElement>('.elabftw-spreadsheet-readonly-view')?.style.setProperty('--spreadsheet-column-index-height', `${wanted}px`);
   [headerRow, ...Array.from(headerRow.children)].forEach(node => {
     if (!(node instanceof HTMLElement)) return;
     node.style.setProperty('box-sizing', 'border-box');
@@ -9093,6 +9177,7 @@ export function buildReadOnlySpreadsheetHost(
   sheetContainer.className = 'elabftw-spreadsheet-readonly-grid';
   if (editable) installRowResizeGuide(sheetContainer);
   host.appendChild(sheetContainer);
+  if (!editable) pageListenerRemovers.push(installViewScrollbar(sheetContainer));
   if (editable && !plateLocked) {
     // Under the grid: how many rows, and a button to add them at the bottom.
     const addRowsBar = document.createElement('div');

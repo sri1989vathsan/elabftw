@@ -2520,10 +2520,12 @@ async function spreadsheetSoak(options = {}) {
         }
         const lastCell = ws.querySelector(`tbody td[data-x="${cols - 1}"][data-y="1"]`);
         if (lastCell && lastCell.textContent.trim() && lastCell.scrollWidth > lastCell.clientWidth + 1) dataLoss.push({ context, table, problem: 'the text of the last column is cut off' });
+        const topGap = ws.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+        if (topGap > 6) dataLoss.push({ context, table, problem: `an empty strip of ${Math.round(topGap)} px above the header row` });
         const lastRow = ws.querySelector('tbody tr:last-child');
         if (lastRow && scroller.scrollHeight <= scroller.clientHeight + 1) {
           const gap = scroller.getBoundingClientRect().bottom - lastRow.getBoundingClientRect().bottom;
-          if (gap > 24) dataLoss.push({ context, table, problem: `an empty strip of ${Math.round(gap)} px under the last row` });
+          if (gap > 10) dataLoss.push({ context, table, problem: `an empty strip of ${Math.round(gap)} px under the last row` });
         }
         note('viewport-equals-table-width');
       }

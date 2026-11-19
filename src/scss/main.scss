@@ -7810,6 +7810,42 @@ body.html-tool-workspace-open:not(.html-tool-workspace-is-maximized) .inline-spr
   background: transparent;
 }
 
+/* The bar under a sheet that is wider than its frame (installViewScrollbar): always visible, in the layout below the grid. */
+.elabftw-view-xbar {
+  background: var(--firstlevel);
+  border-radius: 6px;
+  flex: 0 0 auto;
+  height: 12px;
+  margin-top: 2px;
+  position: relative;
+  width: 100%;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.elabftw-view-xbar-thumb {
+  background: var(--secondary);
+  border-radius: 6px;
+  cursor: grab;
+  height: 8px;
+  margin: 2px 0;
+  touch-action: none;
+
+  &:hover {
+    background: var(--primary);
+  }
+}
+
+.elabftw-spreadsheet-readonly-grid .jss_content.has-view-xbar {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* The editor's Find and replace marks its matches in the stored table, which is hidden behind the grid: the grid cells that hold a
  * match are marked the same way (see mirrorFindHighlights in SpreadsheetExtension.ts). */
 .elabftw-spreadsheet-editor-overlay .jss_worksheet td.elabftw-find-match {
@@ -8160,6 +8196,8 @@ body.html-tool-workspace-open:not(.html-tool-workspace-is-maximized) .inline-spr
 .elabftw-spreadsheet-readonly-view .jss_worksheet {
   border-collapse: collapse !important;
   border-spacing: 0 !important;
+  /* the page's own rule for tables (a margin above and below) left a 14 px strip over the header and under the last row */
+  margin: 0 !important;
 }
 
 .elabftw-spreadsheet-readonly-view .jss_worksheet > thead > tr {
@@ -8169,6 +8207,7 @@ body.html-tool-workspace-open:not(.html-tool-workspace-is-maximized) .inline-spr
 }
 
 .elabftw-spreadsheet-readonly-view .jss_worksheet > thead > tr > * {
+  box-sizing: border-box;
   height: var(--spreadsheet-column-index-height) !important;
   max-height: var(--spreadsheet-column-index-height) !important;
   min-height: var(--spreadsheet-column-index-height) !important;
