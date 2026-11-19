@@ -5889,7 +5889,7 @@ html[data-ui-size='comfortable'] {
   // smaller and muted (a colour, never opacity)
   .toc-items-container .toc-item-section.toc-rank-0 .toc-link {
     color: var(--fx-fg) !important;
-    font-size: 1.04em;
+    font-size: 1.04em !important;
     font-weight: 600;
   }
 
@@ -5900,7 +5900,7 @@ html[data-ui-size='comfortable'] {
 
   .toc-items-container .toc-item-section.toc-rank-2 .toc-link {
     color: var(--fx-muted) !important;
-    font-size: 0.92em;
+    font-size: 0.92em !important;
     font-weight: 400;
   }
 
