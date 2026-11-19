@@ -313,7 +313,7 @@
     "title": "Back to the folder, and a folder path with subfolders",
     "summary": "Back and Save and go back return to the folder an entry is in, and a path bar at the bottom lets you move up or down the folders.",
     "details": [
-      "In a folder's list, and under an experiment or resource that is in a folder, a bar shows the path, for example Vatsi > EV Project > Trogocytosis. Click any part to open that folder.",
+      "In a folder's list, and under an experiment or resource that is in a folder, a bar shows the path, for example Cloning > Plasmids. Click any part to open that folder.",
       "When the folder has subfolders, the last button opens a menu of them to go one level down. The bar stays at the bottom of the window as you scroll.",
       "The back arrow (also on the edit page) and Save and go back now return to that folder."
     ],
