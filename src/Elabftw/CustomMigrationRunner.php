@@ -156,6 +156,7 @@ final class CustomMigrationRunner
         '155_label_format_fisher.sql',
         '156_orders_autocollect_on_sheet.sql',
         '157_team_feature_toggles.sql',
+        '158_notification_category_range.sql',
     );
 
     private Db $Db;
