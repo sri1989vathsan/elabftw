@@ -2905,15 +2905,21 @@ async function spreadsheetSoak(options = {}) {
       if (!uid) return;
       const cell = () => (api.overlayElement(uid)?.querySelector('td[data-x="1"][data-y="1"]')?.textContent || '').trim();
       await typeDirect(uid, 1, 1, 'first', 'Enter'); await sleep(500);
+      // formatting the cell between the two typings (undo-everything's failing order was typing, align right, typing in one cell)
+      { const root = await live(uid); openFormatBar(root); await sleep(300); press(root.querySelector('td[data-x="1"][data-y="1"]')); await sleep(200);
+        const button = findButton(root, ['Align right']); if (button) { button.click(); await sleep(600); } else fail('undo-typing-over-text: no Align right button'); }
       await typeDirect(uid, 1, 1, 'second', 'Enter'); await sleep(500);
       const table = 'undo typing over text';
       if (cell() !== 'second') { fail(`undo-typing-over-text: the cell shows "${cell()}" after typing twice`); return; }
       await undoKey(uid, false);
       if (cell() !== 'first') dataLoss.push({ context, table, problem: `one undo after typing over "first" leaves "${cell()}" in the cell instead of "first"` });
       await undoKey(uid, false);
-      if (cell() !== '') dataLoss.push({ context, table, problem: `a second undo leaves "${cell()}" instead of an empty cell` });
+      if (cell() !== 'first') dataLoss.push({ context, table, problem: `undoing the alignment between the two typings changed the text to "${cell()}" (it must stay "first")` });
+      await undoKey(uid, false);
+      if (cell() !== '') dataLoss.push({ context, table, problem: `a third undo leaves "${cell()}" instead of an empty cell` });
       await undoKey(uid, true);
       if (cell() !== 'first') dataLoss.push({ context, table, problem: `redo gives "${cell()}" instead of "first"` });
+      await undoKey(uid, true);
       await undoKey(uid, true);
       if (cell() !== 'second') dataLoss.push({ context, table, problem: `a second redo gives "${cell()}" instead of "second"` });
       models.delete(uid);
