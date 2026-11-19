@@ -2996,6 +2996,28 @@ function applyCoordinateHeaderStyle(container: HTMLElement, appearance: Spreadsh
 }
 
 /**
+ * The header row (column letters) is as high as a data row, unless the person set another height in the appearance
+ * options. Its cells carry the header's padding on top of the height, so left alone the row came out about 11 px
+ * taller than the rows under it.
+ */
+function matchHeaderRowToDataRows(container: HTMLElement, appearance: SpreadsheetAppearance): void {
+  const firstRow = container.querySelector<HTMLElement>('.jss_worksheet > tbody > tr');
+  const headerRow = container.querySelector<HTMLElement>('.jss_worksheet > thead > tr');
+  if (!firstRow || !headerRow) return;
+  const wanted = appearance.columnIndexHeight !== DEFAULT_APPEARANCE.columnIndexHeight
+    ? appearance.columnIndexHeight
+    : Math.round(firstRow.getBoundingClientRect().height);
+  if (!(wanted > 0)) return;
+  [headerRow, ...Array.from(headerRow.children)].forEach(node => {
+    if (!(node instanceof HTMLElement)) return;
+    node.style.setProperty('box-sizing', 'border-box');
+    node.style.setProperty('height', `${wanted}px`);
+    node.style.setProperty('min-height', `${wanted}px`);
+    node.style.setProperty('max-height', `${wanted}px`);
+  });
+}
+
+/**
  * Read each data row's *currently rendered* height straight from the DOM,
  * keyed by its current position -- the source-of-truth counterpart to
  * applySpreadsheetRowHeights() just below (that one pushes stored sizes
@@ -8321,6 +8343,16 @@ export function buildReadOnlySpreadsheetHost(
     if (!(total > 0)) return;
     host.dataset.viewModeWidth = String(Math.round(total));
     host.style.setProperty('width', `${Math.round(total)}px`);
+    // the frame has a little chrome of its own (padding kept for the scroll bar, the edge): grow it by what the
+    // content still overflows by, so a table that fits is not scrolled by a few pixels. Wider than this is a
+    // table that does not fit: the frame stays at its cap (max-width:100%) and scrolls.
+    const scroller = sheetContainer.querySelector<HTMLElement>('.jss_content');
+    if (!scroller) return;
+    const spill = scroller.scrollWidth - scroller.clientWidth;
+    if (spill > 0 && spill <= 12) {
+      host.style.setProperty('width', `${Math.round(total) + spill}px`);
+      host.dataset.viewModeWidth = String(Math.round(total) + spill);
+    }
   };
   // Listeners put on the page or window by this grid. They are all taken off again when it is destroyed:
   // anonymous ones used to stay behind every time a grid was created and removed, so a long session got
@@ -10384,6 +10416,7 @@ export function buildReadOnlySpreadsheetHost(
       applyCoordinateHeaderDimensions(sheetContainer, appearance);
       applyCoordinateHeaderStyle(sheetContainer, appearance);
       applySpreadsheetRowHeights(sheetContainer, worksheet, rowHeights);
+      matchHeaderRowToDataRows(sheetContainer, appearance);
       applySpreadsheetColWidths(sheetContainer, worksheet, colWidths);
       syncFrameToRealColumns();
       applyCellClipHeights(sheetContainer, manuallyResizedRows);
