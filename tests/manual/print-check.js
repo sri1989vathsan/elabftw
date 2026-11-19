@@ -23,6 +23,12 @@ window.printCheck = async function printCheck() {
   check('print rules let a sheet show in full (overflow visible, no height cap)', /\.elabftw-spreadsheet-readonly-view[^{]*\{[^}]*overflow:\s*visible/.test(printCss), 'rule missing');
   check('print rules hide the bars and toolbars of a sheet', /elabftw-own-scrollbar[^{]*\{[^}]*display:\s*none/.test(printCss) || /elabftw-own-scrollbar[\s\S]*display:\s*none/.test(printCss), 'rule missing');
   check('print rules hide the sticky entry toolbar (it would print over the text once scrolled)', /(#entityToolbar|sticky-toolbar)[^{]*\{[^}]*display:\s*none/.test(printCss), 'rule missing');
+  // "Sheets in print and PDF": landscape page for a wide sheet (named page), the choice published for beforeprint, the select in the export menu
+  let allCss = '';
+  for (const sheet of document.styleSheets) { let list; try { list = sheet.cssRules; } catch { continue; } for (const rule of list) allCss += rule.cssText + '\n'; }
+  check('print: a named landscape page "wide" exists and the wide sheet class uses it', /@page wide[^{]*\{[^}]*landscape/.test(allCss) && /print-wide-sheet[^{]*\{[^}]*page:\s*wide/.test(allCss), 'rule missing');
+  check('sheets mode: the choice is on the body for the print code (data-sheets-mode landscape|fit|split)', ['landscape', 'fit', 'split'].includes(document.body.dataset.sheetsMode || ''), `data-sheets-mode=${document.body.dataset.sheetsMode}`);
+  check('sheets mode: a select with the three values is in the page (Export menu / PDF dialog)', [...document.querySelectorAll('select[data-sheets-mode]')].some(sel => ['landscape', 'fit', 'split'].every(v => [...sel.options].some(o => o.value === v))), 'no select[data-sheets-mode]');
   check('print rules never split a row and repeat the header', /break-inside:\s*avoid/.test(printCss) && /table-header-group/.test(printCss), 'rules missing');
 
   const body = document.getElementById('body_view');
@@ -119,5 +125,27 @@ window.printCheck = async function printCheck() {
     document.body.classList.remove('toc-print-selection-active');
     document.getElementById('tocPrintSelectionDocument')?.remove();
   }
+  // the three modes on the live sheets (beforeprint is fired by hand; afterprint puts everything back)
+  const liveHosts = [...document.querySelectorAll('.elabftw-spreadsheet-readonly-view')].filter(h => h.querySelector('.jss_worksheet'));
+  const chromium = /Chrome\//.test(navigator.userAgent) && !/Firefox\//.test(navigator.userAgent);
+  const savedMode = document.body.dataset.sheetsMode;
+  const widthOf = h => [...h.querySelectorAll('.jss_worksheet > colgroup > col')].filter(c => c.style.display !== 'none').reduce((a, c) => a + (parseFloat(c.getAttribute('width')) || 0), 0);
+  for (const mode of ['landscape', 'fit', 'split']) {
+    document.body.dataset.sheetsMode = mode;
+    window.dispatchEvent(new Event('beforeprint'));
+    liveHosts.forEach((host, i) => {
+      const natural = widthOf(host);
+      if (!(natural > 700)) return;
+      const zoom = parseFloat(host.style.zoom) || 1;
+      const wide = host.classList.contains('print-wide-sheet');
+      const split = host.nextElementSibling && host.nextElementSibling.classList.contains('print-split-sheet');
+      if (mode === 'fit') check(`print mode fit: sheet ${i + 1} stays portrait and is scaled to the page width`, !wide && !split && natural * zoom <= 701, `wide=${wide} zoom=${zoom}`);
+      if (mode === 'landscape') check(`print mode landscape: sheet ${i + 1} ${700 / natural < 0.7 && chromium ? 'is on a landscape page' : 'stays portrait'}`, wide === (700 / natural < 0.7 && chromium) && natural * zoom <= (wide ? 1031 : 701), `wide=${wide} zoom=${zoom} natural=${natural}`);
+      if (mode === 'split') check(`print mode split: sheet ${i + 1} is printed as blocks at actual size (no zoom), none wider than the page`, (split || widthOf(host) <= 700) && !wide && zoom === 1 && [...(split ? host.nextElementSibling.querySelectorAll('table') : [])].every(t => parseFloat(t.style.width) <= 701), `split=${split} zoom=${zoom}`);
+    });
+    window.dispatchEvent(new Event('afterprint'));
+  }
+  if (savedMode) document.body.dataset.sheetsMode = savedMode; else delete document.body.dataset.sheetsMode;
+  check('print: afterprint puts the sheets back (nothing hidden, no zoom, no split copies)', liveHosts.every(h => h.style.display !== 'none' && !h.style.zoom && !h.classList.contains('print-wide-sheet')) && !document.querySelector('.print-split-sheet'), 'leftovers after afterprint');
   return { pass: results.every(r => r.ok), results };
 };
