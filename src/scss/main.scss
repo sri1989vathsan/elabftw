@@ -9086,6 +9086,14 @@ the form-control fails to do that so we do the border ourselves */
   }
 }
 
+/* the entry toolbar is sticky: scrolled down, it would be printed over the text */
+@media print {
+  #entityToolbar,
+  .sticky-toolbar {
+    display: none !important;
+  }
+}
+
 /* print only the main div */
 @media print {
   body.toc-print-selection-active {

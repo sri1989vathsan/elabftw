@@ -22,6 +22,7 @@ window.printCheck = async function printCheck() {
   check('print rules keep the fills of a sheet (print-color-adjust exact)', /print-color-adjust:\s*exact/.test(printCss) && /elabftw-spreadsheet/.test(printCss), 'rule missing');
   check('print rules let a sheet show in full (overflow visible, no height cap)', /\.elabftw-spreadsheet-readonly-view[^{]*\{[^}]*overflow:\s*visible/.test(printCss), 'rule missing');
   check('print rules hide the bars and toolbars of a sheet', /elabftw-own-scrollbar[^{]*\{[^}]*display:\s*none/.test(printCss) || /elabftw-own-scrollbar[\s\S]*display:\s*none/.test(printCss), 'rule missing');
+  check('print rules hide the sticky entry toolbar (it would print over the text once scrolled)', /(#entityToolbar|sticky-toolbar)[^{]*\{[^}]*display:\s*none/.test(printCss), 'rule missing');
   check('print rules never split a row and repeat the header', /break-inside:\s*avoid/.test(printCss) && /table-header-group/.test(printCss), 'rules missing');
 
   const body = document.getElementById('body_view');
