@@ -614,6 +614,9 @@ final class ExperimentsFolders extends AbstractRest
         // the Boards page: board or canvas, the last project tab (the card density of each project is 'elabftw-pm-density-<id>', see isUserPrefKey)
         'pm-canvas-view',
         'pm-last-project',
+        // the What's new popup: the newest entry the user has seen (JSON), and whether they switched the popup off ('1')
+        'whats-new-seen',
+        'whats-new-popup-off',
     );
 
     private function isUserPrefKey(string $key): bool
