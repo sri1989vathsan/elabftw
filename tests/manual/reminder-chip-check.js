@@ -24,8 +24,8 @@ window.reminderChipCheck = async function reminderChipCheck() {
   const mark = 'reminderChipTask';
   const made = sessionStorage.getItem(mark);
   if (!made) {
-    const deadline = new Date(Date.now() + 10 * 60000).toISOString().slice(0, 19).replace('T', ' ');
-    const res = await api('POST', 'todolist', { body: 'Chip check task', deadline, reminder_minutes: 60 });
+    const deadline = new Date(Date.now() + 10 * 60000).toISOString();
+    const res = await api('POST', 'todolist', { content: 'Chip check task', deadline, reminder_minutes: 60 });
     const id = (res.loc || '').split('/').pop();
     check('a task that is due soon was made', res.status === 201 && id, 'status ' + res.status);
     if (id) sessionStorage.setItem(mark, id);
