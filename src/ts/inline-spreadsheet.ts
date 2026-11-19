@@ -13,6 +13,7 @@ import 'jsuites/dist/jsuites.css';
 import { ApiC } from './api';
 import { captureFocus, restoreFocus } from './a11y';
 import { entity } from './getEntity';
+import { getSheetsMode } from './sheets-mode';
 import { createSpreadsheetRepaintQueue } from './custom-editor/SpreadsheetPerformance';
 import { buildWellPlateHost, createPlateViewSwitch } from './well-plate-view';
 
@@ -11704,28 +11705,153 @@ export function activateLazySpreadsheetViews(root: ParentNode): void {
  */
 // printable width of an A4 portrait page with the default margins (about 717 px), in CSS pixels; a wider sheet is scaled down to this
 const PRINT_CONTENT_WIDTH = 700;
+// the same for a landscape page (named page "wide", see main.scss)
+const PRINT_LANDSCAPE_WIDTH = 1030;
+// a sheet that would have to shrink below this on a portrait page goes on a landscape page
+const PRINT_MIN_PORTRAIT_SCALE = 0.7;
+
+/** True for a cell with no text and no fill of its own (a near-white tint such as a zebra stripe is not a fill). */
+function isEmptyPrintCell(cell: HTMLElement): boolean {
+  if ((cell.textContent ?? '').trim() !== '') return false;
+  const match = /rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)(?:[ ,/]+([\d.]+))?/.exec(getComputedStyle(cell).backgroundColor);
+  if (!match) return true;
+  if (match[4] !== undefined && Number(match[4]) === 0) return true;
+  return Number(match[1]) >= 240 && Number(match[2]) >= 240 && Number(match[3]) >= 240;
+}
 
 /**
- * Printing the page itself (Ctrl+P, no copy): the grids on the page are scaled the same way as the copies made for Print selection.
- * A sheet narrower than the page prints as it is; a wider one gets a uniform zoom (text, borders, row heights together) so that it is
- * exactly as wide as the page. Undone after printing.
+ * Hides the empty filler columns on the right and empty rows at the bottom of a live grid (a row or column inside the data range stays).
+ * Returns the width of the columns that stay and a function that shows everything again.
+ */
+function trimEmptyForPrint(host: HTMLElement): { width: number; restore: () => void } | null {
+  const worksheet = host.querySelector<HTMLElement>('.jss_worksheet');
+  if (!worksheet) return null;
+  const hidden: HTMLElement[] = [];
+  const hide = (el: Element | null): void => { if (el instanceof HTMLElement) { el.style.setProperty('display', 'none', 'important'); hidden.push(el); } };
+  const rows = Array.from(worksheet.querySelectorAll<HTMLTableRowElement>(':scope > tbody > tr'));
+  const cells = rows.map(row => Array.from(row.querySelectorAll<HTMLElement>(':scope > td[data-x]')));
+  const colCount = Math.max(0, ...cells.map(row => row.length));
+  let lastRow = -1;
+  let lastCol = -1;
+  cells.forEach((row, y) => row.forEach((cell, x) => {
+    if (!isEmptyPrintCell(cell)) { lastRow = Math.max(lastRow, y); lastCol = Math.max(lastCol, x); }
+  }));
+  if (lastRow < 0) return null;
+  for (let y = lastRow + 1; y < rows.length; y++) hide(rows[y]);
+  const cols = Array.from(worksheet.querySelectorAll<HTMLElement>(':scope > colgroup > col'));
+  // the first <col> belongs to the row numbers
+  for (let x = lastCol + 1; x < colCount; x++) {
+    hide(cols[x + 1] ?? null);
+    hide(worksheet.querySelector(`thead td[data-x="${x}"]`));
+    cells.forEach(row => hide(row[x] ?? null));
+  }
+  const width = cols.reduce((sum, col) => sum + (hidden.includes(col) ? 0 : (Number.parseFloat(col.getAttribute('width') ?? col.style.width) || 0)), 0);
+  return { width, restore: () => hidden.forEach(el => el.style.removeProperty('display')) };
+}
+
+/** Actual-size mode: the table as blocks of columns that each fit the page, each with the row numbers and the header row. */
+function splitTableForPrint(table: HTMLTableElement, pageWidth: number): HTMLElement | null {
+  const cols = Array.from(table.querySelectorAll<HTMLTableColElement>(':scope > colgroup > col'));
+  const widths = cols.map(col => Number.parseFloat(col.style.width) || Number.parseFloat(col.getAttribute('width') ?? '') || 0);
+  const gutterWidth = widths[0] ?? 0;
+  const room = Math.max(40, pageWidth - gutterWidth);
+  const blocks: number[][] = [];
+  let current: number[] = [];
+  let used = 0;
+  for (let index = 1; index < widths.length; index++) {
+    const w = Math.min(widths[index], room);
+    if (current.length > 0 && used + w > room) { blocks.push(current); current = []; used = 0; }
+    current.push(index);
+    used += w;
+  }
+  if (current.length > 0) blocks.push(current);
+  if (blocks.length < 2) return null;
+  const letters = Array.from(table.querySelectorAll('thead tr > *')).map(cell => (cell.textContent ?? '').trim());
+  const wrapper = document.createElement('div');
+  wrapper.className = 'print-split-sheet';
+  blocks.forEach((block, number) => {
+    const copy = table.cloneNode(true) as HTMLTableElement;
+    const keep = new Set([0, ...block]);
+    copy.querySelectorAll('tr').forEach(row => Array.from(row.children).forEach((cell, index) => { if (!keep.has(index)) cell.remove(); }));
+    let blockWidth = 0;
+    copy.querySelectorAll<HTMLTableColElement>(':scope > colgroup > col').forEach((col, index) => {
+      if (!keep.has(index)) { col.remove(); return; }
+      const w = index === 0 ? gutterWidth : Math.min(widths[index], room);
+      col.style.width = `${w}px`;
+      blockWidth += w;
+    });
+    copy.style.width = `${blockWidth}px`;
+    copy.style.maxWidth = 'none';
+    copy.style.tableLayout = 'fixed';
+    copy.style.borderCollapse = 'collapse';
+    copy.querySelectorAll<HTMLElement>('th, td').forEach(cell => {
+      cell.style.border = '1px solid #c8c8c8';
+      cell.style.padding = '2px 4px';
+      cell.style.overflow = 'hidden';
+    });
+    copy.querySelectorAll<HTMLElement>('tr').forEach(row => { row.style.breakInside = 'avoid'; row.style.height = ''; });
+    const from = letters[block[0]] ?? '';
+    const to = letters[block[block.length - 1]] ?? '';
+    const note = document.createElement('p');
+    note.style.cssText = 'color:#555;font-size:8pt;margin:4pt 0 0 0;';
+    note.textContent = from === to ? `column ${from}` : `columns ${from}-${to}`;
+    const piece = document.createElement('div');
+    if (number > 0) piece.style.breakBefore = 'page';
+    piece.append(note, copy);
+    wrapper.append(piece);
+  });
+  return wrapper;
+}
+
+/**
+ * Printing the page itself (Ctrl+P, no copy): the grids on the page follow the choice "Sheets in print and PDF" (sheets-mode.ts).
+ * Empty trailing rows and columns are not printed. A sheet narrower than the page prints as it is. A wider one:
+ * landscape (default): a landscape page ("wide", Chromium only) when a portrait page would shrink it below 70%, scaled to that page's width;
+ * fit: a uniform zoom (text, borders, row heights together) so that it is exactly as wide as the portrait page;
+ * split: actual size, the columns that do not fit continue in blocks on the next pages.
+ * Undone after printing. Browsers without named pages (Firefox) fit the sheet to the portrait width.
  */
 if (typeof window !== 'undefined') {
-  const scaled: HTMLElement[] = [];
+  const undo: Array<() => void> = [];
+  const namedPages = (): boolean => /Chrome\//.test(navigator.userAgent) && !/Firefox\//.test(navigator.userAgent);
   window.addEventListener('beforeprint', () => {
+    const mode = document.body.dataset.sheetsMode ?? getSheetsMode();
     document.querySelectorAll<HTMLElement>('.elabftw-spreadsheet-readonly-view').forEach(host => {
       // the copies made for printing hold static tables, already scaled
       if (host.closest('#tocPrintSelectionDocument')) return;
-      const natural = Number.parseFloat(host.dataset.viewModeWidth ?? '') || host.offsetWidth;
-      if (natural > PRINT_CONTENT_WIDTH) {
-        host.style.setProperty('zoom', String(Math.floor(PRINT_CONTENT_WIDTH / natural * 1000) / 1000));
-        host.style.setProperty('width', `${natural}px`);
-        scaled.push(host);
+      const trimmed = trimEmptyForPrint(host);
+      if (trimmed) undo.push(trimmed.restore);
+      const saved = Number.parseFloat(host.dataset.viewModeWidth ?? '') || host.offsetWidth;
+      const natural = trimmed && trimmed.width > 0 ? trimmed.width : saved;
+      if (natural <= PRINT_CONTENT_WIDTH) return;
+      if (mode === 'split') {
+        const extracted = spreadsheetHostData.get(host);
+        const html = extracted ? spreadsheetToHTML(extracted, extracted.displayData ?? extracted.data) : '';
+        const holder = document.createElement('div');
+        holder.innerHTML = html;
+        const table = holder.querySelector<HTMLTableElement>('table.elabftw-spreadsheet');
+        const blocks = table ? splitTableForPrint(table, PRINT_CONTENT_WIDTH) : null;
+        if (blocks) {
+          host.style.setProperty('display', 'none', 'important');
+          host.after(blocks);
+          undo.push(() => { blocks.remove(); host.style.removeProperty('display'); });
+          return;
+        }
       }
+      let width = PRINT_CONTENT_WIDTH;
+      if (mode === 'landscape' && namedPages() && PRINT_CONTENT_WIDTH / natural < PRINT_MIN_PORTRAIT_SCALE) {
+        width = PRINT_LANDSCAPE_WIDTH;
+        host.classList.add('print-wide-sheet');
+        undo.push(() => host.classList.remove('print-wide-sheet'));
+      }
+      if (natural > width) host.style.setProperty('zoom', String(Math.floor(width / natural * 1000) / 1000));
+      else host.style.removeProperty('zoom');
+      host.style.setProperty('width', `${natural}px`);
+      undo.push(() => { host.style.removeProperty('zoom'); host.style.removeProperty('width'); });
     });
   });
   window.addEventListener('afterprint', () => {
-    scaled.splice(0).forEach(host => host.style.removeProperty('zoom'));
+    undo.splice(0).forEach(fn => fn());
   });
 }
 
