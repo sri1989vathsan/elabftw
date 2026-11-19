@@ -2086,7 +2086,14 @@ async function spreadsheetSoak(options = {}) {
       // the record of what was typed no longer matches after undo and redo: leave this table out of later checks
       models.delete(uid);
       api.removeTable(uid);
-      await sleep(1500); // the editor takes a moment to shrink back before the next size check
+      // the editor shrinks back to its text a little after the table is gone (a slow headless Chrome took 5 s and more): wait for it, up to 12 s,
+      // and say so when it was late; a frame that never shrinks is left for the size check at the end to report
+      const iframeEl = editor.getContainer().querySelector('iframe');
+      const slack = () => Math.round(iframeEl.getBoundingClientRect().height - Math.max(editor.getDoc().body.scrollHeight, editor.getDoc().body.offsetHeight));
+      let waited = 0;
+      while (slack() > 160 && waited < 12000 && !document.hidden) { await sleep(500); waited += 500; }
+      if (waited > 1500) note(`editor-shrink-late-${waited}ms`);
+      await sleep(1500);
     },
     // The Copy table button and a selection copy must carry the values and the formatting.
     async 'copy-table-format'() {
