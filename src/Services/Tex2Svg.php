@@ -25,6 +25,7 @@ use ImagickException;
 use function dirname;
 use function file_put_contents;
 use function preg_match;
+use function str_contains;
 use function preg_match_all;
 use function preg_replace;
 use function str_replace;
@@ -52,6 +53,10 @@ final class Tex2Svg
 
     public function getContent(): string
     {
+        // no math delimiter ($, \(, \[) in the text: nothing to typeset, so no node process (which also cannot fail on a missing bundle)
+        if (!str_contains($this->source, '$') && !str_contains($this->source, '\\(') && !str_contains($this->source, '\\[')) {
+            return $this->source;
+        }
         $this->contentWithMathJaxSVG = $this->runNodeApp($this->source);
 
         // was there actually tex in the content?
