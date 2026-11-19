@@ -1,5 +1,20 @@
 [
   {
+    "id": "side-panel-refresh",
+    "date": "2026-11-19",
+    "area": "Organise",
+    "featured": false,
+    "title": "Refresh and Close in the same place in every side panel",
+    "summary": "Folders, Search, To-do, Calendar and Contents each have a Refresh button next to Close, in the same spot.",
+    "details": [
+      "fa-rotate::Refresh reloads that tab's own data without reloading the page: the folder tree, the current search, your tasks, the calendar, the headings of the page.",
+      "The two buttons no longer move when you switch tabs, and the panel keeps the room for its scroll bar.",
+      "The select bar at the bottom of Contents has two rows, so Print, PDF and Copy are never cut off, and the Back pill keeps clear of an open panel."
+    ],
+    "image": "",
+    "imageAlt": ""
+  },
+  {
     "id": "reminder-chip",
     "date": "2026-11-19",
     "area": "Organise",
