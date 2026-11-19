@@ -1189,8 +1189,8 @@
         });
         if (!hit) break;
         const hitBox = hit.getBoundingClientRect();
-        if (hitBox.width <= 120 && hitBox.height > 80 && hitBox.left > window.innerWidth / 2) {
-          // a column of buttons at the right edge: the reminder sits to the left of it
+        if (hitBox.width <= 120 && hitBox.left > window.innerWidth / 2) {
+          // a narrow thing at the right edge (the column of scroll buttons): the reminder sits to the left of it
           right += Math.ceil(mine.right - hitBox.left) + 8;
           node.style.right = `${right}px`;
         } else if (node.classList.contains('reminder-banner') && hitBox.top > mine.top + 110 && hitBox.top < window.innerHeight) {
