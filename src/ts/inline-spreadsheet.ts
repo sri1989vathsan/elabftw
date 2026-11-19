@@ -11702,8 +11702,32 @@ export function activateLazySpreadsheetViews(root: ParentNode): void {
  * matched up by their position among all matches, not by identity --
  * cloneNode() produces new node objects the WeakMap was never keyed on.
  */
-// printable width of an A4 portrait page with the default margins, in CSS pixels
-const PRINT_CONTENT_WIDTH = 680;
+// printable width of an A4 portrait page with the default margins (about 717 px), in CSS pixels; a wider sheet is scaled down to this
+const PRINT_CONTENT_WIDTH = 700;
+
+/**
+ * Printing the page itself (Ctrl+P, no copy): the grids on the page are scaled the same way as the copies made for Print selection.
+ * A sheet narrower than the page prints as it is; a wider one gets a uniform zoom (text, borders, row heights together) so that it is
+ * exactly as wide as the page. Undone after printing.
+ */
+if (typeof window !== 'undefined') {
+  const scaled: HTMLElement[] = [];
+  window.addEventListener('beforeprint', () => {
+    document.querySelectorAll<HTMLElement>('.elabftw-spreadsheet-readonly-view').forEach(host => {
+      // the copies made for printing hold static tables, already scaled
+      if (host.closest('#tocPrintSelectionDocument')) return;
+      const natural = Number.parseFloat(host.dataset.viewModeWidth ?? '') || host.offsetWidth;
+      if (natural > PRINT_CONTENT_WIDTH) {
+        host.style.setProperty('zoom', String(Math.floor(PRINT_CONTENT_WIDTH / natural * 1000) / 1000));
+        host.style.setProperty('width', `${natural}px`);
+        scaled.push(host);
+      }
+    });
+  });
+  window.addEventListener('afterprint', () => {
+    scaled.splice(0).forEach(host => host.style.removeProperty('zoom'));
+  });
+}
 
 export function restoreStaticSpreadsheetsForPrint(originalRoot: ParentNode, clonedRoot: ParentNode): void {
   // The editor keeps a spacer after each table to reserve room for its overlay, with a negative margin when the
