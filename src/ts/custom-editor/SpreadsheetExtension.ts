@@ -1518,6 +1518,14 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     iframe.style.height = `${needed}px`;
   };
 
+  // A table removed from the text (the Delete button of its toolbar): the editor's own resize did not shrink the frame back, which left
+  // the height the table had needed as an empty strip under the text. Set the height right away and again once the layout has settled.
+  const fitEditorAfterRemoval = (): void => {
+    fitEditorHeightWithoutFocus();
+    window.requestAnimationFrame(() => fitEditorHeightWithoutFocus());
+    window.setTimeout(() => { if (!editor.removed) fitEditorHeightWithoutFocus(); }, 400);
+  };
+
   // The editor's own autoresize can stop short after quick typing (e.g. holding Enter): the frame then stays shorter
   // than the text and the text scrolls inside it. Whenever the content is taller than the frame, grow the frame by
   // exactly the excess. Grow only, so it never fights the normal resize.
@@ -2461,6 +2469,8 @@ export function registerSpreadsheetExtension(editor: Editor): void {
         // has nothing of its own to restore.
         editor.dom.remove(table);
         editor.undoManager.add();
+        // The frame was as tall as the table needed and nothing resizes it when the table goes: shrink it to the text left
+        fitEditorAfterRemoval();
         if (deletedPosition) {
           deletedSpreadsheets.push({
             table, position: deletedPosition, tablesBefore: deletedTablesBefore, revision: proseRevision,
@@ -2943,6 +2953,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       editor.dom.remove(table);
       editor.undoManager.add();
       editor.setDirty(true);
+      fitEditorAfterRemoval();
       return true;
     },
   };
