@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% import 'guide-info.html' as guide -%}
 {% block body %}
 <ul class='tabbed-menu'>
   <li><button type='button' class='btn btn-transparent' data-action='switch-tab' data-tabtarget='1'>{{ 'General'|trans }}</button></li>
@@ -607,7 +608,7 @@
       <div class='ui-size-example mt-2' aria-hidden='true'><span class='ui-size-example-row'>Experiment title</span><span class='ui-size-example-chip'>Running 3</span></div>
     </div>
 
-    <h3 class='pl-3'>{{ 'What’s new'|trans }}</h3>
+    <h3 class='pl-3'>{{ 'What’s new'|trans }}{{ guide.info('guide-whats-new-popup', 'The What’s new popup') }}</h3>
     <div class='pl-3 mt-2 mb-5'>
       <div class='custom-control custom-switch'>
         <input type='checkbox' class='custom-control-input' id='whatsNewPopupSwitch' data-whats-new-popup-switch{{ App.isWhatsNewPopupEnabled() ? ' checked' }}>
