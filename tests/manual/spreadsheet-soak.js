@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'text-column-fits', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'text-column-fits', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'viewport-equals-table-width', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -2473,6 +2473,62 @@ async function spreadsheetSoak(options = {}) {
       const thin = cs.scrollbarWidth === 'thin' || (scroller.offsetHeight - scroller.clientHeight) <= 10;
       if (!thin) dataLoss.push({ context, table: 'wide inline sheet', problem: `the inline sheet has a thick scroll bar (scrollbar-width ${cs.scrollbarWidth}, ${scroller.offsetHeight - scroller.clientHeight} px)` });
       note('inline-scrollbar-thin');
+    },
+
+    // The visible frame must match the table: when the table fits, the frame is exactly its width; when it does not, the frame is
+    // the full width available and the scroll bar reaches the real right edge of the last column. Header row as high as the
+    // data rows, all rows alike, no clipped text in the last column, no empty strip under the last row.
+    async 'viewport-equals-table-width'() {
+      for (const [label, cols] of [['narrow table', 2], ['wide table', 24]]) {
+        const uid = await createTable(`viewport ${label}`, { rows: 4, cols });
+        if (!uid) continue;
+        await typeInto(uid, 1, 0, 'a text long enough to need a fitted column here');
+        await typeInto(uid, 1, cols - 1, 'last column text');
+        const root = await live(uid);
+        await sleep(500);
+        const scroller = root.querySelector('.jss_content');
+        const ws = root.querySelector('.jss_worksheet');
+        if (!scroller || !ws) { fail(`viewport-equals-table-width: no grid (${label})`); continue; }
+        const table = `viewport (${label})`;
+        const tableWidth = Math.round([...ws.querySelectorAll(':scope > colgroup > col')].reduce((sum, col) => sum + (parseFloat(col.getAttribute('width')) || col.getBoundingClientRect().width), 0));
+        const frame = scroller.clientWidth;
+        const wider = scroller.scrollWidth > scroller.clientWidth + 1;
+        if (!wider && Math.abs(frame - tableWidth) > 3 && frame - tableWidth > 3) dataLoss.push({ context, table, problem: `the table is ${tableWidth} px wide and fits, but its frame is ${frame} px` });
+        if (wider) {
+          scroller.scrollLeft = scroller.scrollWidth;
+          await sleep(120);
+          const lastCell = ws.querySelector(`tbody td[data-x="${cols - 1}"]`);
+          if (lastCell) {
+            const edge = lastCell.getBoundingClientRect().right;
+            const frameEdge = scroller.getBoundingClientRect().right;
+            if (edge > frameEdge + 2) dataLoss.push({ context, table, problem: `scrolled to the end, the last column still ends ${Math.round(edge - frameEdge)} px beyond the frame` });
+          }
+          const bar = root.querySelector('.elabftw-own-scrollbar-x');
+          const native = scroller.offsetHeight - scroller.clientHeight > 0;
+          const barShown = bar && getComputedStyle(bar).visibility !== 'hidden';
+          if (!barShown && !native) dataLoss.push({ context, table, problem: 'the table is wider than its frame and there is no horizontal scroll bar' });
+          scroller.scrollLeft = 0;
+        } else if (tableWidth > frame + 2) {
+          dataLoss.push({ context, table, problem: `the table (${tableWidth} px) is wider than its frame (${frame} px) and does not scroll` });
+        }
+        const head = ws.querySelector('thead tr');
+        const rowsH = [...ws.querySelectorAll('tbody tr')].map(tr => Math.round(tr.getBoundingClientRect().height));
+        if (head && rowsH.length) {
+          const headH = Math.round(head.getBoundingClientRect().height);
+          if (Math.abs(headH - rowsH[0]) > 3) dataLoss.push({ context, table, problem: `the header row is ${headH} px high, the data rows ${rowsH[0]} px` });
+          if (new Set(rowsH.slice(0, 3)).size > 1 && Math.max(...rowsH.slice(0, 3)) - Math.min(...rowsH.slice(0, 3)) > 3) dataLoss.push({ context, table, problem: `the rows are not alike in height: ${rowsH.join('/')}` });
+        }
+        const lastCell = ws.querySelector(`tbody td[data-x="${cols - 1}"][data-y="1"]`);
+        if (lastCell && lastCell.textContent.trim() && lastCell.scrollWidth > lastCell.clientWidth + 1) dataLoss.push({ context, table, problem: 'the text of the last column is cut off' });
+        const topGap = ws.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+        if (topGap > 6) dataLoss.push({ context, table, problem: `an empty strip of ${Math.round(topGap)} px above the header row` });
+        const lastRow = ws.querySelector('tbody tr:last-child');
+        if (lastRow && scroller.scrollHeight <= scroller.clientHeight + 1) {
+          const gap = scroller.getBoundingClientRect().bottom - lastRow.getBoundingClientRect().bottom;
+          if (gap > 10) dataLoss.push({ context, table, problem: `an empty strip of ${Math.round(gap)} px under the last row` });
+        }
+        note('viewport-equals-table-width');
+      }
     },
 
     async 'find-in-grid'() {

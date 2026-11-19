@@ -320,6 +320,89 @@ function usesOverlayScrollbars(): boolean {
   return overlay;
 }
 
+/**
+ * A sheet in the text that is wider than its frame shows a horizontal bar under it that is always there, drawn by the page:
+ * the bars of macOS (and phones) only appear while scrolling, so a cut-off table gave no hint that it scrolls. The bar sits in
+ * the layout below the grid and only exists while the table is wider than the frame.
+ */
+function installViewScrollbar(sheetContainer: HTMLElement): () => void {
+  if (!usesOverlayScrollbars()) return () => undefined;
+  const track = document.createElement('div');
+  track.className = 'elabftw-view-xbar';
+  track.setAttribute('role', 'scrollbar');
+  track.setAttribute('aria-orientation', 'horizontal');
+  track.hidden = true;
+  const thumb = document.createElement('div');
+  thumb.className = 'elabftw-view-xbar-thumb';
+  track.append(thumb);
+  // beside the grid, never inside it: the tab library turns every child of its container into a page
+  sheetContainer.after(track);
+  let scroller: HTMLElement | null = null;
+  const update = (): void => {
+    if (!scroller) return;
+    const view = scroller.clientWidth;
+    const total = scroller.scrollWidth;
+    const wider = total > view + 1;
+    track.hidden = !wider;
+    scroller.classList.toggle('has-view-xbar', wider);
+    if (!wider) return;
+    const length = Math.min(track.clientWidth, Math.max(28, track.clientWidth * view / total));
+    const room = total - view;
+    thumb.style.width = `${length}px`;
+    thumb.style.transform = `translateX(${room > 0 ? scroller.scrollLeft / room * (track.clientWidth - length) : 0}px)`;
+  };
+  const scrollTo = (value: number): void => {
+    if (scroller) scroller.scrollLeft = Math.max(0, Math.min(scroller.scrollWidth - scroller.clientWidth, value));
+  };
+  thumb.addEventListener('pointerdown', event => {
+    if (!scroller) return;
+    event.preventDefault();
+    event.stopPropagation();
+    try { thumb.setPointerCapture(event.pointerId); } catch { /* a synthetic pointer has nothing to capture */ }
+    const startX = event.clientX;
+    const startLeft = scroller.scrollLeft;
+    const ratio = (scroller.scrollWidth - scroller.clientWidth) / Math.max(1, track.clientWidth - thumb.offsetWidth);
+    const move = (ev: PointerEvent): void => scrollTo(startLeft + (ev.clientX - startX) * ratio);
+    const up = (): void => {
+      thumb.removeEventListener('pointermove', move);
+      thumb.removeEventListener('pointerup', up);
+      thumb.removeEventListener('pointercancel', up);
+    };
+    thumb.addEventListener('pointermove', move);
+    thumb.addEventListener('pointerup', up);
+    thumb.addEventListener('pointercancel', up);
+  });
+  track.addEventListener('pointerdown', event => {
+    if (event.target !== track || !scroller) return;
+    scrollTo(scroller.scrollLeft + (event.clientX < thumb.getBoundingClientRect().left ? -1 : 1) * scroller.clientWidth * 0.9);
+  });
+  const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(update) : null;
+  const bind = (): void => {
+    const found = sheetContainer.querySelector<HTMLElement>('.jss_content');
+    if (found === scroller) return;
+    scroller?.removeEventListener('scroll', update);
+    resize?.disconnect();
+    scroller = found;
+    if (scroller) {
+      scroller.addEventListener('scroll', update, { passive: true });
+      resize?.observe(scroller);
+      resize?.observe(sheetContainer);
+      const table = scroller.querySelector('.jss_worksheet');
+      if (table) resize?.observe(table);
+    }
+    update();
+  };
+  const mutation = new MutationObserver(() => { bind(); update(); });
+  mutation.observe(sheetContainer, { childList: true, subtree: true });
+  bind();
+  return () => {
+    mutation.disconnect();
+    resize?.disconnect();
+    scroller?.removeEventListener('scroll', update);
+    track.remove();
+  };
+}
+
 function installOverlayScrollbars(host: HTMLElement): () => void {
   if (!usesOverlayScrollbars()) return () => undefined;
   host.classList.add('has-own-scrollbars');
@@ -2992,6 +3075,31 @@ function applyCoordinateHeaderStyle(container: HTMLElement, appearance: Spreadsh
     '.jss_worksheet > thead > tr > *, .jss_worksheet .jss_row',
   ).forEach(cell => {
     declarations.forEach(([property, value]) => cell.style.setProperty(property.trim(), value.trim()));
+  });
+}
+
+/**
+ * The header row (column letters) is as high as a data row, unless the person set another height in the appearance
+ * options. Its cells carry the header's padding on top of the height, so left alone the row came out about 11 px
+ * taller than the rows under it.
+ */
+function matchHeaderRowToDataRows(container: HTMLElement, appearance: SpreadsheetAppearance): void {
+  const dataRows = Array.from(container.querySelectorAll<HTMLElement>('.jss_worksheet > tbody > tr'));
+  const headerRow = container.querySelector<HTMLElement>('.jss_worksheet > thead > tr');
+  if (dataRows.length === 0 || !headerRow) return;
+  // the height of a one-line row: the lowest of the rows (a row with wrapped text is taller than the others)
+  const wanted = appearance.columnIndexHeight !== DEFAULT_APPEARANCE.columnIndexHeight
+    ? appearance.columnIndexHeight
+    : Math.round(Math.min(...dataRows.map(row => row.getBoundingClientRect().height).filter(height => height > 0), 9999));
+  if (!(wanted > 0) || wanted >= 9999) return;
+  // the stylesheet fixes the header cells to this variable (with !important): follow the data rows through it
+  container.closest<HTMLElement>('.elabftw-spreadsheet-readonly-view')?.style.setProperty('--spreadsheet-column-index-height', `${wanted}px`);
+  [headerRow, ...Array.from(headerRow.children)].forEach(node => {
+    if (!(node instanceof HTMLElement)) return;
+    node.style.setProperty('box-sizing', 'border-box');
+    node.style.setProperty('height', `${wanted}px`);
+    node.style.setProperty('min-height', `${wanted}px`);
+    node.style.setProperty('max-height', `${wanted}px`);
   });
 }
 
@@ -8305,6 +8413,33 @@ export function buildReadOnlySpreadsheetHost(
       .reduce((sum, width) => sum + width, 0);
 
   const naturalTableWidth = computeNaturalTableWidth(cols, colWidths, appearance.rowIndexWidth);
+  // The saved widths are only a first guess: the live grid fits columns that were never sized by hand to
+  // their text, so its real table is often wider than the frame drawn from the saved numbers (the right
+  // part was cut off with no way to reach it). Once the grid is built the frame is set from the widths
+  // of its real columns: exactly the table when it fits, the full available width (with a scrollbar)
+  // when it does not (max-width:100% in the frame's style does the capping).
+  const syncFrameToRealColumns = (): void => {
+    if (editable) return;
+    const realCols = sheetContainer.querySelectorAll<HTMLElement>('.jss_worksheet > colgroup > col');
+    if (realCols.length === 0) return;
+    let total = 0;
+    realCols.forEach(col => {
+      total += Number.parseFloat(col.getAttribute('width') ?? '') || col.getBoundingClientRect().width;
+    });
+    if (!(total > 0)) return;
+    host.dataset.viewModeWidth = String(Math.round(total));
+    host.style.setProperty('width', `${Math.round(total)}px`);
+    // the frame has a little chrome of its own (padding kept for the scroll bar, the edge): grow it by what the
+    // content still overflows by, so a table that fits is not scrolled by a few pixels. Wider than this is a
+    // table that does not fit: the frame stays at its cap (max-width:100%) and scrolls.
+    const scroller = sheetContainer.querySelector<HTMLElement>('.jss_content');
+    if (!scroller) return;
+    const spill = scroller.scrollWidth - scroller.clientWidth;
+    if (spill > 0 && spill <= 12) {
+      host.style.setProperty('width', `${Math.round(total) + spill}px`);
+      host.dataset.viewModeWidth = String(Math.round(total) + spill);
+    }
+  };
   // Listeners put on the page or window by this grid. They are all taken off again when it is destroyed:
   // anonymous ones used to stay behind every time a grid was created and removed, so a long session got
   // slower and slower (every mouse event then ran through hundreds of dead handlers).
@@ -9044,6 +9179,7 @@ export function buildReadOnlySpreadsheetHost(
   sheetContainer.className = 'elabftw-spreadsheet-readonly-grid';
   if (editable) installRowResizeGuide(sheetContainer);
   host.appendChild(sheetContainer);
+  if (!editable) pageListenerRemovers.push(installViewScrollbar(sheetContainer));
   if (editable && !plateLocked) {
     // Under the grid: how many rows, and a button to add them at the bottom.
     const addRowsBar = document.createElement('div');
@@ -10368,6 +10504,8 @@ export function buildReadOnlySpreadsheetHost(
       applyCoordinateHeaderStyle(sheetContainer, appearance);
       applySpreadsheetRowHeights(sheetContainer, worksheet, rowHeights);
       applySpreadsheetColWidths(sheetContainer, worksheet, colWidths);
+      matchHeaderRowToDataRows(sheetContainer, appearance);
+      syncFrameToRealColumns();
       applyCellClipHeights(sheetContainer, manuallyResizedRows);
       window.requestAnimationFrame(reserveRoomForHorizontalScrollbar);
       if (options.initialSelection) {
@@ -11549,6 +11687,9 @@ export function activateLazySpreadsheetViews(root: ParentNode): void {
  * matched up by their position among all matches, not by identity --
  * cloneNode() produces new node objects the WeakMap was never keyed on.
  */
+// printable width of an A4 portrait page with the default margins, in CSS pixels
+const PRINT_CONTENT_WIDTH = 680;
+
 export function restoreStaticSpreadsheetsForPrint(originalRoot: ParentNode, clonedRoot: ParentNode): void {
   // The editor keeps a spacer after each table to reserve room for its overlay, with a negative margin when the
   // overlay is shorter than the table. On paper the real table is printed, so a leftover spacer would pull the
@@ -11588,7 +11729,9 @@ export function restoreStaticSpreadsheetsForPrint(originalRoot: ParentNode, clon
     const viewModeWidth = Number.parseFloat(originalHost.dataset.viewModeWidth ?? '');
     if (Number.isFinite(viewModeWidth) && viewModeWidth > 0) {
       table.style.width = `${viewModeWidth}px`;
-      table.style.maxWidth = '100%';
+      table.style.maxWidth = 'none';
+      // a table wider than the printable width is scaled down to fit the page, never cut off
+      if (viewModeWidth > PRINT_CONTENT_WIDTH) table.style.setProperty('zoom', String(Math.floor(PRINT_CONTENT_WIDTH / viewModeWidth * 1000) / 1000));
     }
     clone.replaceWith(table);
   });

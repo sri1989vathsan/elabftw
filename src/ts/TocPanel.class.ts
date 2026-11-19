@@ -365,6 +365,12 @@ export default class TocPanel extends SidePanel {
     if (!input || !add || !clear || !mode || input.dataset.tocSearchReady) return;
 
     print?.addEventListener('click', () => this.printSelection());
+    document.getElementById('tocPdfSelection')?.addEventListener('click', () => {
+      const exporter = document.querySelector<HTMLElement>("[data-action='export-to'][data-format='pdf']");
+      const sections = document.body.dataset.tocSections;
+      if (!exporter || !sections) return;
+      window.open(`/api/v2/${exporter.dataset.type}/${exporter.dataset.id}?format=pdf&sections=${encodeURIComponent(sections)}`, '_blank');
+    });
     copy?.addEventListener('click', () => void this.copySelection(copy));
     input.addEventListener('input', () => this.filterEntries());
     input.addEventListener('keydown', event => {
@@ -747,6 +753,7 @@ export default class TocPanel extends SidePanel {
 
     this.currentFilterActive = filterActive;
     this.currentSectionIds = new Set(sectionIds);
+    this.publishSelectedSections(filterActive, sectionIds);
     const print = document.getElementById('tocPrintSelection') as HTMLButtonElement | null;
     const copy = document.getElementById('tocCopySelection') as HTMLButtonElement | null;
     if (print) {
@@ -889,6 +896,28 @@ export default class TocPanel extends SidePanel {
     selection?.removeAllRanges();
     wrapper.remove();
     return copied;
+  }
+
+  /**
+   * The sections picked here, as the positions of their headings in the text (1 based, document order). The PDF export sends them
+   * (sections=3,4) so the server prints only those sections; nothing picked leaves it empty and the whole entry is exported.
+   */
+  private publishSelectedSections(filterActive: boolean, sectionIds: Set<string>): void {
+    const positions: number[] = [];
+    if (filterActive && sectionIds.size > 0) {
+      const source = document.getElementById('body_view') ?? this.getEditor()?.getBody();
+      source?.querySelectorAll<HTMLElement>(HEADING_SELECTOR).forEach((heading, index) => {
+        if (sectionIds.has(heading.id)) positions.push(index + 1);
+      });
+    }
+    if (positions.length > 0) document.body.dataset.tocSections = positions.join(',');
+    else delete document.body.dataset.tocSections;
+    const note = document.getElementById('pdfSelectedSectionsNote');
+    if (note) {
+      note.hidden = positions.length === 0;
+      const count = note.querySelector('[data-selected-count]');
+      if (count) count.textContent = String(positions.length);
+    }
   }
 
   private filterPrintContent(content: HTMLElement, sectionIds: Set<string>): void {

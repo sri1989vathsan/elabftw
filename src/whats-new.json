@@ -16,6 +16,37 @@
     "imageAlt": ""
   },
   {
+    "id": "print-pdf-selected-sections",
+    "date": "2026-11-19",
+    "area": "Experiments",
+    "featured": false,
+    "title": "Print or export only the sections you pick",
+    "summary": "Tick sections in the Contents panel, then Print or PDF gives just those, with spreadsheets drawn as grids.",
+    "details": [
+      "fa-list-check::In the Contents panel, turn on Select and tick the sections you want. The bar at the bottom of the panel now has Print, PDF and Copy.",
+      "fa-file-pdf::PDF makes a file with only the ticked sections (and the headings above them). The Export as PDF window says when a selection is active. With nothing ticked you get the whole entry as before.",
+      "Spreadsheets print and export like the grid on screen: grid lines, grey row and column labels, fills and bold kept, wide tables scaled to the page, rows never split over a page, empty filler columns and rows left out.",
+      "Plain tables made in the text editor are not spreadsheets and stay ordinary tables."
+    ],
+    "image": "",
+    "imageAlt": ""
+  },
+  {
+    "id": "sheet-frame-fits",
+    "date": "2026-11-19",
+    "area": "Experiments",
+    "featured": false,
+    "title": "Spreadsheets in the text show all of their columns",
+    "summary": "The frame is as wide as the table, or scrolls to the real last column with a bar you can see.",
+    "details": [
+      "A spreadsheet in an experiment is no longer cut off at the right. If it fits, the frame is exactly its width; if not, a scroll bar under it reaches the last column.",
+      "The row of column letters is as high as the other rows, and no empty strip is left above the header or under the last row.",
+      "Text in a column that was never sized by hand is fitted to the text and starts at the left."
+    ],
+    "image": "",
+    "imageAlt": ""
+  },
+  {
     "id": "folder-explorer",
     "date": "2026-11-18",
     "area": "Organise",
@@ -1015,7 +1046,8 @@
       "The Document sections list shows the headings. Click one to jump to it.",
       "Use Add filter or Add heading filter to select sections, and choose whether all or any of the filters must match.",
       "To read only some parts, open Select headings to filter or print and tick the headings you want. The experiment then shows just those sections and hides the rest, until you clear the selection.",
-      "fa-print::Press Print selection or Copy filtered content to get only those parts. Switch spreadsheets and pictures on or off."
+      "fa-print::Press Print selection or Copy filtered content to get only those parts. Switch spreadsheets and pictures on or off.",
+      "fa-file-pdf::Press PDF in the same bar to export only the ticked sections as a PDF; the Export as PDF window then says so."
     ],
     "imageAlt": "An experiment with the Table of Contents panel open: the heading filter box, the list of headings with Goal, Procedure and Results ticked, the Print selection and Copy filtered content buttons, and the page showing only those three sections",
     "featured": false,
@@ -1028,7 +1060,7 @@
       "Print the results sections of a long experiment for a meeting.",
       "Tick only the Results headings to read them without scrolling past the methods."
     ],
-    "news": "New: a contents tab with section filters, print and copy.",
+    "news": "New: Print, PDF and Copy for the sections you tick.",
     "shot": "An experiment with the Table of Contents panel open, three headings ticked in the list and only those sections shown",
     "highlight": {
       "x": 5.5,
@@ -1178,7 +1210,9 @@
       "fa-paste::Paste: Ctrl/Cmd+V pastes at the selected cell. Ctrl/Cmd+Shift+V, or Paste transposed in the right-click menu, swaps rows and columns first. If the browser does not allow reading the clipboard from a menu, a small box asks you to press Ctrl/Cmd+V.",
       "fa-copy::Copy table: in the Edit menu of the menu bar. Copy complete table copies a whole table with its formatting, ready to paste into another program.",
       "fa-rotate-left::Undo: Ctrl+Z in a spreadsheet only undoes spreadsheet edits (including formatting such as bold or a fill colour), and in the text it leaves the tables alone. Pasting, inserting and deleting rows and columns, dragging a row or column border and the two autofit buttons are undo steps too, in the text and in the Spreadsheet Editor. Redo brings a row or column you added back with the look it had.",
-      "fa-print::Printing: File > Print main text (or Print everything) prints every spreadsheet and plate in full, one after another and never on top of each other, also when you print from the edit page."
+      "fa-print::Printing: File > Print main text (or Print everything) prints every spreadsheet and plate in full, one after another and never on top of each other, also when you print from the edit page.",
+      "fa-print::Printing and PDF: a spreadsheet prints and exports as the grid you see, with grid lines, row and column labels and your fills. Wide tables are scaled to fit the page.",
+      "fa-arrows-left-right::A sheet in the text that is wider than the page area shows a scroll bar under it that is always visible, and the frame is never cut mid-column."
     ],
     "imageAlt": "The Insert menu open on Spreadsheet, with the squares for picking a size",
     "featured": false,

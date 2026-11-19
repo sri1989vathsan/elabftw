@@ -71,6 +71,9 @@ class MakePdf extends AbstractMakePdf
 
     protected bool $includeAttachments = false;
 
+    // positions (1 based, document order) of the headings of the sections to export; empty exports everything
+    protected array $selectedSections = array();
+
     protected AbstractEntity $Entity;
 
     private FileSystem $cacheFs;
@@ -115,6 +118,14 @@ class MakePdf extends AbstractMakePdf
         foreach ($this->trash as $filename) {
             $this->cacheFs->delete($filename);
         }
+    }
+
+    /**
+     * Export only these sections of the body (the positions of their headings), see PdfBodyPrep::selectSections()
+     */
+    public function setSelectedSections(array $sections): void
+    {
+        $this->selectedSections = $sections;
     }
 
     /**
@@ -308,6 +319,12 @@ class MakePdf extends AbstractMakePdf
             // the Filter::body (HTMLPurifier) rescues the invalid parts and thus avoids some MathJax errors
             // the consequence is a slightly different layout
             $body = Filter::body(Tools::md2html($body));
+        }
+
+        // only the sections picked in the Contents panel, when there are some; spreadsheets drawn as the grid on screen
+        $body = PdfBodyPrep::spreadsheets(PdfBodyPrep::selectSections($body, $this->selectedSections));
+        if ($this->selectedSections !== []) {
+            $body = PdfBodyPrep::selectedNote() . $body;
         }
 
         // now this part of the code will look for embedded images in the text and download them from storage and passes them to mpdf via variables.

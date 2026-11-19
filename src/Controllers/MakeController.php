@@ -34,6 +34,7 @@ use Elabftw\Make\MakeQrPdf;
 use Elabftw\Make\MakeQrPng;
 use Elabftw\Make\MakeSchedulerReport;
 use Elabftw\Make\MakeStreamZip;
+use Elabftw\Make\PdfBodyPrep;
 use Elabftw\Make\ReportsHandler;
 use Elabftw\Models\AuditLogs;
 use Elabftw\Models\ExperimentsFolders;
@@ -249,7 +250,10 @@ final class MakeController extends AbstractController
         $users2Rors = new Users2Rors($this->requester->getUserid());
         $classification = Classification::tryFrom($this->Request->query->getInt('classification', Classification::None->value)) ?? Classification::None;
         if (count($this->entityArr) === 1) {
-            return (new MakePdf($log, $this->getMpdfProvider(), $this->requester, $this->entityArr, $instance2Rors, $teams2Rors, $users2Rors, $this->shouldIncludeChangelog(), $classification))->getResponse();
+            $Maker = new MakePdf($log, $this->getMpdfProvider(), $this->requester, $this->entityArr, $instance2Rors, $teams2Rors, $users2Rors, $this->shouldIncludeChangelog(), $classification);
+            // the sections picked in the Contents panel (positions of their headings): nothing picked exports everything
+            $Maker->setSelectedSections(PdfBodyPrep::parseSections($this->Request->query->getString('sections')));
+            return $Maker->getResponse();
         }
         return (new MakeMultiPdf($log, $this->getMpdfProvider(), $this->requester, $this->entityArr, $instance2Rors, $teams2Rors, $users2Rors, $this->shouldIncludeChangelog()))->getResponse();
     }
