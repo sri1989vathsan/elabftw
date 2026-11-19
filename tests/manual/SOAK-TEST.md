@@ -352,3 +352,17 @@ Two soak-record fixes made this table clean (no app change): the record now foll
 2. **One-column drift** (seed 22, "col-before: ... -2 columns"): same cause as the first part of item 1 (cleanup at the moment of the insert); not seen on build 55.
 3. **Cosmetic**: scroll jiggle was 0 on fresh pages in build 55 (45 and 70 events on older, crowded pages); the taller last row after "row-before" in Firefox was not seen.
 4. Test hygiene: a scratch experiment accumulates tables; start every full run on a fresh one.
+
+## 12. Added on 19 November 2026: view-page frame, print and PDF
+
+Not part of the default soak list (they need the view page, the print path or the server); each has its own script.
+
+| Check | Script | What it asserts |
+|---|---|---|
+| `viewport-equals-table-width` | `spreadsheet-soak.js` (default list) | see 11.1; also no strip above the header or under the last row (page table margin removed) |
+| view-page frame | `scratchpad/view_checks.py <exp> <prefix>` (headless Chrome, widths 1400/700/420, print media) | per sheet: frame vs table width, wider/bar visible/last column reachable, header height = row height, one row height, bottom gap; screenshots and a print-to-PDF |
+| `print-matches-live`, `print-selected-sections` | `print-check.js` (`printCheck()` on a view page) | print rules in the stylesheet; the printed copy holds every sheet as a grid table (live columns/rows, coordinate cells, scaled to 680 px when wider), no editing parts; only ticked sections are printed and the copy says so |
+| `pdf-matches-live`, `pdf-selected-sections` | `pdf-check.php` (`docker exec -i <web> php < tests/manual/pdf-check.php`) | `PdfBodyPrep`: grid lines, grey centred coordinate cells, fills/bold/alignment kept, trailing empty rows/columns dropped, width from the columns, no row split, two sheets, `sections=` keeps the chosen sections with the headings above them and nothing else |
+| PDF end to end | `curl` with a login cookie: `/api/v2/experiments/<id>?format=pdf[&sections=3,4]`, `sips -s format png x.pdf` | a real PDF; page 1 compared by eye with the live grid (images in the report) |
+
+Selection protocol: the Contents panel publishes `document.body.dataset.tocSections` (positions of the ticked headings, 1 based, document order); the PDF dialog and the PDF button of the selection bar send it as `sections=`; `PdfBodyPrep::selectSections` keeps those headings, their text and the headings that hold them. Plain HTML tables of the rich editor (not spreadsheets) print as normal tables and are not changed.
