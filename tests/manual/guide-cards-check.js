@@ -6,7 +6,8 @@
  *
  * Checks: valid JSON, unique ids, required fields, summary / detail length limits and the number of details of the guide-* cards,
  * every image (and extra screenshot) exists and is small enough, every guide-* card has a picture and alt text, every card id used by
- * a guide-info button (templates, TypeScript and Svelte) exists and is a guide card, and every guide card is opened from somewhere (warning).
+ * a guide-info button (templates, TypeScript and Svelte) exists and is a guide card, and every guide card is reachable: it has an i button, or it is in
+ * an area opened by an area i, or it is listed as page-only (with the reason) in this file.
  */
 const fs = require('fs');
 const path = require('path');
@@ -69,21 +70,45 @@ entries.forEach((e, i) => {
   }
 });
 
-// Card ids used by guide-info buttons.
+// Card ids used by guide-info buttons: guide.info('id'), data-card='id', or any quoted 'guide-...' literal in templates, TypeScript, Svelte and
+// the label dialog (a card chosen through a lookup, like the templates page, is written as a literal too).
 const used = new Map();
 const scan = (dir, ext) => fs.readdirSync(path.join(root, dir)).filter(f => f.endsWith(ext)).map(f => path.join(root, dir, f));
 const files = [...scan('src/templates', '.html'), ...scan('src/ts', '.ts'), ...scan('src/ts/components', '.svelte')];
+const areasLinked = new Set();
 for (const file of files) {
   const text = fs.readFileSync(file, 'utf8');
   for (const m of text.matchAll(/guide\.info\(\s*'([^']+)'/g)) used.set(m[1], [...(used.get(m[1]) || []), path.basename(file)]);
   for (const m of text.matchAll(/data-card=['"]([a-z0-9-]+)['"]/g)) used.set(m[1], [...(used.get(m[1]) || []), path.basename(file)]);
+  // (other 'guide-...' names such as the editor button 'guide-help' are not cards: only literals that are card ids count here)
+  for (const m of text.matchAll(/['"](guide-[a-z0-9-]+)['"]/g)) if (ids.has(m[1])) used.set(m[1], [...(used.get(m[1]) || []), path.basename(file)]);
+  for (const m of text.matchAll(/guide\.area\(\s*'([^']+)'/g)) areasLinked.add(m[1]);
 }
+// the label dialog (web/label-dialog.js) links to the whats-new page of the area "Others"
+if (/whats-new\.php\?area=Others/.test(fs.readFileSync(path.join(root, 'web/label-dialog.js'), 'utf8'))) areasLinked.add('Others');
 for (const [card, where] of used) {
   const names = [...new Set(where)].join(', ');
   if (!ids.has(card)) fail(`card id '${card}' used in ${names} does not exist in whats-new.json`);
   else if (!guideIds.has(card)) fail(`card id '${card}' used in ${names} is not a guide-* entry`);
 }
-for (const card of guideIds) if (!used.has(card)) warnings.push(`${card} is not opened by any i button (still listed on the What's new page)`);
+// Cards without an own i button must be reachable another way: through an area i (opens the guide page showing the whole area), or be listed
+// here as page-only (they are still on the What's new / guide page). Keep the reason when you add one.
+const PAGE_ONLY = {
+  'guide-pins': 'the pin buttons sit in every list row; a small i there would clutter the rows. The Experiments area i lists the card too',
+  'guide-reminders': 'the reminder chip is drawn by a Svelte component and the reminder field by the to-do panel script; an i there needs a TypeScript build',
+};
+const byId = new Map(entries.map(e => [e.id, e]));
+for (const card of guideIds) {
+  if (used.has(card)) continue;
+  const area = byId.get(card).area;
+  if (areasLinked.has(area)) continue;
+  if (PAGE_ONLY[card]) continue;
+  fail(`${card} has no i button, is not in an area opened by an area i (${[...areasLinked].join(', ')}) and is not listed as page-only`);
+}
+for (const card of Object.keys(PAGE_ONLY)) {
+  if (!guideIds.has(card)) fail(`PAGE_ONLY lists ${card}, which is not a guide card`);
+  else if (used.has(card)) fail(`${card} is listed as page-only but has an i button now: remove it from PAGE_ONLY`);
+}
 
 warnings.forEach(w => console.log('WARN ' + w));
 if (errors.length) {
