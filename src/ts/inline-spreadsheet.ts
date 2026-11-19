@@ -10803,6 +10803,8 @@ export function buildReadOnlySpreadsheetHost(
         inheritRowHeaderStyle(sheetContainer, newRow);
       });
       addInsertedCellStyles(lastInlineStructure, sheetContainer, styledCells);
+      // the change was reported before these cells took their look: report it again, or the saved table keeps the library's left alignment
+      notifyFromMirror(false);
     }, 0);
   };
   const styleNewlyInsertedColumn = (changedWorksheet: JssInstance, inserted?: unknown): void => {
@@ -10822,6 +10824,7 @@ export function buildReadOnlySpreadsheetHost(
         }
       });
       addInsertedCellStyles(lastInlineStructure, sheetContainer, styledCells);
+      notifyFromMirror(false);
     }, 0);
   };
 
