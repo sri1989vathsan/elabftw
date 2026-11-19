@@ -3100,6 +3100,12 @@ function matchHeaderRowToDataRows(container: HTMLElement, appearance: Spreadshee
     node.style.setProperty('height', `${wanted}px`);
     node.style.setProperty('min-height', `${wanted}px`);
     node.style.setProperty('max-height', `${wanted}px`);
+    if (node !== headerRow) {
+      // the text line of the header cell plus its padding is taller than the data rows: a table cell never gets lower than its content
+      node.style.setProperty('padding-top', '0');
+      node.style.setProperty('padding-bottom', '0');
+      node.style.setProperty('line-height', '1.2');
+    }
   });
 }
 
