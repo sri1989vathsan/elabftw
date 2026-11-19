@@ -86,11 +86,41 @@ export default class SidePanel {
     const storedWidth = Number.parseFloat(localStorage.getItem(SidePanel.WIDTH_KEY) ?? '');
     const defaultWidth = Math.max(window.innerWidth * 0.24, 330);
     SidePanel.setWidth(Number.isFinite(storedWidth) ? storedWidth : defaultWidth);
+    SidePanel.lockWheel();
     window.addEventListener('resize', () => {
       // Avoid scheduling another resize while handling the synthetic resize
       // emitted by refreshMainLayout().
       SidePanel.setWidth(SidePanel.currentWidth, false, false);
     });
+  }
+
+  /**
+   * The wheel over the rail or an open panel must never scroll the page behind it. CSS `overscroll-behavior: contain` covers
+   * what scrolls; this stops the rest (the drag handle, a panel or rail whose content fits, a wide table that cannot scroll
+   * that way): the event is cancelled unless something between the pointer and the sidebar can still scroll in its direction.
+   */
+  private static lockWheel(): void {
+    const canScroll = (el: HTMLElement, vertical: boolean, delta: number): boolean => {
+      const style = getComputedStyle(el);
+      const overflow = vertical ? style.overflowY : style.overflowX;
+      if (overflow !== 'auto' && overflow !== 'scroll') return false;
+      return vertical
+        ? (delta < 0 ? el.scrollTop > 0 : el.scrollTop + el.clientHeight < el.scrollHeight - 1)
+        : (delta < 0 ? el.scrollLeft > 0 : el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+    };
+    document.addEventListener('wheel', (event: WheelEvent) => {
+      // ctrl + wheel is browser zoom
+      if (event.ctrlKey || (event.deltaX === 0 && event.deltaY === 0) || !(event.target instanceof Element)) return;
+      const sidebar = event.target.closest<HTMLElement>('.side-panel:not([hidden]), #sidepanel-buttons, .side-panel-resizer');
+      if (!sidebar) return;
+      const vertical = Math.abs(event.deltaY) >= Math.abs(event.deltaX);
+      const delta = vertical ? event.deltaY : event.deltaX;
+      for (let el: HTMLElement | null = event.target as HTMLElement; el; el = el.parentElement) {
+        if (canScroll(el, vertical, delta)) return;
+        if (el === sidebar) break;
+      }
+      event.preventDefault();
+    }, { passive: false });
   }
 
   private static setContainerOpen(isOpen: boolean): void {

@@ -2473,6 +2473,15 @@ h1:has(> #documentTitle) {
   }
 }
 
+/* Wheel / trackpad scrolling over the sidebar never reaches the page behind it. The panels and the rail are scroll containers
+   (overflow-y: auto); `contain` stops the scroll from chaining to the page at their ends. The drag handle is not a scroller,
+   so SidePanel.lockWheel() (SidePanel.class.ts) also stops the wheel there and over content that cannot scroll. */
+.side-panel,
+#sidepanel-buttons,
+.side-panel-resizer {
+  overscroll-behavior: contain;
+}
+
 /* Narrow windows: the rail of sidebar buttons would sit on top of the page, so it collapses into
  * one button in the top bar, left of the logo (#sidepanelRailToggle), that shows the others on
  * demand. While a panel is open the whole rail stays visible (the panel leaves a gutter for it), so
