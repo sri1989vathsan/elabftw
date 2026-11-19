@@ -335,6 +335,7 @@ class MakePdf extends AbstractMakePdf
             $this->mpdf->pgwidth * 96 / 25.4,
             $this->sheetsMode,
             ($this->mpdf->pgwidth + $this->mpdf->h - $this->mpdf->w) * 96 / 25.4,
+            (string) preg_replace('/[^A-Za-z0-9]/', '', (string) ($this->requester->userData['pdf_format'] ?? 'A4')) ?: 'A4',
         );
         if ($this->selectedSections !== []) {
             $body = PdfBodyPrep::selectedNote() . $body;

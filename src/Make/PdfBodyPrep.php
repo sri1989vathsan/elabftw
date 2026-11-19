@@ -117,7 +117,7 @@ final class PdfBodyPrep
      * next page (first column, row numbers and header row repeated). A narrower sheet is left at 100% in every mode.
      * $landscapeWidthPx is the printable width of a landscape page.
      */
-    public static function spreadsheets(string $html, ?float $pageWidthPx = null, string $mode = self::MODE_LANDSCAPE, ?float $landscapeWidthPx = null): string
+    public static function spreadsheets(string $html, ?float $pageWidthPx = null, string $mode = self::MODE_LANDSCAPE, ?float $landscapeWidthPx = null, string $pageFormat = 'A4'): string
     {
         if (!str_contains($html, 'elabftw-spreadsheet')) {
             return $html;
@@ -131,11 +131,17 @@ final class PdfBodyPrep
             foreach ($body->querySelectorAll('table.elabftw-spreadsheet') as $table) {
                 self::prepareTable($table, $pageWidthPx, $mode, $landscapeWidthPx);
             }
-            // mPDF switches the page orientation with <pagebreak>
-            return str_replace(
+            $out = self::bodyHtml($body);
+            if (!str_contains($out, 'pdf-landscape-begin')) {
+                return str_replace('<div class="pdf-page-break"></div>', '<pagebreak />', $out);
+            }
+            // mPDF switches the page size with named pages (<pagebreak page-selector>), which also works with the @page rule of the
+            // template (a plain orientation="L" is overridden by it); the footer and margin are those of the template's page
+            $rules = '<style>@page sheetland { sheet-size: ' . $pageFormat . '-L; margin: 1cm; footer: html_footer; } @page sheetport { sheet-size: ' . $pageFormat . '; margin: 1cm; footer: html_footer; }</style>';
+            return $rules . str_replace(
                 array('<div class="pdf-landscape-begin"></div>', '<div class="pdf-landscape-end"></div>', '<div class="pdf-page-break"></div>'),
-                array('<pagebreak orientation="L" />', '<pagebreak orientation="P" />', '<pagebreak />'),
-                self::bodyHtml($body),
+                array('<pagebreak page-selector="sheetland" />', '<pagebreak page-selector="sheetport" />', '<pagebreak />'),
+                $out,
             );
         } catch (Throwable) {
             return $html;

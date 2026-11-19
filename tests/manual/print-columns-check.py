@@ -65,7 +65,11 @@ try:
     call('Emulation.setDeviceMetricsOverride', {'width': 1400, 'height': 900, 'deviceScaleFactor': 1, 'mobile': False})
     subprocess.run(['swiftc', os.path.join(HERE, 'pdf-text.swift'), '-o', os.path.join(tempfile.gettempdir(), 'pdf-text')], check=True)
     for mode in ('landscape', 'fit', 'split'):
-        call('Page.navigate', {'url': f'{BASE}/experiments.php?mode=view&id={exp}'}); time.sleep(6)
+        call('Page.navigate', {'url': f'{BASE}/experiments.php?mode=view&id={exp}'}); time.sleep(4)
+        for _ in range(40):  # the text must be on the page before printing
+            if ev("(document.getElementById('body_view')||{innerText:''}).innerText.length > 200"): break
+            time.sleep(1)
+        time.sleep(2)
         ev(f"localStorage.setItem('elabftw-sheets-mode','{mode}'); document.body.dataset.sheetsMode='{mode}'; window.scrollTo(0,0); 1")  # NOT scrolled to the sheet
         call('Emulation.setEmulatedMedia', {'media': 'print'}); time.sleep(1)
         pdf = os.path.join(tempfile.gettempdir(), f'print-columns-{mode}.pdf')
