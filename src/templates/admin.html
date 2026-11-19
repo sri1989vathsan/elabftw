@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% import 'guide-info.html' as guide -%}
 {% import 'categories-status-index.macro.html' as idx %}
 
 {% block body %}
@@ -58,7 +59,7 @@
     </div>
   </div>
 
-  <h2 class='p-2 pl-3 section-title'>{{ 'Configure your Team'|trans }}</h2>
+  <h2 class='p-2 pl-3 section-title'>{{ 'Configure your Team'|trans }}{{ guide.info('guide-admin-settings', 'Team settings') }}</h2>
 
   <div class='pl-3 mt-2' id='teamSettings'>
     <div class='settings-filter'>
