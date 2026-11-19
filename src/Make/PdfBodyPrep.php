@@ -31,6 +31,11 @@ use function trim;
 
 final class PdfBodyPrep
 {
+    public const string MODE_LANDSCAPE = 'landscape';
+    public const string MODE_FIT = 'fit';
+    public const string MODE_SPLIT = 'split';
+    // a sheet that would have to shrink below this on a portrait page goes on a landscape page
+    private const float MIN_PORTRAIT_SCALE = 0.7;
     private const string GRID_LINE = '1px solid #c8c8c8';
 
     /** The sections asked for in the request: "3,4,9" -> the positions (0 based) of the headings in the body, in document order. */
@@ -106,10 +111,13 @@ final class PdfBodyPrep
     }
 
     /**
-     * Draws every spreadsheet of the body like the grid on screen. A sheet wider than the printable page width ($pageWidthPx) is scaled
-     * down, text, borders, padding and row heights together, so that it is exactly as wide as the page; a narrower one is left at 100%.
+     * Draws every spreadsheet of the body like the grid on screen. $mode says what to do with a sheet wider than the page:
+     * 'landscape' (default): scaled to the portrait page width when that keeps at least 70%, else on a landscape page (scaled to its width
+     * when still wider); 'fit': always portrait, scaled to the page width; 'split': actual size, the columns that do not fit continue on the
+     * next page (first column, row numbers and header row repeated). A narrower sheet is left at 100% in every mode.
+     * $landscapeWidthPx is the printable width of a landscape page.
      */
-    public static function spreadsheets(string $html, ?float $pageWidthPx = null): string
+    public static function spreadsheets(string $html, ?float $pageWidthPx = null, string $mode = self::MODE_LANDSCAPE, ?float $landscapeWidthPx = null): string
     {
         if (!str_contains($html, 'elabftw-spreadsheet')) {
             return $html;
@@ -121,12 +129,23 @@ final class PdfBodyPrep
                 return $html;
             }
             foreach ($body->querySelectorAll('table.elabftw-spreadsheet') as $table) {
-                self::prepareTable($table, $pageWidthPx);
+                self::prepareTable($table, $pageWidthPx, $mode, $landscapeWidthPx);
             }
-            return self::bodyHtml($body);
+            // mPDF switches the page orientation with <pagebreak>
+            return str_replace(
+                array('<div class="pdf-landscape-begin"></div>', '<div class="pdf-landscape-end"></div>', '<div class="pdf-page-break"></div>'),
+                array('<pagebreak orientation="L" />', '<pagebreak orientation="P" />', '<pagebreak />'),
+                self::bodyHtml($body),
+            );
         } catch (Throwable) {
             return $html;
         }
+    }
+
+    /** The "Sheets in print and PDF" choice of the request (sheets=landscape|fit|split); anything else is the default. */
+    public static function parseMode(string $raw): string
+    {
+        return in_array($raw, array(self::MODE_FIT, self::MODE_SPLIT), true) ? $raw : self::MODE_LANDSCAPE;
     }
 
     /** The child elements of an element, in order. */
@@ -180,7 +199,7 @@ final class PdfBodyPrep
         }
     }
 
-    private static function prepareTable(Element $table, ?float $pageWidthPx = null): void
+    private static function prepareTable(Element $table, ?float $pageWidthPx, string $mode, ?float $landscapeWidthPx): void
     {
         $table->removeAttribute('data-spreadsheet');
         self::removeHidden($table);
@@ -196,22 +215,51 @@ final class PdfBodyPrep
         if ($total > 0) {
             $style .= 'width:' . $total . 'px;';
         }
-        $scale = ($pageWidthPx !== null && $total > $pageWidthPx) ? $pageWidthPx / $total : 1.0;
+        // which page and how much smaller than 100%
+        $landscape = false;
+        $target = $pageWidthPx;
+        if ($pageWidthPx !== null && $total > $pageWidthPx && $mode === self::MODE_LANDSCAPE && $pageWidthPx / $total < self::MIN_PORTRAIT_SCALE && $landscapeWidthPx !== null) {
+            $landscape = true;
+            $target = $landscapeWidthPx;
+        }
+        $scale = ($target !== null && $total > $target && $mode !== self::MODE_SPLIT) ? $target / $total : 1.0;
+        if ($mode === self::MODE_SPLIT && $pageWidthPx !== null && $total > $pageWidthPx && !self::hasMergedCells($table)) {
+            self::styleCells($table, 1.0);
+            $table->setAttribute('style', $style);
+            self::splitIntoBlocks($table, $pageWidthPx);
+            return;
+        }
         if ($scale < 1.0) {
             // wider than the page: every size shrinks by the same factor, so the table is exactly as wide as the page
-            $style = (string) preg_replace('/width:\d+px;/', 'width:' . (int) floor($pageWidthPx) . 'px;', $style) . 'font-size:' . round(9 * $scale, 2) . 'pt;';
+            $style = (string) preg_replace('/width:\d+px;/', 'width:' . (int) floor((float) $target) . 'px;', $style) . 'font-size:' . round(9 * $scale, 2) . 'pt;';
             foreach ($table->querySelectorAll('colgroup > col') as $col) {
                 $col->setAttribute('style', 'width:' . round(self::pixels((string) $col->getAttribute('style')) * $scale, 2) . 'px');
             }
         }
         $table->setAttribute('style', $style);
+        self::styleCells($table, $scale);
+        if ($landscape) {
+            $doc = $table->ownerDocument;
+            $begin = $doc->createElement('div');
+            $begin->setAttribute('class', 'pdf-landscape-begin');
+            $end = $doc->createElement('div');
+            $end->setAttribute('class', 'pdf-landscape-end');
+            $table->before($begin);
+            $table->after($end);
+        }
+    }
+
+    /** Grid lines, white cells, grey coordinate cells and tight padding; sizes multiplied by $scale. */
+    private static function styleCells(Element $table, float $scale): void
+    {
         foreach ($table->querySelectorAll('tr') as $row) {
-            $rowStyle = self::scalePixels(trim((string) $row->getAttribute('style'), "; "), $scale);
-            $row->setAttribute('style', $rowStyle . ';background-color:#ffffff;page-break-inside:avoid;');
+            // the row is as high as its content (a live row height is the content plus the grid's padding)
+            $rowStyle = trim((string) preg_replace('/(?:^|;)\s*height\s*:[^;]*/i', '', (string) $row->getAttribute('style')), "; ");
+            $row->setAttribute('style', self::scalePixels($rowStyle, $scale) . ';background-color:#ffffff;page-break-inside:avoid;');
         }
         foreach ($table->querySelectorAll('th, td') as $cell) {
             $coordinate = $cell->classList->contains('spreadsheet-coordinate');
-            $extra = 'border:' . self::GRID_LINE . ';padding:' . round(3 * $scale, 2) . 'px ' . round(5 * $scale, 2) . 'px;overflow:hidden;';
+            $extra = 'border:' . self::GRID_LINE . ';padding:' . round(1.5 * $scale, 2) . 'px ' . round(4 * $scale, 2) . 'px;overflow:hidden;';
             if ($coordinate) {
                 $extra .= 'text-align:center;text-transform:none;font-weight:normal;';
                 if (!preg_match('/background(?:-color)?\s*:/i', (string) $cell->getAttribute('style'))) {
@@ -225,8 +273,94 @@ final class PdfBodyPrep
             if (!$coordinate && !preg_match('/background(?:-color)?\s*:/i', (string) $cell->getAttribute('style'))) {
                 $extra .= 'background-color:#ffffff;';
             }
-            // what the person set on the cell (fill, bold, colour, alignment, number format) comes last and wins
-            $cell->setAttribute('style', $extra . self::scalePixels(trim((string) $cell->getAttribute('style'), "; "), $scale) . ';');
+            // what the person set on the cell (fill, bold, colour, alignment, number format) comes last and wins; padding and height are ours
+            $own = trim((string) preg_replace('/(?:^|;)\s*(?:padding(?:-[a-z]+)?|height)\s*:[^;]*/i', '', (string) $cell->getAttribute('style')), "; ");
+            $cell->setAttribute('style', $extra . self::scalePixels($own, $scale) . ';');
+        }
+    }
+
+    /**
+     * Actual size: the columns that do not fit the page width go on following pages, each block with the row-number column, the header row
+     * and a note naming its columns. A column wider than the page alone is shrunk to the page (never cut).
+     */
+    private static function splitIntoBlocks(Element $table, float $pageWidthPx): void
+    {
+        $cols = array();
+        foreach ($table->querySelectorAll('colgroup > col') as $col) {
+            $cols[] = $col;
+        }
+        $gutter = $table->querySelector('tbody tr > .spreadsheet-coordinate') !== null ? 1 : 0;
+        $widths = array();
+        foreach ($cols as $col) {
+            $widths[] = (float) self::pixels((string) $col->getAttribute('style'));
+        }
+        $gutterWidth = $gutter === 1 ? ($widths[0] ?? 0.0) : 0.0;
+        $room = max(40.0, $pageWidthPx - $gutterWidth);
+        $blocks = array();
+        $current = array();
+        $used = 0.0;
+        for ($index = $gutter, $last = count($widths); $index < $last; $index++) {
+            $w = min($widths[$index], $room);
+            if ($current !== array() && $used + $w > $room) {
+                $blocks[] = $current;
+                $current = array();
+                $used = 0.0;
+            }
+            $current[] = $index;
+            $used += $w;
+        }
+        if ($current !== array()) {
+            $blocks[] = $current;
+        }
+        if (count($blocks) < 2) {
+            return;
+        }
+        $doc = $table->ownerDocument;
+        $letters = array();
+        $head = $table->querySelector('thead tr');
+        if ($head !== null) {
+            foreach (self::kids($head) as $i => $cell) {
+                $letters[$i] = trim($cell->textContent ?? '');
+            }
+        }
+        $original = $table->cloneNode(true);
+        $anchor = $table;
+        foreach ($blocks as $number => $block) {
+            $copy = $number === 0 ? $table : $original->cloneNode(true);
+            $keep = array_merge($gutter === 1 ? array(0) : array(), $block);
+            foreach ($copy->querySelectorAll('tr') as $row) {
+                foreach (self::kids($row) as $i => $cell) {
+                    if (!in_array($i, $keep, true)) {
+                        $cell->remove();
+                    }
+                }
+            }
+            $blockWidth = 0.0;
+            foreach ($copy->querySelectorAll('colgroup > col') as $i => $col) {
+                if (!in_array($i, $keep, true)) {
+                    $col->remove();
+                    continue;
+                }
+                $w = $i === 0 && $gutter === 1 ? $widths[0] : min($widths[$i], $room);
+                $col->setAttribute('style', 'width:' . round($w, 2) . 'px');
+                $blockWidth += $w;
+            }
+            $copy->setAttribute('style', (string) preg_replace('/width:[\d.]+px;?/', '', (string) $copy->getAttribute('style')) . 'width:' . round($blockWidth, 2) . 'px;');
+            $from = $letters[$block[0]] ?? '';
+            $to = $letters[$block[count($block) - 1]] ?? '';
+            $note = $doc->createElement('p');
+            $note->setAttribute('style', 'color:#555;font-size:8pt;margin:4pt 0 0 0;');
+            $note->textContent = $from === $to ? 'column ' . $from : 'columns ' . $from . '-' . $to;
+            if ($number === 0) {
+                $table->before($note);
+            } else {
+                $break = $doc->createElement('div');
+                $break->setAttribute('class', 'pdf-page-break');
+                $anchor->after($break);
+                $break->after($note);
+                $note->after($copy);
+                $anchor = $copy;
+            }
         }
     }
 
@@ -309,7 +443,7 @@ final class PdfBodyPrep
         }
         $isEmpty = static function (Element $cell): bool {
             return trim($cell->textContent ?? '') === ''
-                && preg_match('/background(?:-color)?\s*:\s*(?!(?:#fff(?:fff)?|white|transparent|none)\b)/i', (string) $cell->getAttribute('style')) !== 1;
+                && preg_match('/background(?:-color)?\s*:\s*(?!(?:#fff(?:fff)?|#f[0-9a-f]f[0-9a-f]f[0-9a-f]|white|transparent|none)\b)/i', (string) $cell->getAttribute('style')) !== 1;
         };
         // the data cells of a row, without its coordinate cell
         $dataCells = static function (Element $row): array {
