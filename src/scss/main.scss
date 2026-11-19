@@ -8209,6 +8209,10 @@ body.html-tool-workspace-open:not(.html-tool-workspace-is-maximized) .inline-spr
 
 .elabftw-spreadsheet-readonly-view .jss_worksheet > thead > tr > * {
   box-sizing: border-box;
+  /* the text line plus the header's padding is taller than a data row: a cell never gets lower than its content */
+  line-height: 1.2;
+  padding-bottom: 0 !important;
+  padding-top: 0 !important;
   height: var(--spreadsheet-column-index-height) !important;
   max-height: var(--spreadsheet-column-index-height) !important;
   min-height: var(--spreadsheet-column-index-height) !important;

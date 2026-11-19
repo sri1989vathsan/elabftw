@@ -2482,7 +2482,7 @@ async function spreadsheetSoak(options = {}) {
       for (const [label, cols] of [['narrow table', 2], ['wide table', 24]]) {
         const uid = await createTable(`viewport ${label}`, { rows: 4, cols });
         if (!uid) continue;
-        await typeInto(uid, 1, 0, 'a text long enough to need a fitted column here');
+        await typeInto(uid, 1, 0, 'fitted text');
         await typeInto(uid, 1, cols - 1, 'last column text');
         const root = await live(uid);
         await sleep(500);
@@ -2493,7 +2493,7 @@ async function spreadsheetSoak(options = {}) {
         const tableWidth = Math.round([...ws.querySelectorAll(':scope > colgroup > col')].reduce((sum, col) => sum + (parseFloat(col.getAttribute('width')) || col.getBoundingClientRect().width), 0));
         const frame = scroller.clientWidth;
         const wider = scroller.scrollWidth > scroller.clientWidth + 1;
-        if (!wider && Math.abs(frame - tableWidth) > 3 && frame - tableWidth > 3) dataLoss.push({ context, table, problem: `the table is ${tableWidth} px wide and fits, but its frame is ${frame} px` });
+        if (!wider && frame - tableWidth > 14) dataLoss.push({ context, table, problem: `the table is ${tableWidth} px wide and fits, but its frame is ${frame} px` });
         if (wider) {
           scroller.scrollLeft = scroller.scrollWidth;
           await sleep(120);

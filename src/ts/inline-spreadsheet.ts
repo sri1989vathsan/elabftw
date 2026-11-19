@@ -3078,6 +3078,9 @@ function applyCoordinateHeaderStyle(container: HTMLElement, appearance: Spreadsh
   });
 }
 
+// the outer height of a data row with one line of text in the grid, which the column-letter row follows
+const ONE_LINE_ROW_HEIGHT = 33;
+
 /**
  * The header row (column letters) is as high as a data row, unless the person set another height in the appearance
  * options. Its cells carry the header's padding on top of the height, so left alone the row came out about 11 px
@@ -11535,6 +11538,12 @@ export function buildSpreadsheetPreviewHost(table: HTMLTableElement, reservedBar
       + '<button type="button" class="btn btn-sm btn-outline-secondary" tabindex="-1" disabled>Add rows</button>';
     host.appendChild(placeholder);
   }
+  // the column-letter row is as high as a one-line data row, as it is in the live grid (see matchHeaderRowToDataRows)
+  const previewAppearance = normalizeAppearance(saved?.appearance);
+  host.style.setProperty(
+    '--spreadsheet-column-index-height',
+    `${previewAppearance.columnIndexHeight !== DEFAULT_APPEARANCE.columnIndexHeight ? previewAppearance.columnIndexHeight : ONE_LINE_ROW_HEIGHT}px`,
+  );
   fitPreviewColumns(host, worksheet, saved?.colWidths, dataCols);
   return host;
 }
