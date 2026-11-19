@@ -120,6 +120,48 @@ function restoreScrollIfRequested(): void {
   attempt();
 }
 
+/**
+ * Keeps the "Back to ..." pill clear of the open side panel (and the rail of tab icons beside it): its left edge is taken from where the
+ * panel really ends (measured, not guessed) and follows the panel when it opens, closes or changes size, and the window when it is resized.
+ * With no room left beside the panel (a narrow window) it sits at the top of the page instead of the bottom. It never covers the panel.
+ */
+function keepClearOfSidePanels(bar: HTMLElement): void {
+  const GAP = 16;
+  const place = (): void => {
+    if (!bar.isConnected) {
+      observer.disconnect();
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', place);
+      return;
+    }
+    const panels = Array.from(document.querySelectorAll<HTMLElement>('.side-panel')).filter(panel => !panel.hidden && panel.offsetWidth > 0);
+    const rail = document.getElementById('sidepanel-buttons');
+    const railRight = rail && rail.offsetWidth > 0 ? rail.getBoundingClientRect().right : 0;
+    const panelRight = panels.reduce((right, panel) => Math.max(right, panel.getBoundingClientRect().right), 0);
+    const defaultLeft = 3.5 * Number.parseFloat(getComputedStyle(document.documentElement).fontSize || '16');
+    const left = Math.max(defaultLeft, railRight + GAP, panelRight > 0 ? panelRight + GAP : 0);
+    bar.style.left = `${Math.round(left)}px`;
+    bar.style.maxWidth = `${Math.max(120, window.innerWidth - left - GAP)}px`;
+    // the pill has to fit beside the panel: with less room than 220 px it moves to the top of the page, under the navbar; with less than
+    // 150 px (a panel across the whole window) it is not shown until the panel is closed, since it could only lie over the panel
+    const room = window.innerWidth - left - GAP;
+    bar.style.display = panelRight > 0 && room < 150 ? 'none' : '';
+    if (panelRight > 0 && room < 220) {
+      bar.style.bottom = 'auto';
+      bar.style.top = '66px';
+    } else {
+      bar.style.bottom = '';
+      bar.style.top = '';
+    }
+  };
+  const observer = new MutationObserver(place);
+  observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden', 'class', 'style'], childList: true });
+  const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(place) : null;
+  document.querySelectorAll('.side-panel, #sidepanel-buttons').forEach(element => resizeObserver?.observe(element));
+  window.addEventListener('resize', place);
+  place();
+}
+
 function render(): void {
   document.getElementById('elabftwBackButton')?.remove();
   const here = window.location.href;
@@ -166,6 +208,7 @@ function render(): void {
   });
   bar.append(back, close);
   document.body.appendChild(bar);
+  keepClearOfSidePanels(bar);
 }
 
 export function initBackToLink(): void {

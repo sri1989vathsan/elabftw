@@ -60,10 +60,33 @@ window.tocSelectBarCheck = async function tocSelectBarCheck() {
     }).map(e => (e.id ? '#' + e.id : '') + '.' + String(e.className).split(' ').slice(0, 2).join('.'));
     check(`${n} selected: nothing floating lies over the bar`, over.length === 0, over.join(' | '));
   };
+  // the "Back to ..." pill (back-to-link.ts): shown after following an internal link; here it is made the way the page makes it
+  const keyList = Object.keys(sessionStorage).filter(k => /back/i.test(k));
+  const pillCheck = (when) => {
+    const pill = document.getElementById('elabftwBackButton');
+    if (!pill || getComputedStyle(pill).display === 'none') { check(`${when}: the Back pill is not over the panel (hidden or absent)`, true); return; }
+    const pb = box(pill);
+    const hits = [...document.querySelectorAll('.side-panel:not([hidden]) *')].filter(e => {
+      const b = e.getBoundingClientRect(); const cs = getComputedStyle(e);
+      return b.width > 1 && b.height > 1 && cs.visibility !== 'hidden' && cs.display !== 'none' && touches(pb, { l: b.left, t: b.top, r: b.right, b: b.bottom });
+    }).map(e => e.id || String(e.className).split(' ')[0]);
+    check(`${when}: the Back pill does not touch anything in the open panel`, hits.length === 0, hits.slice(0, 5).join(' | '));
+    const scrollTop = document.getElementById('scrollButtons');
+    if (scrollTop) [...scrollTop.children].forEach(c => { const cb = c.getBoundingClientRect(); if (cb.width > 1 && touches(pb, { l: cb.left, t: cb.top, r: cb.right, b: cb.bottom })) check(`${when}: the Back pill does not cover a scroll button`, false, 'covers a scroll button'); });
+  };
   const available = checks().length;
   check('the panel lists at least five sections', available >= 5, `${available} sections`);
   await measure(1);
-  if (available >= 5) await measure(5);
+  pillCheck('Contents panel, 1 selected');
+  if (available >= 5) { await measure(5); pillCheck('Contents panel, 5 selected'); }
+  // the Folders and Search panels too
+  for (const [id, name] of [['foldersPanelOpener', 'Folders'], ['favoritesPanelOpener', 'Search']]) {
+    const opener = document.getElementById(id);
+    if (!opener) continue;
+    click(opener); await sleep(600);
+    pillCheck(`${name} panel`);
+    click(opener); await sleep(300);
+  }
   check('the header has Print and PDF with a selection too', !!document.getElementById('tocPrintAll') && /\(\d+ section/.test(document.getElementById('tocPrintAll').title), document.getElementById('tocPrintAll')?.title);
   click(document.getElementById('tocSelectClear')); await sleep(300);
   check('with the selection cleared the tooltip says whole entry again', /whole entry/i.test(document.getElementById('tocPrintAll')?.title || ''), document.getElementById('tocPrintAll')?.title);
