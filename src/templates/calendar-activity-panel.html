@@ -1,14 +1,11 @@
 {% import 'guide-info.html' as guide -%}
 <div class='side-panel' id='calendarActivityPanel' hidden>
-  <button type='button' data-action='toggle-sidepanel' data-target='calendar-activity' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn float-right mr-2'>
-    <i class='fas fa-xmark fa-2x'></i>
-  </button>
+  {# Close and Refresh: the same size and place in every side panel (see .panel-corner-btn in main.scss) #}
+  <button type='button' data-action='toggle-sidepanel' data-target='calendar-activity' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn panel-corner-btn panel-close'><i class='fas fa-xmark fa-fw' aria-hidden='true'></i></button>
+  <button type='button' id='calendarActivityRefresh' class='btn panel-corner-btn panel-refresh' title='{{ 'Refresh'|trans }}' aria-label='{{ 'Refresh'|trans }}'><i class='fas fa-rotate fa-fw' aria-hidden='true'></i></button>
   <div class='p-3'>
     <h3 class='mb-3 py-2 d-flex align-items-center justify-content-between'>
       <span>{{ 'Activity calendar'|trans }}{{ guide.info('guide-calendar', 'Activity calendar') }}</span>
-      <button type='button' id='calendarActivityRefresh' class='btn btn-sm btn-outline-secondary' title='{{ 'Refresh'|trans }}' aria-label='{{ 'Refresh'|trans }}'>
-        <i class='fas fa-sync-alt fa-fw' aria-hidden='true'></i>
-      </button>
     </h3>
     <a href='/calendar.php' class='btn btn-primary btn-sm mb-2'><i class='fas fa-calendar-days fa-fw mr-1' aria-hidden='true'></i>{{ 'Open the calendar page'|trans }}</a>
     <div id='calendarActivity'></div>

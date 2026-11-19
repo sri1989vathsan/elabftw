@@ -1,7 +1,9 @@
 {% import 'guide-info.html' as guide -%}
 {# Table of Contents side panel — mirrors structure of todolist-panel.html #}
 <div class='side-panel' id='tocPanel' hidden>
-  <button type='button' data-action='toggle-sidepanel' data-target='toc' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn float-right mr-2'><i class='fas fa-xmark fa-2x'></i></button>
+  {# Close and Refresh: the same size and place in every side panel (see .panel-corner-btn in main.scss) #}
+  <button type='button' data-action='toggle-sidepanel' data-target='toc' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn panel-corner-btn panel-close'><i class='fas fa-xmark fa-fw' aria-hidden='true'></i></button>
+  <button type='button' data-action='refresh-toc' class='btn panel-corner-btn panel-refresh' title='{{ 'Refresh'|trans }}' aria-label='{{ 'Refresh'|trans }}'><i class='fas fa-rotate fa-fw' aria-hidden='true'></i></button>
   <div class='p-3 toc-panel-inner'>
     {# header: Contents, the number of sections, a small refresh button and the guide #}
     <h3 class='toc-heading'>
@@ -10,7 +12,6 @@
         {# always there: with nothing ticked they print / export the whole entry, with sections ticked only those #}
         <button type='button' class='toc-icon-btn' id='tocPrintAll' title='{{ 'Print whole entry'|trans }}' aria-label='{{ 'Print whole entry'|trans }}'><i class='fas fa-print fa-fw' aria-hidden='true'></i></button>
         <button type='button' class='toc-icon-btn' id='tocPdfAll' title='{{ 'PDF of the whole entry'|trans }}' aria-label='{{ 'PDF of the whole entry'|trans }}'><i class='fas fa-file-pdf fa-fw' aria-hidden='true'></i></button>
-        <button type='button' class='toc-icon-btn' data-action='refresh-toc' title='{{ 'Refresh'|trans }}' aria-label='{{ 'Refresh'|trans }}'><i class='fas fa-rotate fa-fw' aria-hidden='true'></i></button>
         {{ guide.info('guide-toc', 'Contents') }}
       </span>
     </h3>

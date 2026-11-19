@@ -249,6 +249,12 @@ export default class FavoriteFilters extends SidePanel {
     void this.loadResults();
   }
 
+  /** The refresh button of the Search panel: forget the short-lived cached results and run the current query again. */
+  refresh(): Promise<void> {
+    this.resultsCache.clear();
+    return this.loadResults();
+  }
+
   // Only the explicit "Apply filters" button closes the overlay -- apply()
   // itself also runs on every live-update trigger (a checkbox toggling, the
   // text debounce, removing a chip), where closing it would kick the user
