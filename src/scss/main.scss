@@ -8886,6 +8886,58 @@ the form-control fails to do that so we do the border ourselves */
   display: none;
 }
 
+/* Spreadsheets on paper look like the grid on the screen: the same grid lines, grey coordinate cells, fills kept (a printer drops
+   backgrounds unless told not to), no scroll bars, toolbars or zebra stripes, rows never split over a page, the header row repeated. */
+@media print {
+  .elabftw-spreadsheet-readonly-view,
+  table.elabftw-spreadsheet {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .elabftw-spreadsheet-readonly-view {
+    max-width: none !important;
+    overflow: visible !important;
+  }
+
+  .elabftw-spreadsheet-readonly-view .jss_content,
+  .elabftw-spreadsheet-readonly-view .jss_container {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .elabftw-spreadsheet-readonly-view .elabftw-own-scrollbar,
+  .elabftw-spreadsheet-readonly-view .elabftw-spreadsheet-readonly-toggle,
+  .elabftw-spreadsheet-readonly-view .jss_toolbar,
+  .elabftw-spreadsheet-readonly-view .jtoolbar {
+    display: none !important;
+  }
+
+  #tocPrintSelectionDocument table.elabftw-spreadsheet {
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  #tocPrintSelectionDocument table.elabftw-spreadsheet td,
+  #tocPrintSelectionDocument table.elabftw-spreadsheet th {
+    border: 1px solid #ccc;
+    overflow: hidden;
+    padding: 0.2rem 0.4rem;
+  }
+
+  #tocPrintSelectionDocument table.elabftw-spreadsheet tr:nth-child(even) {
+    background-color: transparent;
+  }
+
+  #tocPrintSelectionDocument table.elabftw-spreadsheet thead {
+    display: table-header-group;
+  }
+
+  #tocPrintSelectionDocument table.elabftw-spreadsheet tr {
+    break-inside: avoid;
+  }
+}
+
 /* print only the main div */
 @media print {
   body.toc-print-selection-active {

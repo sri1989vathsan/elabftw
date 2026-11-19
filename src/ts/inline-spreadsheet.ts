@@ -11600,6 +11600,9 @@ export function activateLazySpreadsheetViews(root: ParentNode): void {
  * matched up by their position among all matches, not by identity --
  * cloneNode() produces new node objects the WeakMap was never keyed on.
  */
+// printable width of an A4 portrait page with the default margins, in CSS pixels
+const PRINT_CONTENT_WIDTH = 680;
+
 export function restoreStaticSpreadsheetsForPrint(originalRoot: ParentNode, clonedRoot: ParentNode): void {
   // The editor keeps a spacer after each table to reserve room for its overlay, with a negative margin when the
   // overlay is shorter than the table. On paper the real table is printed, so a leftover spacer would pull the
@@ -11639,7 +11642,9 @@ export function restoreStaticSpreadsheetsForPrint(originalRoot: ParentNode, clon
     const viewModeWidth = Number.parseFloat(originalHost.dataset.viewModeWidth ?? '');
     if (Number.isFinite(viewModeWidth) && viewModeWidth > 0) {
       table.style.width = `${viewModeWidth}px`;
-      table.style.maxWidth = '100%';
+      table.style.maxWidth = 'none';
+      // a table wider than the printable width is scaled down to fit the page, never cut off
+      if (viewModeWidth > PRINT_CONTENT_WIDTH) table.style.setProperty('zoom', String(Math.floor(PRINT_CONTENT_WIDTH / viewModeWidth * 1000) / 1000));
     }
     clone.replaceWith(table);
   });
