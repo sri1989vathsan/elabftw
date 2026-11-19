@@ -8030,22 +8030,33 @@ body.html-tool-workspace-open:not(.html-tool-workspace-is-maximized) .inline-spr
 /* stylelint-disable selector-class-pattern */
 .inline-spreadsheet-container .jss_worksheet td.highlight-top,
 .elabftw-spreadsheet-readonly-grid .jss_worksheet td.highlight-top {
-  border-top: 2px solid var(--primary) !important;
+  --elabftw-hl-top: inset 0 2px 0 0 var(--primary);
 }
 
 .inline-spreadsheet-container .jss_worksheet td.highlight-bottom,
 .elabftw-spreadsheet-readonly-grid .jss_worksheet td.highlight-bottom {
-  border-bottom: 2px solid var(--primary) !important;
+  --elabftw-hl-bottom: inset 0 -2px 0 0 var(--primary);
 }
 
 .inline-spreadsheet-container .jss_worksheet td.highlight-left,
 .elabftw-spreadsheet-readonly-grid .jss_worksheet td.highlight-left {
-  border-left: 2px solid var(--primary) !important;
+  --elabftw-hl-left: inset 2px 0 0 0 var(--primary);
 }
 
 .inline-spreadsheet-container .jss_worksheet td.highlight-right,
 .elabftw-spreadsheet-readonly-grid .jss_worksheet td.highlight-right {
-  border-right: 2px solid var(--primary) !important;
+  --elabftw-hl-right: inset -2px 0 0 0 var(--primary);
+}
+
+/* The selection edge is drawn inside the cell (inset shadows of the four sides), not as a thicker border: a 2px border instead of the
+ * 1px one made the cell's text area 1 px narrower on each selected side, so selecting a column moved the text and could re-wrap it. */
+.inline-spreadsheet-container .jss_worksheet td.highlight,
+.elabftw-spreadsheet-readonly-grid .jss_worksheet td.highlight {
+  box-shadow:
+    var(--elabftw-hl-top, 0 0 0 0 transparent),
+    var(--elabftw-hl-bottom, 0 0 0 0 transparent),
+    var(--elabftw-hl-left, 0 0 0 0 transparent),
+    var(--elabftw-hl-right, 0 0 0 0 transparent);
 }
 
 .inline-spreadsheet-container .jss_worksheet td.selection,
