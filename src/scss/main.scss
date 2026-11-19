@@ -13474,6 +13474,23 @@ button.wp-legend-item {
   }
 }
 
+// The dot on the navbar "What's new" button while there are unseen entries (head.html, whats-new-popup.ts).
+.nav-whats-new-dot {
+  background: var(--danger, #dc3545);
+  border: 2px solid var(--fx-nav-bg, var(--white, #fff));
+  border-radius: 50%;
+  height: 0.8rem;
+  pointer-events: none;
+  position: absolute;
+  right: 0.2rem;
+  top: 0.35rem;
+  width: 0.8rem;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
 // The "What's new" popup after login (whats-new-popup.html / whats-new-popup.ts). No dimming layer, so the floating "Back to" button (1035) and the
 // reminder chip stay usable; it sits below other modals (1050) so a confirm or delete dialog opened over it is on top. Colours come from the
 // modal's own theme tokens, so light, dark and midnight match the app's other dialogs.
