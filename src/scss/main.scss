@@ -9062,6 +9062,19 @@ the form-control fails to do that so we do the border ourselves */
   }
 }
 
+/* "Sheets in print and PDF" = landscape when wide: the sheet gets a landscape page of its own (Chromium named pages; others ignore it) */
+@page wide {
+  size: A4 landscape;
+}
+
+@media print {
+  .elabftw-spreadsheet-readonly-view.print-wide-sheet {
+    break-after: page;
+    break-before: page;
+    page: wide;
+  }
+}
+
 /* print only the main div */
 @media print {
   body.toc-print-selection-active {
