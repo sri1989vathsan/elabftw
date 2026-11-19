@@ -229,6 +229,19 @@ final class App
         return $this->whatsNewPopup;
     }
 
+    /** Number of "What's new" entries the user has not seen yet (the dot on the navbar button); 0 when anonymous or on any failure. */
+    public function getWhatsNewUnseenCount(): int
+    {
+        if (!$this->Session->get('is_auth') || $this->isAnonymous()) {
+            return 0;
+        }
+        try {
+            return new WhatsNewPopup((int) $this->Users->userData['userid'])->unseenCount();
+        } catch (Exception) {
+            return 0;
+        }
+    }
+
     /** Whether the user wants the "What's new" popup after login (a switch in their settings; on by default). */
     public function isWhatsNewPopupEnabled(): bool
     {
