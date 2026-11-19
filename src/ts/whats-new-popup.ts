@@ -43,7 +43,7 @@ export function initWhatsNewPopup(): void {
 
   $(popup).on('hide.bs.modal', () => { void markSeen(); });
   $(popup).on('shown.bs.modal', () => popup.querySelector<HTMLElement>('[data-whats-new-got-it]')?.focus());
-  $(popup).modal({ backdrop: false, keyboard: true, focus: true, show: true });
+  $(popup).modal({ backdrop: false, keyboard: true, focus: true });
 
   // click outside the dialog (there is no backdrop to catch it); other dialogs and floating helpers do not count
   document.addEventListener('mousedown', (event: MouseEvent) => {
