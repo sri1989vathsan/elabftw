@@ -115,6 +115,88 @@ namespace {
     $check('popup: "N more" counts the rest', $more === count($unseen) - 14 && $more > 0, (string) $more);
     $check('popup: featured entries come from both files, newest first', $ids($sf)[0] === 'f9');
 
+    // 8. source modes (this branch only: the store takes a mode as its third argument)
+    if ((new \ReflectionClass(WhatsNewStore::class))->getConstructor()?->getNumberOfParameters() >= 3) {
+        $m = fn(?string $mode): array => $ids((new WhatsNewStore("$dir/shared.json", "$dir/extra.json", $mode))->all());
+        $check('mode both: merged list', $m('both') === array('x4', 's3', 'x25', 's2', 's1', 'x0'), json_encode($m('both')));
+        $check('mode orders: shared entries only', $m('orders') === array('s3', 's2', 's1'), json_encode($m('orders')));
+        $check('mode inventory: extra file only', $m('inventory') === array('x4', 'x25', 's2', 'x0'), json_encode($m('inventory')));
+        $check('unknown mode: treated as both', $m('nonsense') === $m('both'));
+        $check('mode inventory without an extra file: shared list', $ids((new WhatsNewStore("$dir/shared.json", "$dir/missing.json", 'inventory'))->all()) === array('s3', 's2', 's1'));
+        $check('mode inventory with a broken extra file: shared list', $ids((new WhatsNewStore("$dir/shared.json", "$dir/bad.json", 'inventory'))->all()) === array('s3', 's2', 's1'));
+        $check('default (no mode, no env, no setting file value) is both', $ids((new WhatsNewStore("$dir/shared.json", "$dir/extra.json"))->all()) === $m('both'));
+        putenv('ELABFTW_WHATS_NEW=orders');
+        $check('env ELABFTW_WHATS_NEW=orders is used', $ids((new WhatsNewStore("$dir/shared.json", "$dir/extra.json"))->all()) === array('s3', 's2', 's1'));
+        putenv('ELABFTW_WHATS_NEW=inventory');
+        $check('env ELABFTW_WHATS_NEW=inventory is used', $ids((new WhatsNewStore("$dir/shared.json", "$dir/extra.json"))->all()) === array('x4', 'x25', 's2', 'x0'));
+        putenv('ELABFTW_WHATS_NEW=both');
+        $check('env ELABFTW_WHATS_NEW=both is used', $ids((new WhatsNewStore("$dir/shared.json", "$dir/extra.json"))->all()) === $m('both'));
+        putenv('ELABFTW_WHATS_NEW');
+        // unseen / popup with extras in the modes: a user who saw the newest shared entry gets the extra ones in both, none in orders
+        $seen = array('id' => 's3', 'date' => '2026-03-03');
+        $check('unseen, mode both: newer extra entry offered', $ids(WhatsNewPopup::unseen((new WhatsNewStore("$dir/shared.json", "$dir/extra.json", 'both'))->all(), $seen, $now)) === array('x4'));
+        $check('unseen, mode orders: nothing new', $ids(WhatsNewPopup::unseen((new WhatsNewStore("$dir/shared.json", "$dir/extra.json", 'orders'))->all(), $seen, $now)) === array());
+
+        // the real files of this checkout: nothing of the old inventory guide (43 ids) is lost, orders shows no inventory-only entry
+        $old = array(
+        'database-guide',
+        'folder-path-bar',
+        'plate-view-and-copy',
+        'link-to-data',
+        'quick-links',
+        'link-templates-and-versions',
+        'spreadsheet-previews',
+        'list-indent',
+        'template-version-history',
+        'spreadsheet-insert-and-view',
+        'boards',
+        'orders',
+        'spreadsheet-editing',
+        'navigation',
+        'cards-linked-experiments',
+        'notifications-feedback',
+        'activity-calendar',
+        'left-sidebar',
+        'guide-folders',
+        'guide-folder-views',
+        'guide-database',
+        'guide-database-storage',
+        'guide-sequence-editor',
+        'guide-lineage',
+        'guide-database-sharing',
+        'guide-sidebar',
+        'guide-calendar',
+        'guide-boards',
+        'guide-orders',
+        'guide-experiment-sections',
+        'guide-steps',
+        'guide-templates',
+        'guide-feedback',
+        'guide-search-filters',
+        'guide-toc',
+        'guide-todo-notifications',
+        'guide-editor-toolbar',
+        'guide-spreadsheets',
+        'guide-collaboration',
+        'guide-todo',
+        'guide-announcements',
+        'guide-experiments',
+        'guide-resources'
+        );
+        $realExtra = __DIR__ . '/../../src/whats-new-inventory.json';
+        if (is_file($realExtra)) {
+            $r = new WhatsNewStore(__DIR__ . '/../../src/whats-new.json', $realExtra, 'both');
+            $rIds = $ids($r->all());
+            $check('real files, both: all 43 ids of the old inventory guide are present', array_diff($old, $rIds) === array(), json_encode(array_values(array_diff($old, $rIds))));
+            $check('real files, both: ids unique', count($rIds) === count(array_unique($rIds)));
+            $realShared = array_column(json_decode((string) file_get_contents(__DIR__ . '/../../src/whats-new.json'), true), 'id');
+            $realExtraIds = array_column(json_decode((string) file_get_contents($realExtra), true), 'id');
+            $check('real files: the extra file holds no id of the shared file', array_intersect($realShared, $realExtraIds) === array(), json_encode(array_values(array_intersect($realShared, $realExtraIds))));
+            $check('real files, both = shared + extra', count($rIds) === count($realShared) + count($realExtraIds));
+            $check('real files, orders = shared only', $ids((new WhatsNewStore(__DIR__ . '/../../src/whats-new.json', $realExtra, 'orders'))->all()) === $ids((new WhatsNewStore(__DIR__ . '/../../src/whats-new.json', "$dir/missing.json"))->all()));
+        }
+    }
+
     // clean up
     ini_set('error_log', (string) $log);
     foreach (glob("$dir/*") as $f) { is_dir($f) ? rmdir($f) : unlink($f); }

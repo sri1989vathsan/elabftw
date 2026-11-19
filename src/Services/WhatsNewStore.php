@@ -22,6 +22,7 @@ use function dirname;
 use function error_log;
 use function file_get_contents;
 use function file_put_contents;
+use function getenv;
 use function getimagesize;
 use function in_array;
 use function is_array;
@@ -62,6 +63,11 @@ final class WhatsNewStore
     /** Optional second list of entries shipped with the code, present on some branches only; same format */
     private const string EXTRA_ENTRIES = __DIR__ . '/../whats-new-inventory.json';
 
+    // Which shipped entries this branch shows, from the environment variable ELABFTW_WHATS_NEW or, without it, the one word in
+    // src/whats-new-source.txt: "both" (the default: the shared list plus this branch's own entries), "orders" (the shared
+    // list alone) or "inventory" (this branch's own entries alone; the shared list when there are none).
+    private const string SOURCE_SETTING_FILE = __DIR__ . '/../whats-new-source.txt';
+
     private const string SHIPPED_IMAGES = __DIR__ . '/../../web/assets/images/whats-new';
 
     private const string DATA_DIR = '/var/lib/elabftw/uploads/whats-new';
@@ -76,6 +82,7 @@ final class WhatsNewStore
     public function __construct(
         private readonly string $sharedFile = self::SHIPPED_ENTRIES,
         private readonly string $extraFile = self::EXTRA_ENTRIES,
+        private readonly ?string $mode = null,
     ) {}
 
     /**
@@ -311,11 +318,15 @@ final class WhatsNewStore
      */
     private function shipped(): array
     {
-        $entries = $this->readList($this->sharedFile);
-        if (!is_file($this->extraFile)) {
-            return $entries;
+        $mode = $this->sourceMode();
+        $entries = $mode === 'inventory' ? array() : $this->readList($this->sharedFile);
+        if ($mode === 'orders' || !is_file($this->extraFile)) {
+            return $entries === array() ? $this->readList($this->sharedFile) : $entries;
         }
         $extra = $this->readList($this->extraFile, true);
+        if ($mode === 'inventory') {
+            return $extra === array() ? $this->readList($this->sharedFile) : $extra;
+        }
         $ids = array_column($entries, 'id');
         foreach ($extra as $entry) {
             if (!in_array($entry['id'], $ids, true)) {
@@ -325,6 +336,16 @@ final class WhatsNewStore
         }
 
         return $entries;
+    }
+
+    private function sourceMode(): string
+    {
+        $mode = $this->mode ?? getenv('ELABFTW_WHATS_NEW');
+        if ($mode === false || $mode === '') {
+            $mode = is_file(self::SOURCE_SETTING_FILE) ? trim((string) file_get_contents(self::SOURCE_SETTING_FILE)) : 'both';
+        }
+
+        return in_array($mode, array('orders', 'inventory'), true) ? $mode : 'both';
     }
 
     /**

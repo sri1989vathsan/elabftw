@@ -29,6 +29,7 @@ REPO = ROOT.parent
 INBOX = ROOT / 'inbox'
 OUT = REPO / 'web' / 'assets' / 'images' / 'whats-new'
 ENTRIES = REPO / 'src' / 'whats-new.json'
+ENTRIES_INVENTORY = REPO / 'src' / 'whats-new-inventory.json'  # this branch's own entries, same format
 MAX_WIDTH = 1600
 
 
@@ -86,7 +87,9 @@ def main() -> int:
     for name in ('regions.json', 'regions-inventory.json'):
         if (ROOT / name).exists():
             regions.update(json.loads((ROOT / name).read_text()))
-    entries = json.loads(ENTRIES.read_text())
+    files = [f for f in (ENTRIES, ENTRIES_INVENTORY) if f.exists()]
+    lists = {f: json.loads(f.read_text()) for f in files}
+    entries = [e for f in files for e in lists[f]]
     wanted = set(sys.argv[1:])
     done = []
     for entry in entries:
@@ -97,7 +100,8 @@ def main() -> int:
             continue
         process(entry, regions.get(entry['id'], {}), source)
         done.append(entry['id'])
-    ENTRIES.write_text(json.dumps(entries, indent=2, ensure_ascii=False) + '\n')
+    for f in files:
+        f.write_text(json.dumps(lists[f], indent=2, ensure_ascii=False) + '\n')
     print('processed:', ', '.join(done) if done else '(nothing in inbox/)')
     missing = [e['id'] for e in entries if not find_source(e['id'])]
     print('no screenshot yet for:', ', '.join(missing) if missing else '(none)')

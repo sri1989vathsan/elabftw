@@ -177,6 +177,7 @@ services:
       - ./web/ui-size.js:/elabftw/web/ui-size.js:ro
       - ./web/label-config.json:/elabftw/web/label-config.json:ro
       - ./src/whats-new.json:/elabftw/src/whats-new.json:ro
+      - ./src/whats-new-inventory.json:/elabftw/src/whats-new-inventory.json:ro
       - ./src/templates/whats-new.html:/elabftw/src/templates/whats-new.html:ro
       - ./web/assets/images/whats-new:/elabftw/web/assets/images/whats-new:ro
 
