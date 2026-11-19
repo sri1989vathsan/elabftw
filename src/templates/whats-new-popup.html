@@ -1,0 +1,48 @@
+{# The "What's new" popup, shown once after login when there are entries the user has not seen (decided in App::getWhatsNewPopup, so nothing is drawn otherwise). Behaviour: src/ts/whats-new-popup.ts #}
+{% import 'guide-detail.html' as guide_detail -%}
+{% set wn = App.getWhatsNewPopup() %}
+{% if wn is not empty and scriptName != 'whats-new.php' %}
+  <div class='modal fade whats-new-popup' id='whatsNewPopup' tabindex='-1' role='dialog' aria-labelledby='whatsNewPopupLabel' aria-hidden='true' data-backdrop='false' data-newest-id='{{ wn.newestId }}' data-newest-date='{{ wn.newestDate }}'>
+    <div class='modal-dialog modal-dialog-centered modal-dialog-scrollable' role='document'>
+      <div class='modal-content'>
+        <div class='modal-header'>
+          <h5 class='modal-title' id='whatsNewPopupLabel'><i class='fas fa-star fa-fw mr-2' aria-hidden='true'></i>{{ 'What’s new'|trans }}</h5>
+          <button type='button' class='close' data-dismiss='modal' aria-label='{{ 'Close'|trans }}'><span aria-hidden='true'>&times;</span></button>
+        </div>
+        <div class='modal-body'>
+          {% for entry in wn.featured %}
+            <section class='whats-new-popup-featured'>
+              {% if entry.area %}<span class='badge badge-primary mb-1'>{{ entry.area }}</span>{% endif %}
+              <h6 class='whats-new-popup-title'>{{ entry.title }}</h6>
+              <p class='mb-2'>{{ entry.summary }}</p>
+              {% if entry.image %}<div class='whats-new-popup-shot'><img src='whats-new.php?image={{ entry.image|url_encode }}' alt='{{ entry.imageAlt|default(entry.title) }}' loading='lazy'></div>{% endif %}
+              {% if entry.details %}
+                <details class='whats-new-popup-details'>
+                  <summary>{{ 'Details'|trans }}</summary>
+                  <ul class='pl-3 mb-0 mt-1'>
+                    {% for detail in entry.details %}<li class='mb-1'>{{ guide_detail.item(detail) }}</li>{% endfor %}
+                  </ul>
+                </details>
+              {% endif %}
+            </section>
+          {% endfor %}
+          {% if wn.compact %}
+            {% if wn.featured %}<h6 class='text-uppercase text-muted small mt-3 mb-1'>{{ 'Also new'|trans }}</h6>{% endif %}
+            <ul class='whats-new-popup-compact list-unstyled mb-0'>
+              {% for entry in wn.compact %}
+                <li><strong>{{ entry.title }}</strong>{% if entry.summary %} <span class='text-muted'>– {{ entry.summary }}</span>{% endif %}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+          {% if wn.more > 0 %}
+            <p class='mt-3 mb-0'><a href='whats-new.php?all=1' data-action='whats-new-popup-more'>{{ 'and %d more'|trans|format(wn.more) }}</a></p>
+          {% endif %}
+        </div>
+        <div class='modal-footer'>
+          <button type='button' class='btn btn-link btn-sm text-muted mr-auto px-0' data-action='whats-new-popup-off'>{{ 'Don’t show these popups'|trans }}</button>
+          <button type='button' class='btn btn-primary' data-dismiss='modal' data-whats-new-got-it>{{ 'Got it'|trans }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endif %}

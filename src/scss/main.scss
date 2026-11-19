@@ -13351,3 +13351,63 @@ button.wp-legend-item {
     width: 100%;
   }
 }
+
+// The "What's new" popup after login (whats-new-popup.html / whats-new-popup.ts). No dimming layer, so the floating "Back to" button (1035) and the
+// reminder chip stay usable; it sits below other modals (1050) so a confirm or delete dialog opened over it is on top. Colours come from the
+// modal's own theme tokens, so light, dark and midnight match the app's other dialogs.
+.whats-new-popup {
+  pointer-events: none;
+  z-index: 1045;
+
+  .modal-content {
+    border: 1px solid var(--fx-line, rgba(128, 128, 128, 0.35));
+    box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.35);
+    pointer-events: auto;
+  }
+
+  .modal-dialog {
+    max-width: 34rem;
+  }
+
+  .modal-body {
+    font-size: var(--fx-popup-font, 0.92rem);
+  }
+
+  .whats-new-popup-featured + .whats-new-popup-featured {
+    border-top: 1px solid var(--fx-line, rgba(128, 128, 128, 0.3));
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+  }
+
+  .whats-new-popup-title {
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+  }
+
+  .whats-new-popup-shot img {
+    border: 1px solid var(--fx-line, rgba(128, 128, 128, 0.3));
+    border-radius: 0.25rem;
+    margin-bottom: 0.5rem;
+    max-width: 100%;
+  }
+
+  .whats-new-popup-details summary {
+    color: var(--primary);
+    cursor: pointer;
+    width: fit-content;
+  }
+
+  .whats-new-popup-compact li {
+    padding: 0.2rem 0;
+  }
+
+  @media (max-width: 575.98px) {
+    .modal-dialog {
+      margin: 0.5rem;
+    }
+  }
+}
+
+:root[data-ui-size='comfortable'] .whats-new-popup {
+  --fx-popup-font: 1.02rem;
+}

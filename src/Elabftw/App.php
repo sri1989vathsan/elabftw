@@ -31,6 +31,7 @@ use Elabftw\Models\ResourcesCategories;
 use Elabftw\Models\Notifications\UserNotifications;
 use Elabftw\Models\Teams;
 use Elabftw\Models\Users\Users;
+use Elabftw\Services\WhatsNewPopup;
 use Elabftw\Traits\TwigTrait;
 use Exception;
 use Monolog\Handler\ErrorLogHandler;
@@ -76,6 +77,8 @@ final class App
     public bool $showLabcollector = false;
 
     private ?array $createFoldersCache = null;
+
+    private ?array $whatsNewPopup = null;
 
     public array $favoriteFiltersArr = array();
 
@@ -200,6 +203,36 @@ final class App
             $this->createFoldersCache = array('rows' => $Folders->readHierarchyRows(), 'favoriteIds' => $Folders->getFavoriteFolders());
         }
         return $this->createFoldersCache;
+    }
+
+    /**
+     * What the "What's new" popup shows on this page load (empty: no popup). Only the first full page of a login session
+     * can show it; it is decided here, on the server, so the page never flashes an empty popup.
+     *
+     * @return array<string, mixed>
+     */
+    public function getWhatsNewPopup(): array
+    {
+        if ($this->whatsNewPopup !== null) {
+            return $this->whatsNewPopup;
+        }
+        $this->whatsNewPopup = array();
+        if (!$this->Session->get('is_auth') || $this->isAnonymous() || $this->Session->get('whats_new_popup_done') === 1) {
+            return $this->whatsNewPopup;
+        }
+        $this->Session->set('whats_new_popup_done', 1);
+        try {
+            $this->whatsNewPopup = new WhatsNewPopup((int) $this->Users->userData['userid'])->build();
+        } catch (Exception $e) {
+            $this->Log->error('What\'s new popup failed', array(array('Exception' => $e)));
+        }
+        return $this->whatsNewPopup;
+    }
+
+    /** Whether the user wants the "What's new" popup after login (a switch in their settings; on by default). */
+    public function isWhatsNewPopupEnabled(): bool
+    {
+        return new WhatsNewPopup((int) $this->Users->userData['userid'])->isEnabled();
     }
 
     public function isAnonymous(): bool

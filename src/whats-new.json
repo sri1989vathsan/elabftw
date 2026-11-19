@@ -30,6 +30,21 @@
     "imageAlt": ""
   },
   {
+    "id": "whats-new-popup",
+    "date": "2026-11-19",
+    "area": "Settings",
+    "featured": false,
+    "title": "A short “What’s new” popup after login",
+    "summary": "Once after you sign in, a small window lists the features you have not seen yet.",
+    "details": [
+      "fa-star::The popup shows only what is new since you last saw it, the most important features first. Closing it in any way (Got it, the X, Esc or a click outside) counts as seen, on every browser and after the next login.",
+      "fa-link::“and N more” opens the full What’s new page.",
+      "fa-toggle-off::“Don’t show these popups” turns it off. Settings > Appearance > What’s new has a switch to turn it back on."
+    ],
+    "image": "",
+    "imageAlt": ""
+  },
+  {
     "id": "reminder-chip",
     "date": "2026-11-19",
     "area": "Organise",
