@@ -11,11 +11,24 @@ import { Api } from './Apiv2.class';
 
 const ApiC = new Api();
 
-function save(key: string, value: string): Promise<unknown> {
-  return ApiC.patch('experiments_folders', { action: 'set_user_pref', key, value, notifOnSaved: 0, notifOnError: 0 }).catch(() => { /* shown again next login at worst */ });
+function save(key: string, value: string | null): Promise<unknown> {
+  const body: Record<string, string | number> = { action: 'set_user_pref', key, notifOnSaved: 0, notifOnError: 0 };
+  if (value !== null) body.value = value;
+  return ApiC.patch('experiments_folders', body).catch(() => { /* shown again next login at worst */ });
+}
+
+/** The switch in the user's settings (Settings > Appearance): on removes the opt-out, off sets it. */
+export function initWhatsNewSetting(): void {
+  const toggle = document.querySelector<HTMLInputElement>('[data-whats-new-popup-switch]');
+  toggle?.addEventListener('change', () => {
+    void ApiC.patch('experiments_folders', toggle.checked
+      ? { action: 'set_user_pref', key: 'whats-new-popup-off', notifOnSaved: 1, notifOnError: 1 }
+      : { action: 'set_user_pref', key: 'whats-new-popup-off', value: '1', notifOnSaved: 1, notifOnError: 1 });
+  });
 }
 
 export function initWhatsNewPopup(): void {
+  initWhatsNewSetting();
   const popup = document.getElementById('whatsNewPopup');
   if (!popup) return;
   let stored = false;

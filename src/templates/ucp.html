@@ -607,6 +607,15 @@
       <div class='ui-size-example mt-2' aria-hidden='true'><span class='ui-size-example-row'>Experiment title</span><span class='ui-size-example-chip'>Running 3</span></div>
     </div>
 
+    <h3 class='pl-3'>{{ 'What’s new'|trans }}</h3>
+    <div class='pl-3 mt-2 mb-5'>
+      <div class='custom-control custom-switch'>
+        <input type='checkbox' class='custom-control-input' id='whatsNewPopupSwitch' data-whats-new-popup-switch{{ App.isWhatsNewPopupEnabled() ? ' checked' }}>
+        <label class='custom-control-label' for='whatsNewPopupSwitch'>{{ 'Show a popup with the new features after login'|trans }}</label>
+      </div>
+      <p class='text-muted small mb-0 mt-1'>{{ 'It appears once, only when there is something you have not seen yet.'|trans }}</p>
+    </div>
+
     <h3 class='pl-3'>{{ 'Theme Options'|trans }}</h3>
     <div class='pl-3 mt-2 mb-5'>
       <div class='d-flex justify-content-between'>

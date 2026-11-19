@@ -229,6 +229,12 @@ final class App
         return $this->whatsNewPopup;
     }
 
+    /** Whether the user wants the "What's new" popup after login (a switch in their settings; on by default). */
+    public function isWhatsNewPopupEnabled(): bool
+    {
+        return new WhatsNewPopup((int) $this->Users->userData['userid'])->isEnabled();
+    }
+
     public function isAnonymous(): bool
     {
         return $this->Users instanceof AnonymousUser;
