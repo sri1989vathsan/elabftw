@@ -45,9 +45,19 @@ window.reminderChipCheck = async function reminderChipCheck() {
     if (b.width > innerWidth * 0.9 && b.height > innerHeight * 0.5) return false;
     return true;
   });
+  // a fixed wrapper that draws nothing itself (the column of scroll buttons) stands for the visible things inside it
+  const drawn = el => {
+    const cs = getComputedStyle(el);
+    const bg = cs.backgroundColor.match(/[\d.]+/g) || [];
+    return (bg.length === 3 || parseFloat(bg[3]) > 0) || parseFloat(cs.borderTopWidth) > 0 || cs.boxShadow !== 'none' || [...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim());
+  };
+  const visibleParts = el => drawn(el) || !el.children.length ? [el] : [...el.querySelectorAll('*')].filter(c => {
+    const b = c.getBoundingClientRect();
+    return b.width > 2 && b.height > 2 && getComputedStyle(c).visibility !== 'hidden' && getComputedStyle(c).display !== 'none' && drawn(c);
+  });
   const clash = (self) => {
     const mine = box(self);
-    return others(self).filter(el => touches(mine, box(el))).map(el => (el.id ? '#' + el.id : '') + '.' + String(el.className).split(' ').slice(0, 2).join('.'));
+    return others(self).flatMap(visibleParts).filter(el => touches(mine, box(el))).map(el => (el.id ? '#' + el.id : '') + '.' + String(el.className).split(' ').slice(0, 2).join('.'));
   };
   try {
     await sleep(1500);
