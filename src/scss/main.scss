@@ -7860,6 +7860,8 @@ body.html-tool-workspace-open:not(.html-tool-workspace-is-maximized) .inline-spr
 
 .inline-spreadsheet-container .jss_worksheet td[data-x][data-y] {
   overflow: hidden;
+  // A word wider than the column (a long plasmid name with underscores) breaks inside the cell instead of being cut off at its edges
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
@@ -8307,6 +8309,7 @@ body.html-tool-workspace-open:not(.html-tool-workspace-is-maximized) .inline-spr
 
 .elabftw-spreadsheet-readonly-view .jss_worksheet td[data-x][data-y] {
   overflow: hidden;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
