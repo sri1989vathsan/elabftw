@@ -22,6 +22,8 @@ final class InventoryMigrations
     public const array MIGRATIONS = array(
         '110_inventory.sql',
         '111_inventory_steps.sql',
+        // replaces 110 and 111 where the runner skips them (see REPLACED_WHEN_TABLE_MISSING), a no-op where they ran: the explicit columns of the twin tables
+        'inv_003_twin_tables.sql',
         '112_registry_storage.sql',
         '113_registry_category_fields.sql',
         '114_registry_storage_comment.sql',
@@ -64,5 +66,25 @@ final class InventoryMigrations
         '152_backbone_cache.sql',
         'inv_001_database_team_toggles.sql',
         'inv_002_storage_unit_moor_capacity.sql',
+        // the columns upstream added to the resource tables, mirrored on the twin tables (same names, see inv_003)
+        'inv_004_twin_booking_approval.sql',
+        'inv_005_twin_metadata_search.sql',
+        'inv_006_twin_category_color_fg.sql',
+        'inv_007_twin_steps_created_at.sql',
+        'inv_008_twin_steps_group_id.sql',
+    );
+
+    /**
+     * Migrations that cannot run any more once upstream has dropped the table they copy (`CREATE TABLE ... LIKE items_revisions`): migration =>
+     * the table it needs. When that table is missing (a fresh install of merged code) the runner does not execute the file, it records it in the
+     * ledger as applied (with its checksum, the file is never edited) and inv_003_twin_tables.sql, which is next in the list, does the work with the
+     * columns spelled out. When the table exists the migration runs as always. Never add a `LIKE <upstream table>` to a new migration instead
+     * of using this: spell the columns out (ELABFTW-CUSTOMIZATIONS-INVENTORY.md, "Twin tables").
+     *
+     * @var array<string, string>
+     */
+    public const array REPLACED_WHEN_TABLE_MISSING = array(
+        '110_inventory.sql' => 'items_revisions',
+        '111_inventory_steps.sql' => 'items_revisions',
     );
 }

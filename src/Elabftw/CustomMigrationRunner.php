@@ -228,6 +228,10 @@ final class CustomMigrationRunner
                 $this->recordAppliedWithoutRunning($migration, $checksum);
                 continue;
             }
+            if ($this->isReplaced($migration)) {
+                $this->recordAppliedWithoutRunning($migration, $checksum);
+                continue;
+            }
             $pending[] = $migration;
         }
         return $pending;
@@ -359,6 +363,22 @@ final class CustomMigrationRunner
             $applied[(string) $row['migration']] = (string) $row['checksum'];
         }
         return $applied;
+    }
+
+    /**
+     * A migration that needs a table upstream has dropped (InventoryMigrations::REPLACED_WHEN_TABLE_MISSING) is not run where that table is
+     * missing: a later migration of the list creates what it would have created.
+     */
+    private function isReplaced(string $migration): bool
+    {
+        $table = InventoryMigrations::REPLACED_WHEN_TABLE_MISSING[$migration] ?? null;
+        if ($table === null) {
+            return false;
+        }
+        $req = $this->Db->prepare('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = :t');
+        $req->bindValue(':t', $table);
+        $this->Db->execute($req);
+        return (int) $req->fetchColumn() === 0;
     }
 
     private function recordAppliedWithoutRunning(string $migration, string $checksum): void
