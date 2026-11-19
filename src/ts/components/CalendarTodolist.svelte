@@ -1162,7 +1162,9 @@
     const place = (): void => {
       frame = 0;
       let top = REMINDER_TOP;
+      let right = 16;
       node.style.top = `${top}px`;
+      node.style.right = `${right}px`;
       const things = avoidables();
       for (let pass = 0; pass < 6; pass++) {
         const mine = node.getBoundingClientRect();
@@ -1171,8 +1173,15 @@
           return mine.left < box.right && mine.right > box.left && mine.top < box.bottom && mine.bottom > box.top;
         });
         if (!hit) break;
-        top = Math.ceil(hit.getBoundingClientRect().bottom) + 6;
-        node.style.top = `${top}px`;
+        const hitBox = hit.getBoundingClientRect();
+        if (hitBox.width <= 120 && hitBox.height > 80 && hitBox.left > window.innerWidth / 2) {
+          // a column of buttons at the right edge: the reminder sits to the left of it
+          right += Math.ceil(mine.right - hitBox.left) + 8;
+          node.style.right = `${right}px`;
+        } else {
+          top = Math.ceil(hitBox.bottom) + 6;
+          node.style.top = `${top}px`;
+        }
       }
     };
     const schedule = (): void => {
