@@ -9164,7 +9164,11 @@ the form-control fails to do that so we do the border ourselves */
 }
 
 @media print {
-  .elabftw-spreadsheet-readonly-view.print-wide-sheet {
+  .print-sheet-copy {
+    overflow: visible !important;
+  }
+
+  .print-wide-sheet {
     break-after: page;
     break-before: page;
     page: wide;
