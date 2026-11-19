@@ -1146,6 +1146,20 @@
   const REMINDER_TOP = 66;
   function placeReminder(node: HTMLElement): { destroy(): void } {
     let frame = 0;
+    // a fixed wrapper that draws nothing itself (the column of scroll buttons) stands for the visible things inside it
+    const draws = (el: HTMLElement): boolean => {
+      const cs = getComputedStyle(el);
+      const background = cs.backgroundColor.match(/[\d.]+/g) ?? [];
+      return background.length === 3 || Number.parseFloat(background[3]) > 0 || Number.parseFloat(cs.borderTopWidth) > 0
+        || cs.boxShadow !== 'none' || Array.from(el.childNodes).some(child => child.nodeType === 3 && (child.textContent ?? '').trim() !== '');
+    };
+    const visibleParts = (el: HTMLElement): HTMLElement[] => (draws(el) || el.children.length === 0
+      ? [el]
+      : Array.from(el.querySelectorAll<HTMLElement>('*')).filter(child => {
+        const box = child.getBoundingClientRect();
+        const cs = getComputedStyle(child);
+        return box.width > 2 && box.height > 2 && cs.visibility !== 'hidden' && cs.display !== 'none' && draws(child);
+      }));
     const avoidables = (): HTMLElement[] => Array.from(document.querySelectorAll<HTMLElement>('body *')).filter(el => {
       if (el === node || node.contains(el) || el.contains(node)) return false;
       const cs = getComputedStyle(el);
@@ -1158,7 +1172,7 @@
       // a wrapper that is as wide as the window and tall is a backdrop or a layout box, not a thing to avoid
       if (box.width > window.innerWidth * 0.9 && box.height > window.innerHeight * 0.5) return false;
       return true;
-    });
+    }).flatMap(visibleParts);
     const place = (): void => {
       frame = 0;
       let top = REMINDER_TOP;
