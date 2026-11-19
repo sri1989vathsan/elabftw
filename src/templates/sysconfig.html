@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% import 'guide-info.html' as guide -%}
 
 {% block body %}
 
@@ -210,7 +211,7 @@
   </div>
   {% endif %}
 
-  <h2 class='mb-3 p-2 pl-3 section-title' id='googleTasksIntegration'>{{ 'Google Tasks sync'|trans }}</h2>
+  <h2 class='mb-3 p-2 pl-3 section-title' id='googleTasksIntegration'>{{ 'Google Tasks sync'|trans }}{{ guide.info('guide-google-calendar', 'Google Calendar and Tasks') }}</h2>
   <div class='pl-3 mb-5' id='googleTasksSettings'>
     <p class='smallgray'>{{ 'Lets each user copy their own to-dos and steps to their own Google Tasks from their browser. Nothing is sent from the server. It stays off until you enable it here, and Google must also be allowed in the Content-Security-Policy. Titles and dates (and details, if the user ticks it) leave this installation for Google, so check your organization rules first.'|trans }}</p>
     {% include 'binary-setting.html' with {'label': 'Offer Google Tasks sync in the to-do panel'|trans, 'slug': 'google_tasks_enabled'} %}
