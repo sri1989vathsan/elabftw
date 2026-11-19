@@ -1,5 +1,5 @@
 /**
- * The deadline reminder as a small chip in the bottom right corner (reminder-chip-no-overlap). Logged in, on any page; two steps because the
+ * The deadline reminder as a small chip in the top right corner (reminder-chip-no-overlap). Logged in, on any page; two steps because the
  * reminder is read when the page loads:
  *
  *   await new Promise(r => { const s = document.createElement('script'); s.src = '/__tests/reminder-chip-check.js'; s.onload = r; document.head.appendChild(s); });
@@ -7,10 +7,10 @@
  *   (reload the page, load the script again)
  *   await reminderChipCheck();      // 2nd call: {pass, results}; removes the task again
  *
- * Checks: the chip is a pill of at least 1.5rem with the clock and the count; it sits in the bottom right corner; its box does not touch any
+ * Checks: the chip is a pill of at least 1.5rem with the clock and the count; it sits in the top right corner, under the navbar; its box does not touch any
  * other fixed or sticky box on the page (back-to-top button, side panel buttons, notices, toolbars, the tab bar of the admin page); a click opens
  * the full reminder (title, the tasks as a list, Collapse), whose box does not touch them either; Collapse or a click on the title closes it again;
- * the choice is kept for the rest of the session (the next page does not open it by itself). Nothing is sent anywhere.
+ * it goes back to the chip by itself: on a click outside, Esc, a scroll of the page and after 8 seconds without the pointer inside (paused while the pointer is inside); the next page starts as the chip. The boxes are compared with the navbar, the tab bar of the admin page, the edit toolbar, the notices ("Saved") and the scroll buttons. Nothing is sent anywhere.
  */
 window.reminderChipCheck = async function reminderChipCheck() {
   const results = [];
@@ -37,7 +37,7 @@ window.reminderChipCheck = async function reminderChipCheck() {
   const others = (self) => [...document.querySelectorAll('body *')].filter(el => {
     if (el === self || self.contains(el) || el.contains(self)) return false;
     const cs = getComputedStyle(el);
-    if (cs.position !== 'fixed' && cs.position !== 'sticky') return false;
+    if (cs.position !== 'fixed' && cs.position !== 'sticky' && !el.matches('.nav-tabs, [role="tablist"]')) return false;
     if (cs.visibility === 'hidden' || cs.display === 'none' || parseFloat(cs.opacity) === 0) return false;
     const b = el.getBoundingClientRect();
     if (b.width < 2 || b.height < 2) return false;
@@ -68,7 +68,9 @@ window.reminderChipCheck = async function reminderChipCheck() {
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
       check('the chip is a rounded pill of about 1.5rem', b.h >= rem * 1.45 && b.h <= rem * 2.1 && parseFloat(getComputedStyle(chip).borderRadius) >= b.h / 2 - 1, `${b.w} x ${b.h}`);
       check('the chip has the clock and the count', !!chip.querySelector('.fa-clock') && /^\d+$/.test((chip.querySelector('.reminder-chip-count')?.textContent || '').trim()), chip.textContent);
-      check('the chip is in the bottom right corner', b.r > innerWidth * 0.7 && b.b > innerHeight * 0.8 && b.r <= innerWidth && b.b <= innerHeight, JSON.stringify(b));
+      check('the chip is in the top right corner', b.r > innerWidth * 0.7 && b.t < innerHeight * 0.3 && b.r <= innerWidth && b.t >= 0, JSON.stringify(b));
+      const nav = document.getElementById('main-navbar');
+      if (nav) check('the chip is below the navbar', b.t >= box(nav).b - 1, `chip top ${b.t}, navbar bottom ${box(nav).b}`);
       const bg = getComputedStyle(chip).backgroundColor.match(/\d+/g).map(Number);
       check('the chip is warm (amber) tinted', bg[0] > bg[2] + 20, getComputedStyle(chip).backgroundColor);
       check('the chip touches nothing else on the page', clash(chip).length === 0, clash(chip).join(' | '));
@@ -87,11 +89,38 @@ window.reminderChipCheck = async function reminderChipCheck() {
         await sleep(400);
         check('Collapse brings the chip back', !!document.querySelector('.reminder-chip') && !document.querySelector('.reminder-banner'), 'still open');
         check('the collapsed state is kept for the session', sessionStorage.getItem('todo-reminder-banner-open') === '0', sessionStorage.getItem('todo-reminder-banner-open'));
-        document.querySelector('.reminder-chip').click();
-        await sleep(300);
-        document.querySelector('.reminder-banner-toggle').click();
-        await sleep(300);
-        check('a click on the title collapses it too', !!document.querySelector('.reminder-chip'), 'still open');
+        const open = async () => { document.querySelector('.reminder-chip')?.click(); await sleep(350); return !!document.querySelector('.reminder-banner'); };
+        const closed = () => !!document.querySelector('.reminder-chip') && !document.querySelector('.reminder-banner');
+        check('the chip opens it again', await open(), 'did not open');
+        document.querySelector('.reminder-banner-toggle').click(); await sleep(300);
+        check('a click on the title collapses it too', closed(), 'still open');
+        await open();
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await sleep(300);
+        check('Esc collapses it', closed(), 'still open');
+        await open();
+        document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); await sleep(300);
+        check('a click outside collapses it', closed(), 'still open');
+        await open();
+        panel.isConnected && document.querySelector('.reminder-banner')?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); await sleep(300);
+        check('a click inside does not collapse it', !closed(), 'collapsed');
+        const spacer = document.createElement('div'); spacer.style.height = '3000px'; spacer.id = 'chipCheckSpacer'; document.body.appendChild(spacer);
+        window.scrollBy(0, 200); await sleep(500);
+        check('a scroll of the page collapses it', closed(), 'still open');
+        window.scrollTo(0, 0); spacer.remove();
+        // 8 seconds with the pointer away
+        await open();
+        await sleep(8600);
+        check('it collapses by itself after about 8 seconds', closed(), 'still open after 8.6 s');
+        // the pointer inside holds it open
+        await open();
+        const held = document.querySelector('.reminder-banner');
+        held.dispatchEvent(new MouseEvent('mouseenter'));
+        await sleep(8600);
+        check('with the pointer inside it stays open', !closed(), 'collapsed while the pointer was inside');
+        held.dispatchEvent(new MouseEvent('mouseleave'));
+        await sleep(8600);
+        check('after the pointer leaves it collapses again', closed(), 'still open');
+        window.dispatchEvent(new Event('pagehide'));
       }
     }
   } finally {

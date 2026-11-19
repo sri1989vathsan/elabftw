@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import { ApiC } from '../api';
   import { core } from '../core';
   import i18next from '../i18n';
@@ -177,14 +177,8 @@
   // A small chip (clock and count) in the bottom right corner; a click opens the full reminder. It stays the way the person left it for the
   // rest of the session, so it does not open itself again on every page.
   const BANNER_OPEN_KEY = 'todo-reminder-banner-open';
-  function readBannerOpen(): boolean {
-    try {
-      return sessionStorage.getItem(BANNER_OPEN_KEY) === '1';
-    } catch {
-      return false;
-    }
-  }
-  let bannerCollapsed = !readBannerOpen();
+  // an opened reminder never carries over to the next page: it starts as the chip
+  let bannerCollapsed = true;
   let calendarCells: CalendarCell[] = [];
   let agendaEntries: CalendarEntry[] = [];
   let agendaExperiments: AgendaEntityActivity[] = [];
@@ -1056,13 +1050,149 @@
     bannerEntries = [];
   }
 
-  function toggleReminderBanner(): void {
-    bannerCollapsed = !bannerCollapsed;
+  // The reminder opens from the chip and goes back to it by itself: on a click outside, Esc, a scroll of the page, leaving the page,
+  // and after 8 seconds without the pointer or the keyboard being inside it.
+  const AUTO_COLLAPSE_MS = 8000;
+  let autoCollapseTimer: number | undefined;
+  let pointerInside = false;
+  let focusInside = false;
+  let openedAtScroll = 0;
+  let openListenersOn = false;
+
+  function rememberBannerOpen(open: boolean): void {
     try {
-      sessionStorage.setItem(BANNER_OPEN_KEY, bannerCollapsed ? '0' : '1');
+      sessionStorage.setItem(BANNER_OPEN_KEY, open ? '1' : '0');
     } catch {
       // the choice is only a convenience
     }
+  }
+
+  function clearAutoCollapse(): void {
+    if (autoCollapseTimer !== undefined) window.clearTimeout(autoCollapseTimer);
+    autoCollapseTimer = undefined;
+  }
+
+  function armAutoCollapse(): void {
+    clearAutoCollapse();
+    if (bannerCollapsed || pointerInside || focusInside) return;
+    autoCollapseTimer = window.setTimeout(collapseReminderBanner, AUTO_COLLAPSE_MS);
+  }
+
+  const onOpenPointerDown = (event: Event): void => {
+    const target = event.target as Node | null;
+    if (target && (target as Element).closest?.('.reminder-banner')) return;
+    collapseReminderBanner();
+  };
+  const onOpenKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape') collapseReminderBanner();
+  };
+  const onOpenScroll = (event: Event): void => {
+    const target = event.target as Element | Document | null;
+    // the list of the reminder scrolls on its own: that is not leaving it
+    if (target instanceof Element && target.closest('.reminder-banner')) return;
+    if (target === document || target === document.documentElement || target === document.body) {
+      if (Math.abs(window.scrollY - openedAtScroll) < 8) return;
+    }
+    collapseReminderBanner();
+  };
+  const onLeavePage = (): void => rememberBannerOpen(false);
+
+  function listenWhileOpen(on: boolean): void {
+    if (on === openListenersOn) return;
+    openListenersOn = on;
+    if (on) {
+      document.addEventListener('pointerdown', onOpenPointerDown, true);
+      document.addEventListener('keydown', onOpenKeyDown, true);
+      window.addEventListener('scroll', onOpenScroll, true);
+      window.addEventListener('pagehide', onLeavePage);
+    } else {
+      document.removeEventListener('pointerdown', onOpenPointerDown, true);
+      document.removeEventListener('keydown', onOpenKeyDown, true);
+      window.removeEventListener('scroll', onOpenScroll, true);
+      window.removeEventListener('pagehide', onLeavePage);
+    }
+  }
+
+  function expandReminderBanner(): void {
+    bannerCollapsed = false;
+    pointerInside = false;
+    focusInside = false;
+    openedAtScroll = window.scrollY;
+    rememberBannerOpen(true);
+    listenWhileOpen(true);
+    armAutoCollapse();
+  }
+
+  function collapseReminderBanner(): void {
+    if (bannerCollapsed) return;
+    const hadFocusInside = focusInside;
+    bannerCollapsed = true;
+    pointerInside = false;
+    focusInside = false;
+    clearAutoCollapse();
+    listenWhileOpen(false);
+    rememberBannerOpen(false);
+    // the focus was in the panel that is gone: give it to the chip
+    if (hadFocusInside) void tick().then(() => document.querySelector<HTMLElement>('.reminder-chip')?.focus());
+  }
+
+  function toggleReminderBanner(): void {
+    if (bannerCollapsed) expandReminderBanner();
+    else collapseReminderBanner();
+  }
+
+  // Top right, where the old toast was. When something else is already there (a "Saved" notice, the tab bar of the admin page, a toolbar),
+  // the chip or the opened reminder sits just below it instead, never on top of it.
+  const REMINDER_TOP = 66;
+  function placeReminder(node: HTMLElement): { destroy(): void } {
+    let frame = 0;
+    const avoidables = (): HTMLElement[] => Array.from(document.querySelectorAll<HTMLElement>('body *')).filter(el => {
+      if (el === node || node.contains(el) || el.contains(node)) return false;
+      const cs = getComputedStyle(el);
+      const inTabBar = el.matches('.nav-tabs, [role="tablist"]');
+      if (cs.position !== 'fixed' && cs.position !== 'sticky' && !inTabBar) return false;
+      if (cs.visibility === 'hidden' || cs.display === 'none' || Number.parseFloat(cs.opacity) === 0) return false;
+      const box = el.getBoundingClientRect();
+      if (box.width < 2 || box.height < 2) return false;
+      if (el.id === 'main-navbar' || el.closest('#main-navbar')) return false;
+      // a wrapper that is as wide as the window and tall is a backdrop or a layout box, not a thing to avoid
+      if (box.width > window.innerWidth * 0.9 && box.height > window.innerHeight * 0.5) return false;
+      return true;
+    });
+    const place = (): void => {
+      frame = 0;
+      let top = REMINDER_TOP;
+      node.style.top = `${top}px`;
+      const things = avoidables();
+      for (let pass = 0; pass < 6; pass++) {
+        const mine = node.getBoundingClientRect();
+        const hit = things.find(el => {
+          const box = el.getBoundingClientRect();
+          return mine.left < box.right && mine.right > box.left && mine.top < box.bottom && mine.bottom > box.top;
+        });
+        if (!hit) break;
+        top = Math.ceil(hit.getBoundingClientRect().bottom) + 6;
+        node.style.top = `${top}px`;
+      }
+    };
+    const schedule = (): void => {
+      if (!frame) frame = window.requestAnimationFrame(place);
+    };
+    place();
+    window.addEventListener('resize', schedule);
+    window.addEventListener('scroll', schedule, { passive: true, capture: true });
+    const overlay = document.getElementById('overlay-container');
+    const watcher = new MutationObserver(schedule);
+    watcher.observe(document.body, { childList: true, subtree: true });
+    if (overlay) watcher.observe(overlay, { childList: true, subtree: true, attributes: true });
+    return {
+      destroy(): void {
+        if (frame) window.cancelAnimationFrame(frame);
+        window.removeEventListener('resize', schedule);
+        window.removeEventListener('scroll', schedule, true);
+        watcher.disconnect();
+      },
+    };
   }
 
   function updateUrgentBadges(
@@ -1152,6 +1282,8 @@
   });
 
   onDestroy(() => {
+    clearAutoCollapse();
+    listenWhileOpen(false);
     if (reminderTimer !== undefined) window.clearInterval(reminderTimer);
     if (autoRefreshTimer !== undefined) window.clearInterval(autoRefreshTimer);
   });
@@ -1164,6 +1296,7 @@
       class='reminder-chip'
       role='status'
       use:portalToContainer
+      use:placeReminder
       on:click={toggleReminderBanner}
       aria-expanded='false'
       aria-label={bannerEntries.length === 1 ? t('1 task due soon') : t('{{count}} tasks due soon', { count: bannerEntries.length })}
@@ -1173,7 +1306,16 @@
       <span class='reminder-chip-count'>{bannerEntries.length}</span>
     </button>
   {:else}
-    <div class='reminder-banner' role='status' use:portalToContainer>
+    <div
+      class='reminder-banner'
+      role='status'
+      use:portalToContainer
+      use:placeReminder
+      on:mouseenter={() => { pointerInside = true; clearAutoCollapse(); }}
+      on:mouseleave={() => { pointerInside = false; armAutoCollapse(); }}
+      on:focusin={() => { focusInside = true; clearAutoCollapse(); }}
+      on:focusout={() => { focusInside = false; armAutoCollapse(); }}
+    >
       <div class='reminder-banner-header'>
         <button type='button' class='reminder-banner-toggle' on:click={toggleReminderBanner} aria-expanded='true'>
           <i class='fas fa-clock fa-fw reminder-banner-icon' aria-hidden='true'></i>
@@ -1497,11 +1639,11 @@
     background: var(--lightgold);
     border-radius: 0.4rem;
     box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.25);
-    max-width: 340px;
     position: fixed;
-    /* bottom right, left of the buttons on the right edge: not over the tab bars of the admin and settings pages */
-    bottom: 1rem;
-    right: 4.5rem;
+    /* top right like the old toast, dropping down from the chip's place; placeReminder moves it lower when something is in the way */
+    max-width: min(340px, calc(100vw - 2rem));
+    right: 1rem;
+    top: 66px;
     width: 100%;
     z-index: 1030;
   }
@@ -1555,7 +1697,6 @@
     background: var(--lightgold);
     border: 1px solid rgba(0, 0, 0, 0.18);
     border-radius: 999px;
-    bottom: 1rem;
     box-shadow: 0 0.15rem 0.5rem rgba(0, 0, 0, 0.25);
     color: var(--strongest);
     cursor: pointer;
@@ -1568,7 +1709,9 @@
     min-width: 2.2rem;
     padding: 0 0.55rem;
     position: fixed;
-    right: 4.5rem;
+    right: 1rem;
+    /* top right like the old toast, just under the navbar; placeReminder moves it lower when something is in the way */
+    top: 66px;
     z-index: 1030;
   }
 
@@ -1622,7 +1765,7 @@
     border-top: 1px solid rgba(0, 0, 0, 0.15);
     list-style: none;
     margin: 0;
-    max-height: 220px;
+    max-height: min(220px, calc(100vh - 160px));
     overflow-y: auto;
     padding: 0;
   }
