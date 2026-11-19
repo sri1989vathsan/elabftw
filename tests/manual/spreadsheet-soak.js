@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'text-column-fits', 'text-not-clipped', 'paste-keeps-formatting', 'cell-alignment-consistent', 'alignment-preserved', 'toolbar-not-cut', 'row-height-fits-text', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'viewport-equals-table-width', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'text-column-fits', 'text-not-clipped', 'paste-keeps-formatting', 'cell-alignment-consistent', 'alignment-preserved', 'toolbar-not-cut', 'row-height-fits-text', 'editor-height-after-removal', 'undo-typing-over-text', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'viewport-equals-table-width', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -2051,17 +2051,22 @@ async function spreadsheetSoak(options = {}) {
       await sleep(600);
       const states = [await look()];
       const kinds = ['inserted'];
+      const where = [];
       const steps = [
-        ['typing', async () => { await typeDirect(uid, int(0, 3), int(0, 3), `U${int(10, 99)}`, 'Enter'); }],
-        ['bold', async () => { await boldCell(uid, int(0, 3), int(0, 3)); }],
-        ['align right', async () => { await alignRight(int(0, 3), int(0, 3)); }],
-        ['add rows', async () => { await addRowsBar(uid, 1); }],
-        ['column width', async () => { await resizeColumn(uid, int(0, 3)); }],
+        ['typing', async () => { const r = int(0, 3); const c = int(0, 3); where.push(`typing ${cellName(r, c)}`); await typeDirect(uid, r, c, `U${int(10, 99)}`, 'Enter'); }],
+        ['bold', async () => { const r = int(0, 3); const c = int(0, 3); where.push(`bold ${cellName(r, c)}`); await boldCell(uid, r, c); }],
+        ['align right', async () => { const r = int(0, 3); const c = int(0, 3); where.push(`align right ${cellName(r, c)}`); await alignRight(r, c); }],
+        ['add rows', async () => { where.push('add rows'); await addRowsBar(uid, 1); }],
+        ['column width', async () => { const c = int(0, 3); where.push(`column width ${c}`); await resizeColumn(uid, c); }],
       ];
       // every kind of step once (in a random order), then random ones up to the count
       const count = config.quick ? 5 : 7;
-      const plan = [...steps].sort(() => random() - 0.5);
+      // Fisher-Yates with the seeded generator: Array.sort with a random comparator takes different numbers of comparisons in V8 and
+      // SpiderMonkey, so the same seed gave Chrome and Firefox different step orders. config.undoPlan (a list of step names) forces an order.
+      const plan = [...steps];
+      for (let i = plan.length - 1; i > 0; i--) { const j = int(0, i); [plan[i], plan[j]] = [plan[j], plan[i]]; }
       while (plan.length < count) plan.push(pick(steps));
+      if (Array.isArray(config.undoPlan)) plan.splice(0, plan.length, ...config.undoPlan.map(kind => steps.find(step => step[0] === kind)).filter(Boolean));
       for (const [kind, run] of plan) {
         await run();
         await sleep(500);
@@ -2073,14 +2078,14 @@ async function spreadsheetSoak(options = {}) {
       for (let i = states.length - 1; i >= 1; i--) {
         await undoKey(uid, false);
         const diff = differences(await look(), states[i - 1]);
-        if (diff.length) dataLoss.push({ context, where: 'grid', problem: `undo of step ${i} (${kinds[i]}) did not restore the table: ${diff.slice(0, 4).join('; ')} [steps: ${kinds.join(' > ')}]` });
+        if (diff.length) dataLoss.push({ context, where: 'grid', problem: `undo of step ${i} (${kinds[i]}) did not restore the table: ${diff.slice(0, 4).join('; ')} [steps: ${kinds.join(' > ')}; cells: ${where.join(' > ')}]` });
         note('undo-everything-undo');
       }
       // and forward again
       for (let i = 1; i < states.length; i++) {
         await undoKey(uid, true);
         const diff = differences(await look(), states[i]);
-        if (diff.length) dataLoss.push({ context, where: 'grid', problem: `redo of step ${i} (${kinds[i]}) did not bring the change back: ${diff.slice(0, 4).join('; ')} [steps: ${kinds.join(' > ')}]` });
+        if (diff.length) dataLoss.push({ context, where: 'grid', problem: `redo of step ${i} (${kinds[i]}) did not bring the change back: ${diff.slice(0, 4).join('; ')} [steps: ${kinds.join(' > ')}; cells: ${where.join(' > ')}]` });
         note('undo-everything-redo');
       }
       // the record of what was typed no longer matches after undo and redo: leave this table out of later checks
@@ -2866,6 +2871,55 @@ async function spreadsheetSoak(options = {}) {
       const afterResize = clipped(api.overlayElement(uid) || root);
       if (afterResize.length) dataLoss.push({ context, table, problem: `after a column resize the text of ${afterResize.join(' ')} is cut off at the bottom` });
       note('row-height-fits-text');
+    },
+    // The editor is only as tall as its text: after a table that was made taller (Add rows) is removed, the frame shrinks back within
+    // a moment (it used to stay as tall as the table had needed, an empty strip under the text), after Delete and after undo of the insert.
+    async 'editor-height-after-removal'() {
+      const iframeEl = editor.getContainer().querySelector('iframe');
+      const slack = () => Math.round(iframeEl.getBoundingClientRect().height - Math.max(editor.getDoc().body.scrollHeight, editor.getDoc().body.offsetHeight));
+      for (const how of ['removed', 'deleted with the toolbar button']) {
+        const uid = await createTable(`editor height (${how})`, { rows: 4, cols: 4 });
+        if (!uid) continue;
+        await addRowsBar(uid, 3);
+        await sleep(600);
+        const grown = slack();
+        if (how === 'removed') api.removeTable(uid);
+        else {
+          const root = await live(uid);
+          const button = root.querySelector('.elabftw-spreadsheet-readonly-delete');
+          const confirmBefore = window.confirm; window.confirm = () => true;
+          try { button.click(); } finally { window.confirm = confirmBefore; }
+        }
+        models.delete(uid);
+        let waited = 0;
+        while (slack() > 120 && waited < 4000) { await sleep(250); waited += 250; }
+        const after = slack();
+        if (after > 120) dataLoss.push({ context, table: `editor height (${how})`, problem: `the editor frame is ${after} px taller than its text ${waited} ms after the table went (${grown} px right before)` });
+        note('editor-height-after-removal');
+      }
+    },
+    // Typing straight over a cell that already has text is one undo step that brings the old text back (not an empty cell), and redo puts
+    // the new text in again. (undo-everything with some seeds typed twice into the same cell and then found the cell empty after one undo.)
+    async 'undo-typing-over-text'() {
+      const uid = await createTable('undo typing over text', { rows: 3, cols: 3 });
+      if (!uid) return;
+      const cell = () => (api.overlayElement(uid)?.querySelector('td[data-x="1"][data-y="1"]')?.textContent || '').trim();
+      await typeDirect(uid, 1, 1, 'first', 'Enter'); await sleep(500);
+      await typeDirect(uid, 1, 1, 'second', 'Enter'); await sleep(500);
+      const table = 'undo typing over text';
+      if (cell() !== 'second') { fail(`undo-typing-over-text: the cell shows "${cell()}" after typing twice`); return; }
+      await undoKey(uid, false);
+      if (cell() !== 'first') dataLoss.push({ context, table, problem: `one undo after typing over "first" leaves "${cell()}" in the cell instead of "first"` });
+      await undoKey(uid, false);
+      if (cell() !== '') dataLoss.push({ context, table, problem: `a second undo leaves "${cell()}" instead of an empty cell` });
+      await undoKey(uid, true);
+      if (cell() !== 'first') dataLoss.push({ context, table, problem: `redo gives "${cell()}" instead of "first"` });
+      await undoKey(uid, true);
+      if (cell() !== 'second') dataLoss.push({ context, table, problem: `a second redo gives "${cell()}" instead of "second"` });
+      models.delete(uid);
+      api.removeTable(uid);
+      await sleep(800);
+      note('undo-typing-over-text');
     },
     // Print and the PDF export are built from the stored table, not from the live grid: its column widths, one coordinate cell per row
     // and its header row must be the live grid's, or paper and screen differ. The print rules (fills kept, no clipping) must be loaded.
