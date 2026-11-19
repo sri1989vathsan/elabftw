@@ -1,3 +1,4 @@
+{% import 'guide-info.html' as guide -%}
 {% set canWriteExperiments = App.Users.isAdmin or App.Teams.teamArr.users_canwrite_experiments %}
 {% set canWriteResources = App.Users.isAdmin or App.Teams.teamArr.users_canwrite_resources %}
 {% set canWriteExperimentsTemplates = App.Users.isAdmin or App.Teams.teamArr.users_canwrite_experiments_templates %}
@@ -7,7 +8,7 @@
   <div class='modal-dialog modal-lg' role='document'>
     <div class='modal-content'>
       <div class='modal-header'>
-        <h5 class='modal-title' id='createModalLabel'>{{ 'Create a new entry'|trans }}</h5>
+        <h5 class='modal-title' id='createModalLabel'>{{ 'Create a new entry'|trans }}{{ guide.info('guide-create-entry', 'Create a new entry') }}</h5>
         <button type='button' class='close' data-dismiss='modal' aria-label='{{ 'Close'|trans }}'>
           <span aria-hidden='true'>&times;</span>
         </button>
