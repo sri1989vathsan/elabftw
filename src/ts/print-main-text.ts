@@ -11,6 +11,7 @@
  * @package elabftw
  */
 import { restoreStaticSpreadsheetsForPrint } from './inline-spreadsheet';
+import { printWithSheetsChoice } from './sheets-mode';
 
 // sections of the page that belong on paper (the others are editing tools, permissions or drawing areas)
 const PRINTED_SECTIONS = /^(steps|data|links|custom fields|local files|storage|comments)/i;
@@ -55,7 +56,12 @@ function printHeader(label: string, ariaLabel: string): { container: HTMLElement
   return { container, title, context };
 }
 
+/** Print main text: when a table is wider than the page the user is asked first how to print it (sheets-mode.ts). */
 export function printMainText(editorBody?: HTMLElement | null): void {
+  printWithSheetsChoice(() => printMainTextNow(editorBody));
+}
+
+function printMainTextNow(editorBody?: HTMLElement | null): void {
   const source = document.getElementById('body_view') ?? editorBody;
   if (!source) return;
   const { container, title, context } = printHeader('Notebook main text', 'Main text');
@@ -130,6 +136,10 @@ function pageSections(): HTMLElement[] {
 }
 
 export function printEverything(editorBody?: HTMLElement | null): void {
+  printWithSheetsChoice(() => printEverythingNow(editorBody));
+}
+
+function printEverythingNow(editorBody?: HTMLElement | null): void {
   const source = document.getElementById('body_view') ?? editorBody;
   if (!source) return;
   const { container, title, context } = printHeader('Complete entry', 'Complete entry');

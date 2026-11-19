@@ -13,7 +13,7 @@ import 'jsuites/dist/jsuites.css';
 import { ApiC } from './api';
 import { captureFocus, restoreFocus } from './a11y';
 import { entity } from './getEntity';
-import { getSheetsMode } from './sheets-mode';
+import { currentPrintMode, type SheetsMode } from './sheets-mode';
 import { createSpreadsheetRepaintQueue } from './custom-editor/SpreadsheetPerformance';
 import { buildWellPlateHost, createPlateViewSwitch } from './well-plate-view';
 
@@ -11803,6 +11803,11 @@ function staticTableForPrint(el: HTMLElement): HTMLTableElement | null {
     const liveData = sheetContainer ? getMountedWorksheet(sheetContainer)?.getData?.() : undefined;
     if (Array.isArray(liveData)) data = { ...data, data: liveData, displayData: liveData };
   }
+  return staticTableFromData(data);
+}
+
+/** A static table made from the data of a sheet, trimmed and drawn like the PDF. */
+function staticTableFromData(data: SpreadsheetData): HTMLTableElement | null {
   const holder = document.createElement('div');
   holder.innerHTML = spreadsheetToHTML(data, data.displayData ?? data.data);
   const table = holder.querySelector<HTMLTableElement>('table.elabftw-spreadsheet');
@@ -11891,11 +11896,39 @@ function splitTableForPrint(table: HTMLTableElement, pageWidth: number): HTMLEle
  * split: actual size, the columns that do not fit continue in blocks on the next pages.
  * Undone after printing. Browsers without named pages (Firefox) fit the sheet to the portrait width.
  */
+/**
+ * Puts a static table on paper the way the chosen mode says, inside a plain wrapper (no scroll container): fit = a zoom to the portrait
+ * page width, landscape = the named page "wide" (Chromium; elsewhere fit) when a portrait page would shrink it below 70%,
+ * split = actual size in column blocks. A table that fits the page is left at 100%.
+ */
+function placeForPrint(table: HTMLTableElement, mode: SheetsMode): HTMLElement {
+  const natural = staticTableWidth(table);
+  let width = PRINT_CONTENT_WIDTH;
+  const copy = document.createElement('div');
+  copy.className = 'print-sheet-copy';
+  const namedPages = /Chrome\//.test(navigator.userAgent) && !/Firefox\//.test(navigator.userAgent);
+  if (mode === 'split' && natural > PRINT_CONTENT_WIDTH) {
+    const blocks = splitTableForPrint(table, PRINT_CONTENT_WIDTH);
+    copy.append(blocks ?? table);
+    return copy;
+  }
+  if (mode === 'landscape' && namedPages && natural > PRINT_CONTENT_WIDTH && PRINT_CONTENT_WIDTH / natural < PRINT_MIN_PORTRAIT_SCALE) {
+    width = PRINT_LANDSCAPE_WIDTH;
+    copy.classList.add('print-wide-sheet');
+  }
+  // zoom scales text, borders and row heights together and shrinks the layout width with it
+  if (natural > width) copy.style.setProperty('zoom', String(Math.floor(width / natural * 1000) / 1000));
+  copy.append(table);
+  return copy;
+}
+
 if (typeof window !== 'undefined') {
   const undo: Array<() => void> = [];
-  const namedPages = (): boolean => /Chrome\//.test(navigator.userAgent) && !/Firefox\//.test(navigator.userAgent);
   window.addEventListener('beforeprint', () => {
-    const mode = document.body.dataset.sheetsMode ?? getSheetsMode();
+    // the copy made for Print / Print selection is already built (restoreStaticSpreadsheetsForPrint) and everything else is hidden
+    if (document.body.classList.contains('toc-print-selection-active')) return;
+    // Ctrl+P cannot be intercepted to ask: the remembered choice, else fit (the Print buttons set the mode of their print)
+    const mode = currentPrintMode();
     const scope = document.getElementById('body_view') ?? document.body;
     // every sheet of the text, mounted or not (the ones below the fold are still raw tables), but not the copies made for Print selection
     const sheets = Array.from(scope.querySelectorAll<HTMLElement>('.elabftw-spreadsheet-readonly-view, table.elabftw-spreadsheet[data-spreadsheet]'))
@@ -11903,23 +11936,7 @@ if (typeof window !== 'undefined') {
     sheets.forEach(el => {
       const table = staticTableForPrint(el);
       if (!table) return;
-      const natural = staticTableWidth(table);
-      let width = PRINT_CONTENT_WIDTH;
-      const copy = document.createElement('div');
-      copy.className = 'print-sheet-copy';
-      if (mode === 'split' && natural > PRINT_CONTENT_WIDTH) {
-        const blocks = splitTableForPrint(table, PRINT_CONTENT_WIDTH);
-        if (blocks) copy.append(blocks);
-        else copy.append(table);
-      } else {
-        if (mode === 'landscape' && namedPages() && natural > PRINT_CONTENT_WIDTH && PRINT_CONTENT_WIDTH / natural < PRINT_MIN_PORTRAIT_SCALE) {
-          width = PRINT_LANDSCAPE_WIDTH;
-          copy.classList.add('print-wide-sheet');
-        }
-        // zoom scales text, borders and row heights together and shrinks the layout width with it
-        if (natural > width) copy.style.setProperty('zoom', String(Math.floor(width / natural * 1000) / 1000));
-        copy.append(table);
-      }
+      const copy = placeForPrint(table, mode);
       // the original stays in the page, hidden, and comes back after printing
       const hiddenBefore = el.style.getPropertyValue('display');
       el.style.setProperty('display', 'none', 'important');
@@ -11933,6 +11950,7 @@ if (typeof window !== 'undefined') {
 }
 
 export function restoreStaticSpreadsheetsForPrint(originalRoot: ParentNode, clonedRoot: ParentNode): void {
+  const mode = currentPrintMode();
   // The editor keeps a spacer after each table to reserve room for its overlay, with a negative margin when the
   // overlay is shorter than the table. On paper the real table is printed, so a leftover spacer would pull the
   // following tables and text up over it.
@@ -11957,25 +11975,15 @@ export function restoreStaticSpreadsheetsForPrint(originalRoot: ParentNode, clon
     const worksheet = sheetContainer ? getMountedWorksheet(sheetContainer) : null;
     const liveData = worksheet?.getData?.();
     const current = Array.isArray(liveData) ? { ...extracted, data: liveData, displayData: liveData } : extracted;
-    const html = spreadsheetToHTML(current, current.displayData ?? current.data);
-    const parsed = document.createElement('div');
-    parsed.innerHTML = html;
-    const table = parsed.querySelector<HTMLTableElement>('table.elabftw-spreadsheet');
-    if (!table) return;
-    // spreadsheetToHTML() sizes the table from the saved appearance, which
-    // for many spreadsheets is a leftover "fill the editor" width (e.g.
-    // 100%) rather than the compact size actually shown in view mode --
-    // the view page's own CSS auto-fits the host to its content instead
-    // of trusting that saved width. Match what print produces to what the
-    // reader already saw on the page rather than the saved value.
-    const viewModeWidth = Number.parseFloat(originalHost.dataset.viewModeWidth ?? '');
-    if (Number.isFinite(viewModeWidth) && viewModeWidth > 0) {
-      table.style.width = `${viewModeWidth}px`;
-      table.style.maxWidth = 'none';
-      // a table wider than the printable width is scaled down to fit the page, never cut off
-      if (viewModeWidth > PRINT_CONTENT_WIDTH) table.style.setProperty('zoom', String(Math.floor(PRINT_CONTENT_WIDTH / viewModeWidth * 1000) / 1000));
-    }
-    clone.replaceWith(table);
+    // the same look and the same handling of wide tables as the page print (trimmed, fit / landscape / split by the chosen mode)
+    const finished = staticTableFromData(current);
+    if (finished) clone.replaceWith(placeForPrint(finished, mode));
+  });
+  // sheets that are still raw tables (not mounted yet) in the copy
+  clonedRoot.querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet[data-spreadsheet]').forEach(raw => {
+    if (raw.dataset.spreadsheetStyle === 'well-plate') return;
+    const finished = staticTableFromData(extractFromTable(raw));
+    if (finished) raw.replaceWith(placeForPrint(finished, mode));
   });
 }
 

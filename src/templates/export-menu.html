@@ -11,14 +11,7 @@
       </div>
       <div class='modal-body'>
         <p id='pdfSelectedSectionsNote' class='smallgray' hidden><i class='fas fa-fw fa-list-check'></i> {{ 'Only the sections selected in the Contents panel are exported'|trans }} (<span data-selected-count>0</span>).</p>
-        <div class='form-group'>
-      <label>{{ 'Sheets in print and PDF'|trans }}</label>
-      <select data-sheets-mode class='form-control form-control-sm' aria-label='{{ 'Sheets in print and PDF'|trans }}'>
-        <option value='landscape'>{{ 'Landscape when wide'|trans }}</option>
-        <option value='fit'>{{ 'Fit to page width'|trans }}</option>
-        <option value='split'>{{ 'Actual size, split across pages'|trans }}</option>
-      </select>
-    </div>
+        <p class='smallgray'><i class='fas fa-fw fa-table'></i> {{ 'Wide tables'|trans }}: <span data-sheets-mode-label></span> <a href='#' data-action='sheets-mode-change'>{{ 'Change wide table setting'|trans }}</a></p>
         {% include 'export-menu-options.html' with {'format': 'pdf'} %}
       </div>
       <div class='modal-footer'>
@@ -134,14 +127,7 @@
     <button type='button' class='dropdown-item' data-action='print-entry'>
       <i class='fas fa-print fa-fw'></i> {{ 'Print'|trans }}
     </button>
-    <div class='dropdown-item-text py-0'>
-      <label class='smallgray mb-0'>{{ 'Sheets in print and PDF'|trans }}</label>
-      <select data-sheets-mode class='form-control form-control-sm' aria-label='{{ 'Sheets in print and PDF'|trans }}'>
-        <option value='landscape'>{{ 'Landscape when wide'|trans }}</option>
-        <option value='fit'>{{ 'Fit to page width'|trans }}</option>
-        <option value='split'>{{ 'Actual size, split across pages'|trans }}</option>
-      </select>
-    </div>
+    <a href='#' class='dropdown-item smallgray' data-action='sheets-mode-change'><i class='fas fa-table fa-fw'></i> {{ 'Change wide table setting'|trans }}</a>
     <button type='button' class='dropdown-item' data-action='toggle-modal' data-target='pdfExportModal'>
       <i class='fas fa-file-pdf fa-fw'></i> {{ 'PDF File'|trans }}
     </button>
