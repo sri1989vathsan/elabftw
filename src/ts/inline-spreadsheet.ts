@@ -2527,10 +2527,11 @@ function shiftFormulaReferences(formula: string, deltaCol: number, deltaRow: num
  * the formulas), with where the range came from. A paste of that same text brings the formulas along, moved by how far
  * they travelled, the way Excel does.
  */
-let lastGridCopy: { col: number; row: number; shown: string[][]; raw: string[][] } | null = null;
+let lastGridCopy: { col: number; row: number; shown: string[][]; raw: string[][]; styles?: string[][] } | null = null;
 
-function rememberGridCopy(col: number, row: number, shown: string[][], raw: string[][]): void {
-  lastGridCopy = { col, row, shown, raw };
+/** `styles` are the copied cells' style attributes: a paste that arrives as text only (the grid's own Paste menu entry) still gets the look. */
+function rememberGridCopy(col: number, row: number, shown: string[][], raw: string[][], styles?: string[][]): void {
+  lastGridCopy = { col, row, shown, raw, styles };
 }
 
 /**
@@ -4950,7 +4951,14 @@ function mergePastedCellStyle(existingStyle: string | undefined, pastedStyle: st
   [
     'font-weight', 'font-style', 'font-family', 'font-size', 'color',
     'text-decoration', 'text-decoration-line', 'text-decoration-style', 'text-decoration-color',
+    'background-color', 'text-align',
   ].forEach(property => target.style.removeProperty(property));
+  // the pasted cell brings its own borders (a copied cell's style names all four sides), so the target's do not stay under them
+  if (pastedStyle) {
+    Array.from({ length: target.style.length }, (_, index) => target.style.item(index))
+      .filter(property => property.startsWith('border'))
+      .forEach(property => target.style.removeProperty(property));
+  }
   if (pastedStyle) {
     const source = document.createElement('span');
     source.setAttribute('style', pastedStyle);
@@ -9265,11 +9273,13 @@ export function buildReadOnlySpreadsheetHost(
     const htmlRows: string[] = [];
     const shownCells: string[][] = [];
     const rawCells: string[][] = [];
+    const styleCells: string[][] = [];
     for (let row = startRow; row <= endRow; row++) {
       const textCells: string[] = [];
       const htmlCells: string[] = [];
       shownCells.push([]);
       rawCells.push([]);
+      styleCells.push([]);
       for (let col = startCol; col <= endCol; col++) {
         const cell = sheetContainer.querySelector<HTMLElement>(
           `.jss_worksheet > tbody td[data-x="${col}"][data-y="${row}"]`,
@@ -9279,12 +9289,13 @@ export function buildReadOnlySpreadsheetHost(
         rawCells[rawCells.length - 1].push(String(rawDataMirror[row]?.[col] ?? text));
         textCells.push(/[\t\r\n"]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text);
         const style = sanitizeStyle(cell?.getAttribute('style') ?? undefined, PRESERVED_STYLE_PROPERTIES);
+        styleCells[styleCells.length - 1].push(style ?? '');
         htmlCells.push(`<td${style ? ` style="${escapeHTMLAttribute(style)}"` : ''}>${escapeHTML(text)}</td>`);
       }
       textRows.push(textCells.join('\t'));
       htmlRows.push(`<tr>${htmlCells.join('')}</tr>`);
     }
-    rememberGridCopy(startCol, startRow, shownCells, rawCells);
+    rememberGridCopy(startCol, startRow, shownCells, rawCells, styleCells);
     event.preventDefault();
     event.stopImmediatePropagation();
     event.clipboardData.setData('text/plain', textRows.join('\n'));
@@ -10843,7 +10854,30 @@ export function buildReadOnlySpreadsheetHost(
     const origin = pasteOrigin;
     pasteHtmlTable = null;
     pasteOrigin = null;
-    if (!table || !origin || !table.cellStyles) return;
+    if (!origin) return;
+    if (!table || !table.cellStyles) {
+      // No HTML came with the paste (the grid's Paste menu entry reads the clipboard as text): when the text is what the last
+      // copy in a grid put on the clipboard, the look of that copy is pasted with it.
+      const copied = lastGridCopy;
+      const height = copied?.shown.length ?? 0;
+      const width = copied?.shown[0]?.length ?? 0;
+      if (!copied?.styles || height === 0 || width === 0) return;
+      const sameText = origin.values.every((line, row) => line.every((value, col) => (
+        value.trim() === (copied.shown[row % height]?.[col % width] ?? '').trim()
+      )));
+      if (!sameText) return;
+      origin.values.forEach((line, row) => line.forEach((_value, col) => {
+        const cell = sheetContainer.querySelector<HTMLElement>(`td[data-x="${origin.x + col}"][data-y="${origin.y + row}"]`);
+        if (!cell) return;
+        const before = cell.getAttribute('style') ?? '';
+        const after = mergePastedCellStyle(before || undefined, copied.styles?.[row % height]?.[col % width] || undefined) ?? '';
+        if (after === before) return;
+        if (after) cell.setAttribute('style', after);
+        else cell.removeAttribute('style');
+        pasteStyleChanges.push({ col: origin.x + col, row: origin.y + row, oldValue: '', newValue: '', style: true, oldStyle: before, newStyle: after });
+      }));
+      return;
+    }
     const sourceHeight = table.data.length;
     const sourceWidth = table.data.reduce((widest, line) => Math.max(widest, line.length), 0);
     if (sourceHeight === 0 || sourceWidth === 0) return;
