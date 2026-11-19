@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'text-column-fits', 'text-not-clipped', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'viewport-equals-table-width', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'text-column-fits', 'text-not-clipped', 'paste-keeps-formatting', 'cell-alignment-consistent', 'alignment-preserved', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'viewport-equals-table-width', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -1114,7 +1114,7 @@ async function spreadsheetSoak(options = {}) {
   // (they were 4 px shorter once, because the row-number cell of a new row had no padding).
   async function rowHeightsUniform(uid, label) {
     const root = api.overlayElement(uid);
-    if (!root) return;
+    if (!root || models.get(uid)?.tallRows) return; // a sheet of wrapped long text has rows of different heights on purpose
     await sleep(500);
     if (document.hidden) { note('row-height-check-skipped-hidden'); return; } // the layout loop is throttled then
     const heights = [...root.querySelectorAll('.jss_worksheet tbody tr')].map(tr => Math.round(tr.getBoundingClientRect().height));
@@ -2481,6 +2481,233 @@ async function spreadsheetSoak(options = {}) {
         }
         note('text-not-clipped');
       }
+    },
+    // A range copied inside a sheet keeps its look when pasted: into the same sheet, into a second sheet, with the clipboard's HTML table
+    // and with the text only (the grid's Paste menu entry reads the text alone), and after a cut. The look is the fill, bold, font size,
+    // text colour, alignment and borders of every cell; one undo brings the target's old look back and redo applies it again.
+    // Headless Firefox cannot do real clipboard work, but this scenario sends the copy/paste/cut events itself (synthetic clipboard), so it
+    // runs there too; the real Ctrl+C / Ctrl+V keys are not exercised (run in Chromium for the closest thing).
+    async 'paste-keeps-formatting'() {
+      const rows = [['Component', 'Volume (uL)'], ['Vector', '1.44'], ['Insert', '0.309'], ['Master mix', '2.00'], ['Water', '6.25'], ['Total', '10.00']];
+      const headerStyle = 'font-size: 10px; font-weight: bold; color: #888888; background-color: #d9e2f3; text-align: left;';
+      const totalStyle = 'font-size: 12px; font-weight: bold; font-style: italic; background-color: #fff2cc; border-top: 2px solid #333333;';
+      const bodyStyle = (r, c) => `font-size: 12px; color: #1a4f8b; text-align: ${c ? 'right' : 'left'}; background-color: ${r % 2 ? '#e2efda' : '#fce4d6'};`;
+      const sourceStyles = {};
+      rows.forEach((row, r) => row.forEach((_, c) => { sourceStyles[cellName(r, c)] = r === 0 ? headerStyle : (r === 5 ? totalStyle : bodyStyle(r, c)); }));
+      const oldLook = 'font-size: 16px; font-style: italic; color: #cc0000; text-align: center; background-color: #ddddff; border: 3px solid #00aa00;';
+      const make = async (label, cols, targetColumn) => {
+        layoutDirty = true;
+        const full = rows.map(r => [...(targetColumn === 0 ? r.map(() => '') : r), ...Array(cols - 2).fill('')]);
+        const styles = { ...sourceStyles };
+        full.forEach((row, r) => row.forEach((_, c) => { if (c >= targetColumn) styles[cellName(r, c)] = oldLook; }));
+        const before = new Set(api.snapshot(false).map(snap => snap.uid));
+        editor.focus();
+        editor.execCommand('elabftwInsertSpreadsheetData', false, { data: full, displayData: full, rows: 6, cols, kind: 'standard', caption: '', cellStyles: styles });
+        await sleep(1000);
+        const added = newTablesSince(before);
+        if (added.length !== 1) { fail(`paste-keeps-formatting: ${added.length} spreadsheets were made for ${label}`); return null; }
+        models.set(added[0].uid, { label, grid: full.map(r => r.slice()), plate: false });
+        return added[0].uid;
+      };
+      const first = await make('paste formatting source', 5, 3);
+      const second = await make('paste formatting second sheet', 4, 0);
+      if (!first || !second) return;
+      const look = td => { const s = getComputedStyle(td); return [s.fontSize, s.fontWeight, s.fontStyle, s.color, s.textAlign, s.backgroundColor, s.borderTopWidth, s.borderTopColor, s.borderLeftWidth].join('|'); };
+      const cellOf = (root, r, c) => root.querySelector(`td[data-x="${c}"][data-y="${r}"]`);
+      const looks = (root, c0) => { const out = []; for (let r = 0; r < 6; r++) for (let c = 0; c < 2; c++) out.push(look(cellOf(root, r, c0 + c))); return out; };
+      const copyRange = async (uid, kind) => {
+        const root = await live(uid);
+        press(cellOf(root, 0, 0)); await sleep(200);
+        press(cellOf(root, 5, 1), { shiftKey: true }); await sleep(250);
+        const store = {};
+        const event = new ClipboardEvent(kind, { bubbles: true, cancelable: true });
+        Object.defineProperty(event, 'clipboardData', { value: { setData: (type, value) => { store[type] = value; }, getData: type => store[type] || '' } });
+        (document.activeElement && root.contains(document.activeElement) ? document.activeElement : root.querySelector('.jss_textarea')).dispatchEvent(event);
+        await sleep(300);
+        return store;
+      };
+      const pasteAt = async (uid, r, c, store, withHtml) => {
+        const root = await live(uid);
+        press(cellOf(root, r, c)); await sleep(250);
+        const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true });
+        const data = { 'text/plain': store['text/plain'] || '', ...(withHtml ? { 'text/html': store['text/html'] || '' } : {}) };
+        Object.defineProperty(event, 'clipboardData', { value: { getData: type => (type === 'text' ? data['text/plain'] : data[type] || ''), types: Object.keys(data) } });
+        (document.activeElement && root.contains(document.activeElement) ? document.activeElement : root.querySelector('.jss_textarea')).dispatchEvent(event);
+        await sleep(900);
+        return root;
+      };
+      let sourceLooks = null;
+      const check = async (label, uid, c0, expected) => {
+        const root = api.overlayElement(uid) || await live(uid);
+        // the selected cell wears the selection's border: look at a column outside the compared range
+        press(cellOf(root, 5, c0 === 0 ? 3 : 0)); await sleep(200);
+        const now = looks(root, c0);
+        const bad = now.map((value, index) => value === expected[index] ? null : `${cellName(Math.floor(index / 2), c0 + (index % 2))}: ${value} instead of ${expected[index]}`).filter(Boolean);
+        if (bad.length) dataLoss.push({ context, table: label, problem: `the pasted range lost its formatting in ${bad.length} of 12 cells: ${bad.slice(0, 2).join('; ')}` });
+        return now;
+      };
+      const rootOne = await live(first);
+      sourceLooks = looks(rootOne, 0);
+      const table = 'paste keeps formatting';
+      if (new Set(sourceLooks).size < 4) fail('paste-keeps-formatting: the source sheet does not show different formatting, the test sheet did not take its styles');
+      const targetOldLooks = looks(rootOne, 3);
+      const target = (uid, c0) => { const root = api.overlayElement(uid); return [...root.querySelectorAll(`td[data-x="${c0}"][data-y], td[data-x="${c0 + 1}"][data-y]`)].filter(td => +td.dataset.y < 6).map(td => td.getAttribute('style') || ''); };
+      const store = await copyRange(first, 'copy');
+      if (!/<table/i.test(store['text/html'] || '')) { dataLoss.push({ context, table, problem: 'the range copy wrote no HTML table' }); return; }
+      for (const [label, uid, c0, withHtml] of [['same sheet, HTML + text', first, 3, true], ['same sheet, text only (Paste menu)', first, 3, false], ['second sheet, HTML + text', second, 0, true], ['second sheet, text only (Paste menu)', second, 0, false]]) {
+        const oldStyles = target(uid, c0);
+        const oldRoot = api.overlayElement(uid) || await live(uid);
+        press(cellOf(oldRoot, 5, c0 === 0 ? 3 : 0)); await sleep(200);
+        const oldNow = looks(oldRoot, c0);
+        await pasteAt(uid, 0, c0, store, withHtml);
+        note('paste-keeps-formatting');
+        await check(`${table}: ${label}`, uid, c0, sourceLooks);
+        const grid = models.get(uid).grid;
+        rows.forEach((row, r) => row.forEach((value, c) => { grid[r][c0 + c] = value; }));
+        const stored = tableEl(uid).rows[1]?.cells[c0 + 1];
+        if (!/background-color/i.test(stored?.getAttribute('style') || '')) dataLoss.push({ context, table: `${table}: ${label}`, problem: 'the pasted fill is not in the stored table' });
+        await undoKey(uid, false);
+        rows.forEach((row, r) => row.forEach((_, c) => { grid[r][c0 + c] = ''; }));
+        await verify(`paste-keeps-formatting: ${label} undone`, true);
+        void oldStyles;
+        await check(`${table}: ${label} undone`, uid, c0, oldNow);
+        await undoKey(uid, true);
+        rows.forEach((row, r) => row.forEach((value, c) => { grid[r][c0 + c] = value; }));
+        await check(`${table}: ${label} redone`, uid, c0, sourceLooks);
+        await verify(`paste-keeps-formatting: ${label} redone`, true);
+        // back to the target's old look for the next way of pasting
+        await undoKey(uid, false);
+        rows.forEach((row, r) => row.forEach((_, c) => { grid[r][c0 + c] = ''; }));
+      }
+      // cut: the pasted range looks like the cut one (and the source is emptied)
+      const cutStore = await copyRange(first, 'cut');
+      if (!/<table/i.test(cutStore['text/html'] || '')) { dataLoss.push({ context, table, problem: 'the cut wrote no HTML table' }); return; }
+      void targetOldLooks;
+      await pasteAt(second, 0, 2, cutStore, true);
+      note('paste-keeps-formatting');
+      await check(`${table}: after a cut`, second, 2, sourceLooks);
+      const g1 = models.get(first).grid; const g2 = models.get(second).grid;
+      rows.forEach((row, r) => row.forEach((value, c) => { g1[r][c] = ''; g2[r][2 + c] = value; }));
+      await verify('paste-keeps-formatting: cut and pasted', true);
+    },
+    // Text sits in its cell the same way in every row: the same padding from the border (one-line and wrapped rows alike, selected or
+    // not), one vertical alignment for all rows, the alignment the cell asked for (left, centred, right) and the same in the preview
+    // as in the live grid. The "Backbone" sheet: long plasmid names in a narrow column (150 to 330 px), a centred header.
+    async 'cell-alignment-consistent'() {
+      const names = ['pLVX-TRE3G-VSVg*', 'pLV-EF1α-HygR_T2A_EGFRn_CD8TM-linker-mCherry-pHIntein-Cas9', 'pLV-EF1α-HygR_T2A_EGFRn_CD8TM-linker-mCherry-pHIntein-Cre',
+        'pLV-EF1α-HygR_T2A_EndoTagIGF_CD8TM-linker-mCherry-pHIntein-Cre', 'pLV-EF1α-HygR_T2A_EndoTagIGF_CD8TM-linker-mCherry-pHIntein-Cas9',
+        'pLV-EF1α-HygR_T2A_LaG17_CD8TM-linker-mCherry-pHIntein-Cre'];
+      const rows = [['Backbone', 'Digest'], ...names.map((n, i) => [n, `d${i}`])];
+      const configs = [['left', 150, false], ['left', 200, true], ['left', 330, false], ['center', 165, true], ['right', 165, true]];
+      for (const [align, width, withHeights] of configs) {
+        layoutDirty = true;
+        const cellStyles = {};
+        rows.forEach((row, r) => row.forEach((_, c) => {
+          cellStyles[cellName(r, c)] = `vertical-align: middle; background-color: ${r % 2 ? '#f6f7f8' : '#ffffff'}; ${r === 0 ? 'text-align: center; font-weight: bold;' : `text-align: ${align};`}${r > 0 && r % 3 === 0 ? ' font-weight: bold;' : ''}`;
+        }));
+        const rowHeights = withHeights ? Object.fromEntries(rows.slice(1).map((_, i) => [i + 1, i === 0 ? 34 : 112])) : undefined;
+        const before = new Set(api.snapshot(false).map(snap => snap.uid));
+        editor.focus();
+        editor.execCommand('elabftwInsertSpreadsheetData', false, { data: rows, displayData: rows, rows: rows.length, cols: 2, kind: 'standard', caption: '', cellStyles, colWidths: { 0: width, 1: 90 }, ...(rowHeights ? { rowHeights } : {}) });
+        await sleep(1000);
+        const added = newTablesSince(before);
+        if (added.length !== 1) { fail(`cell-alignment-consistent: ${added.length} spreadsheets were made`); continue; }
+        const uid = added[0].uid;
+        models.set(uid, { label: `alignment ${align} ${width}`, grid: rows.map(r => r.slice()), plate: false });
+        const table = `alignment (${align}, ${width} px${withHeights ? ', set row heights' : ''})`;
+        const textBox = td => {
+          const walker = document.createTreeWalker(td, NodeFilter.SHOW_TEXT);
+          const rects = [];
+          for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.textContent.trim()) { const r = document.createRange(); r.selectNodeContents(n); rects.push(...r.getClientRects()); }
+          if (!rects.length) return null;
+          const box = td.getBoundingClientRect();
+          return { left: Math.min(...rects.map(r => r.left)) - box.left, right: box.right - Math.max(...rects.map(r => r.right)), top: Math.min(...rects.map(r => r.top)) - box.top, bottom: box.bottom - Math.max(...rects.map(r => r.bottom)) };
+        };
+        const measureRoot = root => [...root.querySelectorAll('.jss_worksheet tbody td[data-x="0"][data-y]')].filter(td => +td.dataset.y > 0).map(td => {
+          const clip = td.querySelector(':scope > .jss-cell-clip');
+          const cs = getComputedStyle(td);
+          return { y: +td.dataset.y, align: (clip && clip.style.textAlign) || cs.textAlign, va: cs.verticalAlign, box: textBox(td), rowH: td.getBoundingClientRect().height };
+        });
+        const live1 = await live(uid);
+        await sleep(400);
+        const liveRows = measureRoot(live1);
+        // the column selected: the text keeps its padding from the selection border
+        const head = live1.querySelector('.jss_worksheet thead td[data-x="0"]');
+        press(head); await sleep(400);
+        const selectedRows = measureRoot(live1);
+        const previewRows = await withPreview(uid, host => measureRoot(host));
+        const padding = parseFloat(getComputedStyle(live1.querySelector('.jss_worksheet tbody td[data-x="0"][data-y="1"]')).paddingLeft) || 8;
+        const spread = (list, key) => Math.max(...list.map(r => r.box[key])) - Math.min(...list.map(r => r.box[key]));
+        for (const [where, list] of [['live', liveRows], ['live, column selected', selectedRows], ['preview', previewRows]]) {
+          if (!list || list.some(r => !r.box)) { fail(`cell-alignment-consistent: no text found (${table}, ${where})`); continue; }
+          if (new Set(list.map(r => r.align)).size !== 1 || !list[0].align.includes(align === 'left' ? 'left' : align === 'right' ? 'right' : 'center') && !(align === 'left' && list[0].align === 'start')) dataLoss.push({ context, table, problem: `${where}: the cells ask for ${align} but show ${[...new Set(list.map(r => r.align))].join('/')}` });
+          if (new Set(list.map(r => r.va)).size !== 1) dataLoss.push({ context, table, problem: `${where}: rows differ in vertical alignment (${[...new Set(list.map(r => r.va))].join('/')})` });
+          const minSide = Math.min(...list.map(r => Math.min(r.box.left, r.box.right)));
+          if (minSide < padding - 2) dataLoss.push({ context, table, problem: `${where}: text comes within ${Math.round(minSide)} px of the cell border (padding is ${padding} px)` });
+          if (align === 'left' && spread(list, 'left') > 2) dataLoss.push({ context, table, problem: `${where}: the text starts at different distances from the left border: ${list.map(r => Math.round(r.box.left)).join('/')}` });
+          if (align === 'right' && spread(list, 'right') > 2) dataLoss.push({ context, table, problem: `${where}: the text ends at different distances from the right border: ${list.map(r => Math.round(r.box.right)).join('/')}` });
+          if (!withHeights) list.forEach(r => { if (Math.abs(r.box.top - r.box.bottom) > 4) dataLoss.push({ context, table, problem: `${where}: row ${r.y + 1} text is not vertically centred (${Math.round(r.box.top)} px above, ${Math.round(r.box.bottom)} below)` }); });
+        }
+        if (liveRows && previewRows && JSON.stringify(liveRows.map(r => r.align)) !== JSON.stringify(previewRows.map(r => r.align))) dataLoss.push({ context, table, problem: `alignment differs between live (${liveRows.map(r => r.align).join(',')}) and preview (${previewRows.map(r => r.align).join(',')})` });
+        if (liveRows && selectedRows && liveRows.some((r, i) => Math.abs(r.box.left - selectedRows[i].box.left) > 1.5)) dataLoss.push({ context, table, problem: 'selecting the column moved the text' });
+        note('cell-alignment-consistent');
+      }
+    },
+    // A cell keeps its horizontal alignment (left, centred, right) through every way of working with the sheet: the first click, typing in
+    // a cell and leaving it, undo and redo, a column resize, Add rows, a save, the popup (cancel and Update) and the preview that a reload shows.
+    // Before the fix a centred or right-aligned cell whose text was wider than its column came out left-aligned.
+    async 'alignment-preserved'() {
+      layoutDirty = true;
+      const aligns = ['left', 'center', 'right'];
+      const rows = [['short', 'short', 'short'], ['HygR_T2A_EndoTagIGF_CD8TM_linker_mCherry', 'HygR_T2A_EndoTagIGF_CD8TM_linker_mCherry', 'HygR_T2A_EndoTagIGF_CD8TM_linker_mCherry'], ['pLV-EF1α-HygR_T2A_EGFRn_CD8TM-linker-mCherry-pHIntein', 'pLV-EF1α-HygR_T2A_EGFRn_CD8TM-linker-mCherry-pHIntein', 'pLV-EF1α-HygR_T2A_EGFRn_CD8TM-linker-mCherry-pHIntein'], ['x', 'y', 'z']];
+      const cellStyles = {};
+      rows.forEach((row, r) => row.forEach((_, c) => { cellStyles[cellName(r, c)] = `text-align: ${aligns[c]}; vertical-align: middle;`; }));
+      const before = new Set(api.snapshot(false).map(snap => snap.uid));
+      editor.focus();
+      editor.execCommand('elabftwInsertSpreadsheetData', false, { data: rows, displayData: rows, rows: 4, cols: 3, kind: 'standard', caption: '', cellStyles, colWidths: { 0: 150, 1: 150, 2: 150 }, rowHeights: { 0: 34, 1: 100, 2: 100, 3: 34 } });
+      await sleep(1000);
+      const added = newTablesSince(before);
+      if (added.length !== 1) { fail(`alignment-preserved: ${added.length} spreadsheets were made`); return; }
+      const uid = added[0].uid;
+      models.set(uid, { label: 'alignment preserved', grid: rows.map(r => r.slice()), plate: false, tallRows: true });
+      const table = 'alignment preserved';
+      const effective = td => { const clip = td.querySelector(':scope > .jss-cell-clip'); return ((clip && clip.style.textAlign) || getComputedStyle(td).textAlign).replace('start', 'left'); };
+      const readLive = root => { const out = []; for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) { const td = root.querySelector(`td[data-x="${c}"][data-y="${r}"]`); out.push(td ? effective(td) : 'missing'); } return out; };
+      const expected = []; for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) expected.push(aligns[c]);
+      const readStored = () => { const t = tableEl(uid); const out = []; for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) out.push((t.rows[r + 1]?.cells[c + 1]?.style.textAlign || '').replace('start', 'left')); return out; };
+      const check = async step => {
+        const root = api.overlayElement(uid) || await live(uid);
+        const shown = readLive(root);
+        if (JSON.stringify(shown) !== JSON.stringify(expected)) dataLoss.push({ context, table, problem: `after ${step}: alignment of the live cells is ${shown.join(',')}, expected ${expected.join(',')}` });
+        const stored = readStored();
+        if (JSON.stringify(stored) !== JSON.stringify(expected)) dataLoss.push({ context, table, problem: `after ${step}: alignment in the stored table is ${stored.join(',')}, expected ${expected.join(',')}` });
+      };
+      await live(uid); await sleep(400);
+      await check('mounting the grid');
+      const root0 = await live(uid);
+      press(root0.querySelector('td[data-x="1"][data-y="1"]')); await sleep(300);
+      await check('a click on a cell');
+      await typeInto(uid, 1, 1, 'edited', 'Enter'); await sleep(500);
+      await check('typing in a centred cell and leaving it');
+      await undoKey(uid, false); models.get(uid).grid[1][1] = rows[1][1];
+      await check('undo');
+      await undoKey(uid, true); models.get(uid).grid[1][1] = 'edited';
+      await check('redo');
+      await typeInto(uid, 2, 2, 'right edited', 'Tab'); await sleep(400);
+      await check('typing in a right-aligned cell');
+      await resizeColumn(uid, 1); await sleep(500);
+      await check('a column resize');
+      await addRowsBar(uid, 2); await sleep(500);
+      await check('Add rows');
+      await save(); await sleep(500);
+      await check('a save');
+      await popupEdit(uid, false, 0); await sleep(500);
+      await check('opening and cancelling the popup');
+      await popupEdit(uid, true, 0); await sleep(1500);
+      await check('Update in the popup');
+      const previewAligns = await withPreview(uid, host => readLive(host));
+      if (previewAligns && JSON.stringify(previewAligns) !== JSON.stringify(expected)) dataLoss.push({ context, table, problem: `the preview shows ${previewAligns.join(',')}, expected ${expected.join(',')}` });
+      note('alignment-preserved');
     },
     // Print and the PDF export are built from the stored table, not from the live grid: its column widths, one coordinate cell per row
     // and its header row must be the live grid's, or paper and screen differ. The print rules (fills kept, no clipping) must be loaded.
