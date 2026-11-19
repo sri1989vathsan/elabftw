@@ -19,6 +19,7 @@ use function array_map;
 use function array_values;
 use function bin2hex;
 use function dirname;
+use function error_log;
 use function file_get_contents;
 use function file_put_contents;
 use function getimagesize;
@@ -58,6 +59,9 @@ final class WhatsNewStore
 
     private const string SHIPPED_ENTRIES = __DIR__ . '/../whats-new.json';
 
+    /** Optional second list of entries shipped with the code, present on some branches only; same format */
+    private const string EXTRA_ENTRIES = __DIR__ . '/../whats-new-inventory.json';
+
     private const string SHIPPED_IMAGES = __DIR__ . '/../../web/assets/images/whats-new';
 
     private const string DATA_DIR = '/var/lib/elabftw/uploads/whats-new';
@@ -69,6 +73,11 @@ final class WhatsNewStore
         'image/gif' => 'gif',
     );
 
+    public function __construct(
+        private readonly string $sharedFile = self::SHIPPED_ENTRIES,
+        private readonly string $extraFile = self::EXTRA_ENTRIES,
+    ) {}
+
     /**
      * @return array<int, array<string, mixed>> newest first
      */
@@ -76,7 +85,7 @@ final class WhatsNewStore
     {
         $state = $this->readState();
         $byId = array();
-        foreach ($this->readList(self::SHIPPED_ENTRIES) as $entry) {
+        foreach ($this->shipped() as $entry) {
             if (!in_array($entry['id'], $state['deleted'], true)) {
                 $byId[$entry['id']] = $entry;
             }
@@ -162,7 +171,7 @@ final class WhatsNewStore
         $state = $this->readState();
         $previous = $this->find($id);
         unset($state['entries'][$id]);
-        $shippedIds = array_map(static fn(array $e): string => $e['id'], $this->readList(self::SHIPPED_ENTRIES));
+        $shippedIds = array_map(static fn(array $e): string => (string) $e['id'], $this->shipped());
         if (in_array($id, $shippedIds, true) && !in_array($id, $state['deleted'], true)) {
             $state['deleted'][] = $id;
         }
@@ -294,21 +303,49 @@ final class WhatsNewStore
     }
 
     /**
+     * The entries shipped with the code: the shared list (src/whats-new.json) plus, when the file exists, the
+     * extra list (src/whats-new-inventory.json). An id found in both is taken from the shared list. A missing
+     * or broken extra file is ignored, so it can never take a page down.
+     *
      * @return array<int, array<string, mixed>>
      */
-    private function readList(string $file): array
+    private function shipped(): array
+    {
+        $entries = $this->readList($this->sharedFile);
+        if (!is_file($this->extraFile)) {
+            return $entries;
+        }
+        $extra = $this->readList($this->extraFile, true);
+        $ids = array_column($entries, 'id');
+        foreach ($extra as $entry) {
+            if (!in_array($entry['id'], $ids, true)) {
+                $entries[] = $entry;
+                $ids[] = $entry['id'];
+            }
+        }
+
+        return $entries;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function readList(string $file, bool $logProblems = false): array
     {
         if (!is_file($file)) {
             return array();
         }
         try {
             $decoded = json_decode((string) file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
+        } catch (JsonException $e) {
+            if ($logProblems) {
+                error_log('What\'s new: ignoring ' . $file . ': ' . $e->getMessage());
+            }
             return array();
         }
 
         return is_array($decoded)
-            ? array_values(array_filter($decoded, static fn($e): bool => is_array($e) && isset($e['id'])))
+            ? array_values(array_filter($decoded, static fn($e): bool => is_array($e) && isset($e['id']) && is_string($e['id'])))
             : array();
     }
 }

@@ -512,6 +512,7 @@ everyone else only read it.
 
 - `src/whats-new.json` — the entries shipped with the code (id, date, area, title, summary, details, optional `image`, `imageAlt` and `highlight` {x, y, w, h as % of the picture, label} outlining where the feature is)
 - `web/assets/images/whats-new/` — the pictures shipped with the code
+- `src/whats-new-inventory.json` (only on branches that have it) — further shipped entries in the same format; `WhatsNewStore` merges them with `src/whats-new.json` (newest first, an id in both lists is taken from `src/whats-new.json`, a missing or broken file is ignored). Keeps `src/whats-new.json` identical across branches.
 - `src/Services/WhatsNewStore.php` — merges the shipped entries with what admins changed. Changes live in the persistent uploads volume (`/var/lib/elabftw/uploads/whats-new/`: `entries.json` and `images/`), so they survive upgrades. An edited entry replaces the shipped one with the same id, a deleted shipped entry stays hidden, and entries shipped later still appear.
 - `src/Controllers/WhatsNewController.php`, `web/whats-new.php`, `src/templates/whats-new.html`, `src/templates/whats-new-form.html` — the page, its pictures (`whats-new.php?image=<name>`) and the admin forms (plain POST forms with the usual CSRF field, no script needed)
 - `src/templates/head.html` — "What's new" item in the Tools dropdown
