@@ -63,5 +63,6 @@ final class InventoryMigrations
         '151_personal_module_views_module.sql',
         '152_backbone_cache.sql',
         'inv_001_database_team_toggles.sql',
+        'inv_002_storage_unit_moor_capacity.sql',
     );
 }
