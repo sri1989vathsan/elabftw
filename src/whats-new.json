@@ -1,5 +1,20 @@
 [
   {
+    "id": "reminder-chip",
+    "date": "2026-11-19",
+    "area": "Organise",
+    "featured": false,
+    "title": "Deadline reminders as a small chip",
+    "summary": "A small clock with a number sits in the bottom right corner; click it to see the tasks due soon.",
+    "details": [
+      "fa-clock::The reminder no longer covers the page. The chip shows how many tasks are due soon.",
+      "Click the chip to open the list. Each task from a step links to it. Click the title or Collapse to bring the chip back; Dismiss all clears the list.",
+      "The chip stays the way you left it for the rest of the session, so it does not open itself on every page."
+    ],
+    "image": "",
+    "imageAlt": ""
+  },
+  {
     "id": "print-pdf-selected-sections",
     "date": "2026-11-19",
     "area": "Experiments",
