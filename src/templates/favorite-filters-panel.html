@@ -25,7 +25,9 @@
 {% set activeTags = App.Request.query.all('tags') %}
 
 <div class='side-panel' id='favoritesPanel' data-current-target='{{ favoriteFilterTarget }}' hidden>
-  <button type='button' data-action='toggle-sidepanel' data-target='favorites' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn float-right mr-2'><i class='fas fa-xmark fa-2x'></i></button>
+  {# Close and Refresh: the same size and place in every side panel (see .panel-corner-btn in main.scss) #}
+  <button type='button' data-action='toggle-sidepanel' data-target='favorites' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn panel-corner-btn panel-close'><i class='fas fa-xmark fa-fw' aria-hidden='true'></i></button>
+  <button type='button' data-action='refresh-search' class='btn panel-corner-btn panel-refresh' title='{{ 'Refresh'|trans }}' aria-label='{{ 'Refresh'|trans }}'><i class='fas fa-rotate fa-fw' aria-hidden='true'></i></button>
   <div class='p-3'>
     <h3 class='mb-3'><i class='fas fa-magnifying-glass mr-2'></i>{{ 'Search'|trans }}{{ guide.info('guide-search-filters', 'Search') }}</h3>
 

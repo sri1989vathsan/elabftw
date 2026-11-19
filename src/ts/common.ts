@@ -1185,7 +1185,22 @@ on('scroll-top', () => {
   });
 });
 
-on('refresh-todolist', () => {
+// Refresh of the Search panel: run the current query again, the button spins until the results are in
+on('refresh-search', (el: HTMLElement) => {
+  const icon = el.querySelector('i');
+  icon?.classList.add('fa-spin');
+  void FavoriteFiltersC.refresh().finally(() => icon?.classList.remove('fa-spin'));
+});
+
+// a short spin on the icon of a refresh button, so the click is seen; the button keeps its size
+function spinRefreshIcon(el: HTMLElement, ms = 700): void {
+  const icon = el.querySelector('i');
+  icon?.classList.add('fa-spin');
+  window.setTimeout(() => icon?.classList.remove('fa-spin'), ms);
+}
+
+on('refresh-todolist', (el: HTMLElement) => {
+  spinRefreshIcon(el);
   window.dispatchEvent(new CustomEvent('todolist-changed'));
 });
 
@@ -1305,7 +1320,8 @@ on('toggle-sidepanel', (el: HTMLElement, event: Event) => {
 });
 
 // Refresh the TOC panel contents
-on('refresh-toc', () => {
+on('refresh-toc', (el: HTMLElement) => {
+  spinRefreshIcon(el);
   TocPanelC.refresh();
 });
 

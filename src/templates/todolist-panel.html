@@ -1,10 +1,11 @@
 {% import 'guide-info.html' as guide -%}
 <div class='side-panel' id='todolistPanel' hidden>
-  <button type='button' data-action='toggle-sidepanel' data-target='todolist' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn float-right mr-2'><i class='fas fa-xmark fa-2x'></i></button>
+  {# Close and Refresh: the same size and place in every side panel (see .panel-corner-btn in main.scss) #}
+  <button type='button' data-action='toggle-sidepanel' data-target='todolist' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn panel-corner-btn panel-close'><i class='fas fa-xmark fa-fw' aria-hidden='true'></i></button>
+  <button type='button' data-action='refresh-todolist' class='btn panel-corner-btn panel-refresh' title='{{ 'Refresh'|trans }}' aria-label='{{ 'Refresh'|trans }}'><i class='fas fa-rotate fa-fw' aria-hidden='true'></i></button>
   <div class='p-3'>
     <div class='d-flex align-items-center justify-content-between'>
       <h3 class='mb-3 py-2'>{{ 'To-do'|trans }}{{ guide.info('guide-todo', 'To-do list') }}</h3>
-      <button type='button' data-action='refresh-todolist' class='btn btn-sm' title='{{ 'Refresh'|trans }}' aria-label='{{ 'Refresh'|trans }}'><i class='fas fa-arrows-rotate' aria-hidden='true'></i></button>
     </div>
     <div class='d-flex align-items-center justify-content-between mb-2'>
       <h3 class='h5 mb-0'>{{ 'Tasks and steps'|trans }}</h3>

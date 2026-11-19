@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import { ApiC } from '../api';
   import { core } from '../core';
   import i18next from '../i18n';
@@ -173,7 +173,11 @@
   let entityActivities: EntityActivity[] = [];
   let entries: CalendarEntry[] = [];
   let reminderEntries: CalendarEntry[] = [];
-  let bannerEntries: { key: string; deadline: string; body: string; deadlineLabel: string; overdue: boolean }[] = [];
+  let bannerEntries: { key: string; deadline: string; body: string; deadlineLabel: string; overdue: boolean; href: string | null }[] = [];
+  // A small chip (clock and count) in the bottom right corner; a click opens the full reminder. It stays the way the person left it for the
+  // rest of the session, so it does not open itself again on every page.
+  const BANNER_OPEN_KEY = 'todo-reminder-banner-open';
+  // an opened reminder never carries over to the next page: it starts as the chip
   let bannerCollapsed = true;
   let calendarCells: CalendarCell[] = [];
   let agendaEntries: CalendarEntry[] = [];
@@ -1030,6 +1034,9 @@
         body: entry.body,
         deadlineLabel: formatDeadline(entry.deadline),
         overdue: deadline < now,
+        href: entry.source === 'step' && entry.entityPage && entry.entityId
+          ? `${entry.entityPage}?mode=view&id=${entry.entityId}#step_view_${entry.id}`
+          : null,
       });
       return accumulator;
     }, []);
@@ -1043,8 +1050,176 @@
     bannerEntries = [];
   }
 
+  // The reminder opens from the chip and goes back to it by itself: on a click outside, Esc, a scroll of the page, leaving the page,
+  // and after 8 seconds without the pointer or the keyboard being inside it.
+  const AUTO_COLLAPSE_MS = 8000;
+  let autoCollapseTimer: number | undefined;
+  let pointerInside = false;
+  let focusInside = false;
+  let openedAtScroll = 0;
+  let openListenersOn = false;
+
+  function rememberBannerOpen(open: boolean): void {
+    try {
+      sessionStorage.setItem(BANNER_OPEN_KEY, open ? '1' : '0');
+    } catch {
+      // the choice is only a convenience
+    }
+  }
+
+  function clearAutoCollapse(): void {
+    if (autoCollapseTimer !== undefined) window.clearTimeout(autoCollapseTimer);
+    autoCollapseTimer = undefined;
+  }
+
+  function armAutoCollapse(): void {
+    clearAutoCollapse();
+    if (bannerCollapsed || pointerInside || focusInside) return;
+    autoCollapseTimer = window.setTimeout(collapseReminderBanner, AUTO_COLLAPSE_MS);
+  }
+
+  const onOpenPointerDown = (event: Event): void => {
+    const target = event.target as Node | null;
+    if (target && (target as Element).closest?.('.reminder-banner')) return;
+    collapseReminderBanner();
+  };
+  const onOpenKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape') collapseReminderBanner();
+  };
+  const onOpenScroll = (event: Event): void => {
+    const target = event.target as Element | Document | null;
+    // the list of the reminder scrolls on its own: that is not leaving it
+    if (target instanceof Element && target.closest('.reminder-banner')) return;
+    if (target === document || target === document.documentElement || target === document.body) {
+      if (Math.abs(window.scrollY - openedAtScroll) < 8) return;
+    }
+    collapseReminderBanner();
+  };
+  const onLeavePage = (): void => rememberBannerOpen(false);
+
+  function listenWhileOpen(on: boolean): void {
+    if (on === openListenersOn) return;
+    openListenersOn = on;
+    if (on) {
+      document.addEventListener('pointerdown', onOpenPointerDown, true);
+      document.addEventListener('keydown', onOpenKeyDown, true);
+      window.addEventListener('scroll', onOpenScroll, true);
+      window.addEventListener('pagehide', onLeavePage);
+    } else {
+      document.removeEventListener('pointerdown', onOpenPointerDown, true);
+      document.removeEventListener('keydown', onOpenKeyDown, true);
+      window.removeEventListener('scroll', onOpenScroll, true);
+      window.removeEventListener('pagehide', onLeavePage);
+    }
+  }
+
+  function expandReminderBanner(): void {
+    bannerCollapsed = false;
+    pointerInside = false;
+    focusInside = false;
+    openedAtScroll = window.scrollY;
+    rememberBannerOpen(true);
+    listenWhileOpen(true);
+    armAutoCollapse();
+  }
+
+  function collapseReminderBanner(): void {
+    if (bannerCollapsed) return;
+    const hadFocusInside = focusInside;
+    bannerCollapsed = true;
+    pointerInside = false;
+    focusInside = false;
+    clearAutoCollapse();
+    listenWhileOpen(false);
+    rememberBannerOpen(false);
+    // the focus was in the panel that is gone: give it to the chip
+    if (hadFocusInside) void tick().then(() => document.querySelector<HTMLElement>('.reminder-chip')?.focus());
+  }
+
   function toggleReminderBanner(): void {
-    bannerCollapsed = !bannerCollapsed;
+    if (bannerCollapsed) expandReminderBanner();
+    else collapseReminderBanner();
+  }
+
+  // Top right, where the old toast was. When something else is already there (a "Saved" notice, the tab bar of the admin page, a toolbar),
+  // the chip or the opened reminder sits just below it instead, never on top of it.
+  const REMINDER_TOP = 66;
+  function placeReminder(node: HTMLElement): { destroy(): void } {
+    let frame = 0;
+    // a fixed wrapper that draws nothing itself (the column of scroll buttons) stands for the visible things inside it
+    const draws = (el: HTMLElement): boolean => {
+      const cs = getComputedStyle(el);
+      const background = cs.backgroundColor.match(/[\d.]+/g) ?? [];
+      return background.length === 3 || Number.parseFloat(background[3]) > 0 || Number.parseFloat(cs.borderTopWidth) > 0
+        || cs.boxShadow !== 'none' || Array.from(el.childNodes).some(child => child.nodeType === 3 && (child.textContent ?? '').trim() !== '');
+    };
+    const visibleParts = (el: HTMLElement): HTMLElement[] => (draws(el) || el.children.length === 0
+      ? [el]
+      : Array.from(el.querySelectorAll<HTMLElement>('*')).filter(child => {
+        const box = child.getBoundingClientRect();
+        const cs = getComputedStyle(child);
+        return box.width > 2 && box.height > 2 && cs.visibility !== 'hidden' && cs.display !== 'none' && draws(child);
+      }));
+    const avoidables = (): HTMLElement[] => Array.from(document.querySelectorAll<HTMLElement>('body *')).filter(el => {
+      if (el === node || node.contains(el) || el.contains(node)) return false;
+      const cs = getComputedStyle(el);
+      const inTabBar = el.matches('.nav-tabs, [role="tablist"]');
+      if (cs.position !== 'fixed' && cs.position !== 'sticky' && !inTabBar) return false;
+      if (cs.visibility === 'hidden' || cs.display === 'none' || Number.parseFloat(cs.opacity) === 0) return false;
+      const box = el.getBoundingClientRect();
+      if (box.width < 2 || box.height < 2) return false;
+      if (el.id === 'main-navbar' || el.closest('#main-navbar')) return false;
+      // a wrapper that is as wide as the window and tall is a backdrop or a layout box, not a thing to avoid
+      if (box.width > window.innerWidth * 0.9 && box.height > window.innerHeight * 0.5) return false;
+      return true;
+    }).flatMap(visibleParts);
+    const place = (): void => {
+      frame = 0;
+      let top = REMINDER_TOP;
+      let right = 16;
+      node.style.top = `${top}px`;
+      node.style.right = `${right}px`;
+      node.style.maxHeight = '';
+      const things = avoidables();
+      for (let pass = 0; pass < 6; pass++) {
+        const mine = node.getBoundingClientRect();
+        const hit = things.find(el => {
+          const box = el.getBoundingClientRect();
+          return mine.left < box.right && mine.right > box.left && mine.top < box.bottom && mine.bottom > box.top;
+        });
+        if (!hit) break;
+        const hitBox = hit.getBoundingClientRect();
+        if (hitBox.width <= 120 && hitBox.left > window.innerWidth / 2) {
+          // a narrow thing at the right edge (the column of scroll buttons): the reminder sits to the left of it
+          right += Math.ceil(mine.right - hitBox.left) + 8;
+          node.style.right = `${right}px`;
+        } else if (node.classList.contains('reminder-banner') && hitBox.top > mine.top + 110 && hitBox.top < window.innerHeight) {
+          // something lower down (the edit toolbar): the opened reminder gets less high, its list scrolls, rather than lying over it
+          node.style.maxHeight = `${Math.floor(hitBox.top - top - 8)}px`;
+        } else {
+          top = Math.ceil(hitBox.bottom) + 6;
+          node.style.top = `${top}px`;
+        }
+      }
+    };
+    const schedule = (): void => {
+      if (!frame) frame = window.requestAnimationFrame(place);
+    };
+    place();
+    window.addEventListener('resize', schedule);
+    window.addEventListener('scroll', schedule, { passive: true, capture: true });
+    const overlay = document.getElementById('overlay-container');
+    const watcher = new MutationObserver(schedule);
+    watcher.observe(document.body, { childList: true, subtree: true });
+    if (overlay) watcher.observe(overlay, { childList: true, subtree: true, attributes: true });
+    return {
+      destroy(): void {
+        if (frame) window.cancelAnimationFrame(frame);
+        window.removeEventListener('resize', schedule);
+        window.removeEventListener('scroll', schedule, true);
+        watcher.disconnect();
+      },
+    };
   }
 
   function updateUrgentBadges(
@@ -1134,49 +1309,82 @@
   });
 
   onDestroy(() => {
+    clearAutoCollapse();
+    listenWhileOpen(false);
     if (reminderTimer !== undefined) window.clearInterval(reminderTimer);
     if (autoRefreshTimer !== undefined) window.clearInterval(autoRefreshTimer);
   });
 </script>
 
 {#if bannerEntries.length > 0}
-  <div class='reminder-banner' role='status' use:portalToContainer>
-    <div class='reminder-banner-header'>
-      <button type='button' class='reminder-banner-toggle' on:click={toggleReminderBanner} aria-expanded={!bannerCollapsed}>
-        <i class='fas fa-clock fa-fw reminder-banner-icon' aria-hidden='true'></i>
-        <span class='reminder-banner-summary'>
-          <span class='reminder-banner-title'>
-            {bannerEntries.length === 1
-              ? t('1 task due soon')
-              : t('{{count}} tasks due soon', { count: bannerEntries.length })}
+  {#if bannerCollapsed}
+    <button
+      type='button'
+      class='reminder-chip'
+      role='status'
+      use:portalToContainer
+      use:placeReminder
+      on:click={toggleReminderBanner}
+      aria-expanded='false'
+      aria-label={bannerEntries.length === 1 ? t('1 task due soon') : t('{{count}} tasks due soon', { count: bannerEntries.length })}
+      title={bannerEntries.length === 1 ? t('1 task due soon') : t('{{count}} tasks due soon', { count: bannerEntries.length })}
+    >
+      <i class='fas fa-clock' aria-hidden='true'></i>
+      <span class='reminder-chip-count'>{bannerEntries.length}</span>
+    </button>
+  {:else}
+    <div
+      class='reminder-banner'
+      role='status'
+      use:portalToContainer
+      use:placeReminder
+      on:mouseenter={() => { pointerInside = true; clearAutoCollapse(); }}
+      on:mouseleave={() => { pointerInside = false; armAutoCollapse(); }}
+      on:focusin={() => { focusInside = true; clearAutoCollapse(); }}
+      on:focusout={() => { focusInside = false; armAutoCollapse(); }}
+    >
+      <div class='reminder-banner-header'>
+        <button type='button' class='reminder-banner-toggle' on:click={toggleReminderBanner} aria-expanded='true'>
+          <i class='fas fa-clock fa-fw reminder-banner-icon' aria-hidden='true'></i>
+          <span class='reminder-banner-summary'>
+            <span class='reminder-banner-title'>
+              {bannerEntries.length === 1
+                ? t('1 task due soon')
+                : t('{{count}} tasks due soon', { count: bannerEntries.length })}
+            </span>
+            <span class='reminder-banner-subtitle'>{t('Deadlines approaching')}</span>
           </span>
-          <span class='reminder-banner-subtitle'>{t('Deadlines approaching')}</span>
-        </span>
-        <i class='fas fa-fw reminder-banner-chevron' class:fa-chevron-up={!bannerCollapsed} class:fa-chevron-down={bannerCollapsed} aria-hidden='true'></i>
-      </button>
-      <button
-        type='button'
-        class='reminder-banner-dismiss'
-        aria-label={t('Dismiss')}
-        on:click={dismissReminderBanner}
-      >
-        <i class='fas fa-xmark' aria-hidden='true'></i>
-      </button>
-    </div>
-    {#if !bannerCollapsed}
+        </button>
+        <button
+          type='button'
+          class='reminder-banner-dismiss'
+          aria-label={t('Collapse')}
+          title={t('Collapse')}
+          on:click={toggleReminderBanner}
+        >
+          <i class='fas fa-xmark' aria-hidden='true'></i>
+        </button>
+      </div>
       <ul class='reminder-banner-list'>
         {#each bannerEntries as entry (entry.key)}
           <li class='reminder-banner-item'>
             <i class='fas fa-list-check fa-fw' aria-hidden='true'></i>
-            <span class='reminder-banner-item-body'>{entry.body}</span>
+            {#if entry.href}
+              <a class='reminder-banner-item-body' href={entry.href}>{entry.body}</a>
+            {:else}
+              <span class='reminder-banner-item-body'>{entry.body}</span>
+            {/if}
             <span class='reminder-banner-item-when' class:reminder-banner-item-overdue={entry.overdue}>
               {entry.overdue ? t('Overdue') : entry.deadlineLabel}
             </span>
           </li>
         {/each}
       </ul>
-    {/if}
-  </div>
+      <div class='reminder-banner-footer'>
+        <button type='button' class='reminder-banner-clear' on:click={dismissReminderBanner}>{t('Dismiss all')}</button>
+      </div>
+    </div>
+  {/if}
 {/if}
 
 <section class='calendar-todo-month' aria-label={t('Activity calendar')}>
@@ -1458,11 +1666,13 @@
     background: var(--lightgold);
     border-radius: 0.4rem;
     box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.25);
-    max-width: 340px;
+    display: flex;
+    flex-direction: column;
     position: fixed;
-    /* bottom right, left of the buttons on the right edge: not over the tab bars of the admin and settings pages */
-    bottom: 1rem;
-    right: 4.5rem;
+    /* top right like the old toast, dropping down from the chip's place; placeReminder moves it lower when something is in the way */
+    max-width: min(340px, calc(100vw - 2rem));
+    right: 1rem;
+    top: 66px;
     width: 100%;
     z-index: 1030;
   }
@@ -1510,10 +1720,55 @@
     opacity: 0.8;
   }
 
-  .reminder-banner-chevron {
+  /* the compact form: a small amber pill with the clock and the number of tasks, in the bottom right corner */
+  .reminder-chip {
+    align-items: center;
+    background: var(--lightgold);
+    border: 1px solid rgba(0, 0, 0, 0.18);
+    border-radius: 999px;
+    box-shadow: 0 0.15rem 0.5rem rgba(0, 0, 0, 0.25);
     color: var(--strongest);
-    margin-top: 0.2rem;
-    opacity: 0.7;
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 0.75rem;
+    font-weight: 700;
+    gap: 0.3rem;
+    height: 1.5rem;
+    justify-content: center;
+    min-width: 2.2rem;
+    padding: 0 0.55rem;
+    position: fixed;
+    right: 1rem;
+    /* top right like the old toast, just under the navbar; placeReminder moves it lower when something is in the way */
+    top: 66px;
+    z-index: 1030;
+  }
+
+  .reminder-chip:hover,
+  .reminder-chip:focus-visible {
+    filter: brightness(0.96);
+  }
+
+  .reminder-banner-footer {
+    border-top: 1px solid rgba(0, 0, 0, 0.15);
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.25rem 0.6rem;
+  }
+
+  .reminder-banner-clear {
+    background: transparent;
+    border: 0;
+    color: var(--strongest);
+    cursor: pointer;
+    font-size: 0.72rem;
+    opacity: 0.75;
+    padding: 0.1rem 0.3rem;
+    text-decoration: underline;
+  }
+
+  .reminder-banner-clear:hover {
+    opacity: 1;
   }
 
   .reminder-banner-dismiss {
@@ -1539,7 +1794,9 @@
     border-top: 1px solid rgba(0, 0, 0, 0.15);
     list-style: none;
     margin: 0;
-    max-height: 220px;
+    flex: 1 1 auto;
+    max-height: min(220px, calc(100vh - 160px));
+    min-height: 0;
     overflow-y: auto;
     padding: 0;
   }

@@ -5,6 +5,7 @@
  * @license AGPL-3.0
  * @package elabftw
  */
+import { printEverything } from './print-main-text';
 import $ from 'jquery';
 import { ApiC } from './api';
 import { entity } from './getEntity';
@@ -166,6 +167,16 @@ on(Action.CancelRequestableAction, (el: HTMLElement) => {
     ApiC.delete(`${entity.type}/${entity.id}/request_actions/${el.dataset.id}`)
       .then(() => el.parentElement.parentElement.parentElement.parentElement.remove());
   }
+});
+
+// Print in the Export menu: the same code path as the Print button of the Contents panel (the whole entry, or the ticked sections)
+on('print-entry', () => {
+  const panelPrint = document.getElementById('tocPrintAll');
+  if (panelPrint) {
+    panelPrint.click();
+    return;
+  }
+  printEverything((window as unknown as { tinymce?: { activeEditor?: { getBody(): HTMLElement } } }).tinymce?.activeEditor?.getBody());
 });
 
 on('export-to', (el: HTMLElement) => {

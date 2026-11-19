@@ -2026,9 +2026,10 @@ button[data-action='toggle-pin'] {
   color: var(--fx-muted, #7a8591) !important;
   display: inline-flex;
   flex: 0 0 auto;
-  height: var(--fx-ctl, 1.5rem);
+  // never smaller than 1.5rem to hit, even where a denser theme sets --fx-ctl lower (the Database branch uses 1.4rem)
+  height: max(1.5rem, var(--fx-ctl, 1.5rem));
   justify-content: center;
-  min-width: var(--fx-ctl, 1.5rem);
+  min-width: max(1.5rem, var(--fx-ctl, 1.5rem));
   opacity: 0.55;
   padding: 0 0.25rem;
   width: auto;
@@ -2492,6 +2493,12 @@ h1:has(> #documentTitle) {
   }
 }
 
+/* "Back to ..." after following an internal link (back-to-link.ts). With a side panel open it moves to the right of the panel, where it
+   used to cover the bottom of the panel (the Print/PDF buttons of the Contents bar). */
+body:has(.side-panel:not([hidden])) .elabftw-back-button {
+  left: calc(var(--side-panel-width, max(24%, 330px)) + 1rem);
+}
+
 /* "Back to ..." after following an internal link (back-to-link.ts) */
 .elabftw-back-button {
   align-items: stretch;
@@ -2785,6 +2792,56 @@ h1:has(> #documentTitle) {
     --fx-hover: rgba(255, 255, 255, 0.09);
     --fx-line: rgba(255, 255, 255, 0.12);
     --fx-star: #f0ad4e;
+}
+
+// Close and Refresh of every side panel (Folders, Search, To-do, Activity calendar, Contents, HTML tools): the same size, icon and place,
+// from the same tokens, so they do not move when switching tabs. They are placed from the panel's own padding box, so a scroll bar (its room
+// is always kept, see scrollbar-gutter below) never shifts them.
+.side-panel {
+  --panel-corner-size: 1.7rem;
+  --panel-corner-gap: 0.25rem;
+  --panel-corner-top: 10px;
+  --panel-corner-right: 0.5rem;
+  scrollbar-gutter: stable;
+
+  > .panel-corner-btn {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    color: var(--chrome-fg);
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 0.95rem;
+    height: var(--panel-corner-size);
+    justify-content: center;
+    opacity: 0.85;
+    padding: 0;
+    position: absolute;
+    top: var(--panel-corner-top);
+    width: var(--panel-corner-size);
+    z-index: 2;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--fx-hover, rgba(255, 255, 255, 0.09));
+      opacity: 1;
+    }
+  }
+
+  > .panel-close {
+    right: var(--panel-corner-right);
+  }
+
+  > .panel-refresh {
+    right: calc(var(--panel-corner-right) + var(--panel-corner-size) + var(--panel-corner-gap));
+  }
+
+  // the content starts under that row of buttons in every panel
+  > .p-3,
+  > div > .p-3,
+  #experimentsFoldersSidebar {
+    padding-top: calc(var(--panel-corner-top) + var(--panel-corner-size) + 0.25rem) !important;
+  }
 }
 
 .side-panel {
@@ -5940,9 +5997,25 @@ html[data-ui-size='comfortable'] {
     border-top: 1px solid var(--fx-line);
     bottom: 0;
     display: flex;
+    // two rows in the narrow panel: the count and what is selected, then Print, PDF, Copy and clear: nothing cut off
+    flex-wrap: wrap;
     gap: 0.3rem;
-    padding: 0.3rem 1rem;
+    padding: 0.4rem 1rem 0.5rem;
     position: sticky;
+    // above anything floating over the page and the panel
+    z-index: 1040;
+
+    .toc-select-actions {
+      align-items: center;
+      display: flex;
+      flex: 1 0 100%;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+    }
+
+    #tocSelectClear {
+      margin-left: auto;
+    }
 
     &[hidden] {
       display: none;
@@ -8240,6 +8313,10 @@ body.html-tool-workspace-open:not(.html-tool-workspace-is-maximized) .inline-spr
 
 .elabftw-spreadsheet-readonly-view .jss_worksheet > thead > tr > * {
   box-sizing: border-box;
+  /* the text line plus the header's padding is taller than a data row: a cell never gets lower than its content */
+  line-height: 1.2;
+  padding-bottom: 0 !important;
+  padding-top: 0 !important;
   height: var(--spreadsheet-column-index-height) !important;
   max-height: var(--spreadsheet-column-index-height) !important;
   min-height: var(--spreadsheet-column-index-height) !important;
@@ -9085,6 +9162,9 @@ the form-control fails to do that so we do the border ourselves */
   }
 
   /* don't print all that stuff */
+  .reminder-chip,
+  .reminder-banner,
+  #overlay-container,
   nav,
   footer,
   #menu,

@@ -6,6 +6,7 @@
  * Table of Contents side panel — extracts headings from #body_view (view mode)
  * or from the active TinyMCE editor (edit mode) and renders a navigable list.
  */
+import { printEverything } from './print-main-text';
 import SidePanel from './SidePanel.class';
 import {
   copiedContentAsPlainText,
@@ -365,11 +366,20 @@ export default class TocPanel extends SidePanel {
     if (!input || !add || !clear || !mode || input.dataset.tocSearchReady) return;
 
     print?.addEventListener('click', () => this.printSelection());
-    document.getElementById('tocPdfSelection')?.addEventListener('click', () => {
+    // the PDF buttons (the bar's and the header's): the whole entry, or only the ticked sections
+    const openPdf = (): void => {
       const exporter = document.querySelector<HTMLElement>("[data-action='export-to'][data-format='pdf']");
+      if (!exporter) return;
       const sections = document.body.dataset.tocSections;
-      if (!exporter || !sections) return;
-      window.open(`/api/v2/${exporter.dataset.type}/${exporter.dataset.id}?format=pdf&sections=${encodeURIComponent(sections)}`, '_blank');
+      const param = sections ? `&sections=${encodeURIComponent(sections)}` : '';
+      window.open(`/api/v2/${exporter.dataset.type}/${exporter.dataset.id}?format=pdf${param}`, '_blank');
+    };
+    document.getElementById('tocPdfSelection')?.addEventListener('click', openPdf);
+    document.getElementById('tocPdfAll')?.addEventListener('click', openPdf);
+    // always available: the whole entry when nothing is ticked, the ticked sections otherwise
+    document.getElementById('tocPrintAll')?.addEventListener('click', () => {
+      if (document.body.dataset.tocSections) this.printSelection();
+      else printEverything(this.getEditor()?.getBody());
     });
     copy?.addEventListener('click', () => void this.copySelection(copy));
     input.addEventListener('input', () => this.filterEntries());
@@ -912,6 +922,17 @@ export default class TocPanel extends SidePanel {
     }
     if (positions.length > 0) document.body.dataset.tocSections = positions.join(',');
     else delete document.body.dataset.tocSections;
+    const count = positions.length;
+    const printAll = document.getElementById('tocPrintAll');
+    const pdfAll = document.getElementById('tocPdfAll');
+    const printLabel = count > 0 ? `Print (${count} ${count === 1 ? 'section' : 'sections'})` : 'Print whole entry';
+    const pdfLabel = count > 0 ? `PDF (${count} ${count === 1 ? 'section' : 'sections'})` : 'PDF of the whole entry';
+    [[printAll, printLabel], [pdfAll, pdfLabel]].forEach(([button, label]) => {
+      if (button instanceof HTMLElement && typeof label === 'string') {
+        button.title = label;
+        button.setAttribute('aria-label', label);
+      }
+    });
     const note = document.getElementById('pdfSelectedSectionsNote');
     if (note) {
       note.hidden = positions.length === 0;
