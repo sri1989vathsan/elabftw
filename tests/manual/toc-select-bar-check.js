@@ -4,7 +4,7 @@
  *   await new Promise(r => { const s = document.createElement('script'); s.src = '/__tests/toc-select-bar-check.js'; s.onload = r; document.head.appendChild(s); });
  *   await tocSelectBarCheck();      // {pass, results}
  *
- * Ticks one section, then five, and checks: Print, PDF, Copy and the clear button are all visible and do not touch each other; no text of the bar
+ * Ticks one section, then five, and checks: Copy and the clear button are visible (Print and PDF exist once, in the header, and name the count) and do not touch each other; no text of the bar
  * is cut off (scrollWidth > clientWidth); the bar is inside the panel; no fixed or absolute thing of the page (the "Back to ..." pill, a toast)
  * lies over the bar; the always-visible Print and PDF buttons of the header are there. Nothing is printed or sent.
  */
@@ -30,9 +30,14 @@ window.tocSelectBarCheck = async function tocSelectBarCheck() {
     const bar = document.getElementById('tocSelectBar');
     check(`${n} selected: the bar shows`, !!bar && !bar.hidden, 'hidden');
     if (!bar || bar.hidden) return;
-    const ids = ['tocPrintSelection', 'tocPdfSelection', 'tocCopySelection', 'tocSelectClear'];
+    const ids = ['tocCopySelection', 'tocSelectClear'];
     const els = ids.map(id => document.getElementById(id));
-    check(`${n} selected: Print, PDF, Copy and clear are all in the bar and visible`, els.every(e => e && e.offsetWidth > 0 && e.offsetHeight > 0), ids.filter((id, i) => !els[i] || !els[i].offsetWidth).join(','));
+    check(`${n} selected: Copy and clear are in the bar and visible`, els.every(e => e && e.offsetWidth > 0 && e.offsetHeight > 0), ids.filter((id, i) => !els[i] || !els[i].offsetWidth).join(','));
+    // Print and PDF exist once, in the header, and say how many sections they take
+    check(`${n} selected: the bar has no Print or PDF of its own`, !bar.querySelector('#tocPrintSelection, #tocPdfSelection'), 'Print/PDF still in the bar');
+    const headerPrint = document.getElementById('tocPrintAll'); const headerPdf = document.getElementById('tocPdfAll');
+    const word = `${n} ${n === 1 ? 'section' : 'sections'}`;
+    check(`${n} selected: the header Print and PDF say "(${word})"`, !!headerPrint && !!headerPdf && headerPrint.title === `Print (${word})` && headerPdf.title === `PDF (${word})`, `${headerPrint && headerPrint.title} | ${headerPdf && headerPdf.title}`);
     const boxes = els.filter(Boolean).map(box);
     let overlap = '';
     boxes.forEach((a, i) => boxes.forEach((b, j) => { if (j > i && touches(a, b)) overlap += `${ids[i]}/${ids[j]} `; }));

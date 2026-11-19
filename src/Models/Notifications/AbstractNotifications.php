@@ -83,8 +83,10 @@ abstract class AbstractNotifications
      */
     protected function getPref(): array
     {
-        // only categories inferior to 20 have a user setting for email/web notif
-        if ($this->category->value >= 20) {
+        // only categories inferior to 20, and the fork's five formerly-15..19
+        // categories (now 1015..1019), have a user setting for email/web notif
+        $value = $this->category->value;
+        if ($value >= 20 && ($value < 1015 || $value > 1019)) {
             return array(1, 1);
         }
 

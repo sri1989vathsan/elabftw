@@ -262,6 +262,9 @@ export default class TocPanel extends SidePanel {
 
     // Find the minimum heading level to normalize indentation
     const minLevel = Math.min(...entries.map(e => e.level));
+    // the level shows by indent, weight and size, from the levels this page really has: the top-most present level is rank 0,
+    // the next present one rank 1, the rest rank 2 (a page with only H2 and H4 has ranks 0 and 1)
+    const presentLevels = [...new Set(entries.filter(e => isSection(e)).map(e => e.level))].sort((a, b) => a - b);
 
     let html = '<ul class="toc-list list-unstyled mb-0">';
     for (const entry of entries) {
@@ -271,8 +274,10 @@ export default class TocPanel extends SidePanel {
       const label = this.escapeAttribute(entry.text);
       const searchText = this.escapeAttribute(entry.path.toLocaleLowerCase());
       const kindClass = entry.kind === 'image' ? ' toc-item-image' : (entry.kind === 'table' ? ' toc-item-table' : ' toc-item-section');
-      // the small icon column: H1..H6 for a heading, a table for a spreadsheet, a photo (with a tiny thumbnail) for a picture
-      let kind: string;
+      const rank = Math.min(2, Math.max(0, presentLevels.indexOf(entry.level)));
+      // the small icon slot only exists for a spreadsheet (a table icon) and a picture (a tiny thumbnail): headings have no tag,
+      // their level is the indent, the weight and the size, and "Heading N" in the tooltip and for screen readers
+      let kind = '';
       if (entry.kind === 'image') {
         const thumb = this.getImageThumbnail(entry.id);
         kind = thumb
@@ -280,17 +285,18 @@ export default class TocPanel extends SidePanel {
           : '<i class="fas fa-image fa-fw" aria-hidden="true"></i>';
       } else if (entry.kind === 'table') {
         kind = '<i class="fas fa-table fa-fw" aria-hidden="true"></i>';
-      } else {
-        kind = `H${entry.level}`;
       }
-      html += `<li class="toc-item${kindClass}" style="--toc-indent:${indent}rem" data-toc-level="${entry.level}" data-toc-search-text="${searchText}" data-toc-target="${id}">`;
+      const kindName = entry.kind === 'image' ? 'Picture' : (entry.kind === 'table' ? 'Spreadsheet' : `Heading ${entry.level}`);
+      html += `<li class="toc-item${kindClass} toc-rank-${rank}" style="--toc-indent:${indent}rem" data-toc-level="${entry.level}" data-toc-search-text="${searchText}" data-toc-target="${id}">`;
       html += '<div class="toc-entry">';
       if (!isTable) {
         html += `<input type="checkbox" class="toc-row-check" data-toc-section-checkbox="${id}" aria-label="Select ${label}" tabindex="-1">`;
       }
-      html += `<span class="toc-kind${isTable ? ' toc-kind-leaf' : ''}" aria-hidden="true">${kind}</span>`;
-      html += `<a href="#${encodeURIComponent(entry.id)}" class="toc-link" data-toc-target="${id}" title="${this.escapeAttribute(entry.path)}">${this.escapeHTML(entry.text)}</a>`;
+      if (kind) html += `<span class="toc-kind toc-kind-leaf" aria-hidden="true">${kind}</span>`;
+      // the tooltip is the level; it only repeats the whole title (set after drawing) when the title is cut off
+      html += `<a href="#${encodeURIComponent(entry.id)}" class="toc-link" data-toc-target="${id}" data-toc-kind-name="${kindName}" data-toc-full-title="${this.escapeAttribute(entry.path)}" title="${kindName}" aria-label="${kindName}: ${label}">${this.escapeHTML(entry.text)}</a>`;
       html += '<span class="toc-only-mark" hidden title="section only" aria-label="section only">1</span>';
+      html += '<span class="toc-entry-actions">';
       html += `<button type="button" class="btn btn-sm toc-entry-action toc-copy-link" data-toc-target="${id}" title="Copy link to ${label}" aria-label="Copy link to ${label}"><i class="fas fa-link fa-fw" aria-hidden="true"></i></button>`;
       if (this.getEditor()) {
         html += `<button type="button" class="btn btn-sm toc-entry-action toc-insert-link" data-toc-target="${id}" data-toc-text="${label}" title="Insert link to ${label}" aria-label="Insert link to ${label}"><i class="fas fa-paste fa-fw" aria-hidden="true"></i></button>`;
@@ -299,11 +305,17 @@ export default class TocPanel extends SidePanel {
         html += `<button type="button" class="btn btn-sm toc-entry-action toc-goto" data-toc-target="${id}" title="Go to ${label}" aria-label="Go to ${label}"><i class="fas fa-arrow-right fa-fw" aria-hidden="true"></i></button>`;
         html += `<button type="button" class="btn btn-sm toc-entry-action toc-row-more" data-toc-target="${id}" title="Selection options" aria-label="Selection options for ${label}" aria-haspopup="true"><i class="fas fa-ellipsis fa-fw" aria-hidden="true"></i></button>`;
       }
+      html += '</span>';
       html += '</div>';
       html += '</li>';
     }
     html += '</ul>';
     container.innerHTML = html;
+    this.markCutOffTitles(container);
+    if (!this.titleObserver && typeof ResizeObserver !== 'undefined') {
+      this.titleObserver = new ResizeObserver(() => this.markCutOffTitles(container));
+      this.titleObserver.observe(container);
+    }
     // Spreadsheets and pictures can each be switched off; the switch for a
     // kind only appears when the document has some.
     (['image', 'table'] as const).forEach(kind => {
@@ -362,12 +374,10 @@ export default class TocPanel extends SidePanel {
     const add = document.getElementById('tocSearchAdd') as HTMLButtonElement | null;
     const clear = document.getElementById('tocSearchClear') as HTMLButtonElement | null;
     const mode = document.getElementById('tocSearchMode') as HTMLSelectElement | null;
-    const print = document.getElementById('tocPrintSelection') as HTMLButtonElement | null;
     const copy = document.getElementById('tocCopySelection') as HTMLButtonElement | null;
     if (!input || !add || !clear || !mode || input.dataset.tocSearchReady) return;
 
-    print?.addEventListener('click', () => this.printSelection());
-    // the PDF buttons (the bar's and the header's): the whole entry, or only the ticked sections
+    // Print and PDF exist once, in the header: the whole entry, or only the ticked sections
     const openPdf = (): void => {
       const exporter = document.querySelector<HTMLElement>("[data-action='export-to'][data-format='pdf']");
       if (!exporter) return;
@@ -375,7 +385,6 @@ export default class TocPanel extends SidePanel {
       const param = sections ? `&sections=${encodeURIComponent(sections)}` : '';
       window.open(`/api/v2/${exporter.dataset.type}/${exporter.dataset.id}?format=pdf${param}&sheets=${getSheetsMode()}`, '_blank');
     };
-    document.getElementById('tocPdfSelection')?.addEventListener('click', openPdf);
     document.getElementById('tocPdfAll')?.addEventListener('click', openPdf);
     // always available: the whole entry when nothing is ticked, the ticked sections otherwise
     document.getElementById('tocPrintAll')?.addEventListener('click', () => {
@@ -679,6 +688,17 @@ export default class TocPanel extends SidePanel {
       .map(entry => entry.id);
   }
 
+  private titleObserver: ResizeObserver | null = null;
+
+  /** A title shows two lines at most; the tooltip is just the level, and only a title that is really cut off gets its whole text in it. */
+  private markCutOffTitles(container: HTMLElement): void {
+    container.querySelectorAll<HTMLElement>('.toc-link').forEach(link => {
+      const kindName = link.dataset.tocKindName ?? '';
+      const cut = link.scrollHeight > link.clientHeight + 1;
+      link.title = cut ? `${kindName}: ${link.dataset.tocFullTitle ?? link.textContent ?? ''}` : kindName;
+    });
+  }
+
   private hasSectionChildren(entryId: string): boolean {
     return this.entries.some(entry => entry.parentId === entryId && isSection(entry));
   }
@@ -765,14 +785,15 @@ export default class TocPanel extends SidePanel {
     this.currentFilterActive = filterActive;
     this.currentSectionIds = new Set(sectionIds);
     this.publishSelectedSections(filterActive, sectionIds);
-    const print = document.getElementById('tocPrintSelection') as HTMLButtonElement | null;
     const copy = document.getElementById('tocCopySelection') as HTMLButtonElement | null;
-    if (print) {
-      print.disabled = filterActive && sectionIds.size === 0;
-      print.title = print.disabled
-        ? 'No sections match the current selection'
-        : 'Print the selected or filtered notebook sections';
-    }
+    // nothing matches the filter: Print and PDF of the header have nothing to take (otherwise publishSelectedSections words them)
+    const noMatch = filterActive && sectionIds.size === 0;
+    ['tocPrintAll', 'tocPdfAll'].forEach(id => {
+      const button = document.getElementById(id) as HTMLButtonElement | null;
+      if (!button) return;
+      button.disabled = noMatch;
+      if (noMatch) button.title = 'No sections match the current selection';
+    });
     if (copy) {
       copy.disabled = filterActive && sectionIds.size === 0;
       copy.title = copy.disabled

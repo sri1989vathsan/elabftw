@@ -57,7 +57,7 @@ window.printCheck = async function printCheck() {
         click(rows[1].querySelector('[data-toc-section-checkbox]')); await sleep(500);
         const position = document.body.dataset.tocSections;
         check('ticking a section publishes its heading position for the PDF export', !!position, 'no data-toc-sections on body');
-        click(document.getElementById('tocPrintSelection')); await sleep(500);
+        click(document.getElementById('tocPrintAll')); await sleep(500);
         const doc = printed.pop();
         check('print-selected-sections: a copy is printed', !!doc, 'window.print ran with no #tocPrintSelectionDocument');
         if (doc) {
@@ -97,7 +97,7 @@ window.printCheck = async function printCheck() {
       check('pdf-selected-sections: sections=1 gives a PDF (a different one)', part.status === 200 && /pdf/.test(part.headers.get('content-type') || '') && partSize > 2000 && partSize !== wholeSize, `status ${part.status}, ${partSize} vs ${wholeSize} bytes`);
     }
     // the whole text, spreadsheets included
-    const trigger = document.getElementById('tocPrintSelection');
+    const trigger = document.getElementById('tocPrintAll');
     if (trigger) { trigger.disabled = false; click(trigger); await sleep(500); }
     const whole = printed.pop();
     if (whole) {
