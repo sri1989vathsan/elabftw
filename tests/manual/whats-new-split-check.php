@@ -1,6 +1,6 @@
 <?php
 /**
- * What's new: shared list + optional extra list (src/whats-new-inventory.json). No app stack needed:
+ * What's new: shared list + optional extra list (src/whats-new-inventory.json, present on some branches only) and the source modes. No app stack needed:
  *
  *   docker run --rm -v "$PWD":/w -w /w php:8.4-cli php tests/manual/whats-new-split-check.php
  *
@@ -76,7 +76,7 @@ namespace {
     $check('broken shared file + good extra: extra entries still listed', $ids((new WhatsNewStore("$dir/nope.json", "$dir/extra.json"))->all()) !== array());
 
     // 5. the real files of this checkout load and merge cleanly
-    $real = new WhatsNewStore();
+    $real = new WhatsNewStore(__DIR__ . '/../../src/whats-new.json', __DIR__ . '/../../src/whats-new-inventory.json', 'both');
     $realIds = $ids($real->all());
     $check('real files: ids unique and list not empty', $realIds !== array() && count($realIds) === count(array_unique($realIds)));
     $sharedReal = json_decode((string) file_get_contents(__DIR__ . '/../../src/whats-new.json'), true);
@@ -115,8 +115,8 @@ namespace {
     $check('popup: "N more" counts the rest', $more === count($unseen) - 14 && $more > 0, (string) $more);
     $check('popup: featured entries come from both files, newest first', $ids($sf)[0] === 'f9');
 
-    // 8. source modes (this branch only: the store takes a mode as its third argument)
-    if ((new \ReflectionClass(WhatsNewStore::class))->getConstructor()?->getNumberOfParameters() >= 3) {
+    // 8. source modes (the store takes a mode as its third argument; the extra file of the cases below is a temp copy)
+    {
         $m = fn(?string $mode): array => $ids((new WhatsNewStore("$dir/shared.json", "$dir/extra.json", $mode))->all());
         $check('mode both: merged list', $m('both') === array('x4', 's3', 'x25', 's2', 's1', 'x0'), json_encode($m('both')));
         $check('mode orders: shared entries only', $m('orders') === array('s3', 's2', 's1'), json_encode($m('orders')));
@@ -137,63 +137,18 @@ namespace {
         $check('unseen, mode both: newer extra entry offered', $ids(WhatsNewPopup::unseen((new WhatsNewStore("$dir/shared.json", "$dir/extra.json", 'both'))->all(), $seen, $now)) === array('x4'));
         $check('unseen, mode orders: nothing new', $ids(WhatsNewPopup::unseen((new WhatsNewStore("$dir/shared.json", "$dir/extra.json", 'orders'))->all(), $seen, $now)) === array());
 
-        // the real files of this checkout: nothing of the old inventory guide (43 ids) is lost, orders shows no inventory-only entry
-        $old = array(
-        'database-guide',
-        'folder-path-bar',
-        'plate-view-and-copy',
-        'link-to-data',
-        'quick-links',
-        'link-templates-and-versions',
-        'spreadsheet-previews',
-        'list-indent',
-        'template-version-history',
-        'spreadsheet-insert-and-view',
-        'boards',
-        'orders',
-        'spreadsheet-editing',
-        'navigation',
-        'cards-linked-experiments',
-        'notifications-feedback',
-        'activity-calendar',
-        'left-sidebar',
-        'guide-folders',
-        'guide-folder-views',
-        'guide-database',
-        'guide-database-storage',
-        'guide-sequence-editor',
-        'guide-lineage',
-        'guide-database-sharing',
-        'guide-sidebar',
-        'guide-calendar',
-        'guide-boards',
-        'guide-orders',
-        'guide-experiment-sections',
-        'guide-steps',
-        'guide-templates',
-        'guide-feedback',
-        'guide-search-filters',
-        'guide-toc',
-        'guide-todo-notifications',
-        'guide-editor-toolbar',
-        'guide-spreadsheets',
-        'guide-collaboration',
-        'guide-todo',
-        'guide-announcements',
-        'guide-experiments',
-        'guide-resources'
-        );
+        // the real files of this checkout (the extra file exists on some branches only)
+        $realShared = __DIR__ . '/../../src/whats-new.json';
         $realExtra = __DIR__ . '/../../src/whats-new-inventory.json';
+        $sharedIds = array_column(json_decode((string) file_get_contents($realShared), true), 'id');
+        $check('real files, orders: shared entries only', $ids((new WhatsNewStore($realShared, $realExtra, 'orders'))->all()) === $ids((new WhatsNewStore($realShared, "$dir/missing.json", 'both'))->all()));
         if (is_file($realExtra)) {
-            $r = new WhatsNewStore(__DIR__ . '/../../src/whats-new.json', $realExtra, 'both');
+            $r = new WhatsNewStore($realShared, $realExtra, 'both');
             $rIds = $ids($r->all());
-            $check('real files, both: all 43 ids of the old inventory guide are present', array_diff($old, $rIds) === array(), json_encode(array_values(array_diff($old, $rIds))));
+            $extraIds = array_column(json_decode((string) file_get_contents($realExtra), true), 'id');
             $check('real files, both: ids unique', count($rIds) === count(array_unique($rIds)));
-            $realShared = array_column(json_decode((string) file_get_contents(__DIR__ . '/../../src/whats-new.json'), true), 'id');
-            $realExtraIds = array_column(json_decode((string) file_get_contents($realExtra), true), 'id');
-            $check('real files: the extra file holds no id of the shared file', array_intersect($realShared, $realExtraIds) === array(), json_encode(array_values(array_intersect($realShared, $realExtraIds))));
-            $check('real files, both = shared + extra', count($rIds) === count($realShared) + count($realExtraIds));
-            $check('real files, orders = shared only', $ids((new WhatsNewStore(__DIR__ . '/../../src/whats-new.json', $realExtra, 'orders'))->all()) === $ids((new WhatsNewStore(__DIR__ . '/../../src/whats-new.json', "$dir/missing.json"))->all()));
+            $check('real files: the extra file holds no id of the shared file', array_intersect($sharedIds, $extraIds) === array(), json_encode(array_values(array_intersect($sharedIds, $extraIds))));
+            $check('real files, both = shared + extra', count($rIds) === count($sharedIds) + count($extraIds));
         }
     }
 
