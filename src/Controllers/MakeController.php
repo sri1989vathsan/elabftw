@@ -253,6 +253,7 @@ final class MakeController extends AbstractController
             $Maker = new MakePdf($log, $this->getMpdfProvider(), $this->requester, $this->entityArr, $instance2Rors, $teams2Rors, $users2Rors, $this->shouldIncludeChangelog(), $classification);
             // the sections picked in the Contents panel (positions of their headings): nothing picked exports everything
             $Maker->setSelectedSections(PdfBodyPrep::parseSections($this->Request->query->getString('sections')));
+            $Maker->setSheetsMode($this->Request->query->getString('sheets'));
             return $Maker->getResponse();
         }
         return (new MakeMultiPdf($log, $this->getMpdfProvider(), $this->requester, $this->entityArr, $instance2Rors, $teams2Rors, $users2Rors, $this->shouldIncludeChangelog()))->getResponse();

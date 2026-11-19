@@ -15,6 +15,7 @@ import {
   writeRichClipboard,
 } from './ClipboardContent';
 import { restoreStaticSpreadsheetsForPrint } from './inline-spreadsheet';
+import { getSheetsMode } from './sheets-mode';
 import {
   getImageTocLabel,
   getSpreadsheetTocLabel,
@@ -382,7 +383,7 @@ export default class TocPanel extends SidePanel {
       if (!exporter) return;
       const sections = document.body.dataset.tocSections;
       const param = sections ? `&sections=${encodeURIComponent(sections)}` : '';
-      window.open(`/api/v2/${exporter.dataset.type}/${exporter.dataset.id}?format=pdf${param}`, '_blank');
+      window.open(`/api/v2/${exporter.dataset.type}/${exporter.dataset.id}?format=pdf${param}&sheets=${getSheetsMode()}`, '_blank');
     };
     document.getElementById('tocPdfAll')?.addEventListener('click', openPdf);
     // always available: the whole entry when nothing is ticked, the ticked sections otherwise
