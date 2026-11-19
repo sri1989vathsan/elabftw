@@ -5798,8 +5798,21 @@ html[data-ui-size='comfortable'] {
   }
 
   .toc-items-container .toc-item {
-    padding-left: calc(var(--toc-indent, 0rem) + 0.3rem);
+    padding-left: calc(var(--toc-indent, 0rem) + 0.15rem);
     position: relative;
+
+    // thin guide lines for the nesting: one per indent step, so the level reads from the left edge
+    &::after {
+      background-image: linear-gradient(to right, var(--fx-line) 1px, transparent 1px);
+      background-size: 0.8rem 100%;
+      bottom: 0;
+      content: '';
+      left: 0;
+      pointer-events: none;
+      position: absolute;
+      top: 0;
+      width: var(--toc-indent, 0rem);
+    }
 
     // the active marker: 2px on the rail
     &:has(.toc-link.active)::before {
@@ -5820,6 +5833,22 @@ html[data-ui-size='comfortable'] {
     gap: 0.2rem;
     min-height: var(--fx-row);
     position: relative;
+
+    // the hover buttons are a small overlay at the right edge with a solid background, so they never hide the first words
+    .toc-entry-actions {
+      align-items: center;
+      border-radius: 3px;
+      display: flex;
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    &:hover .toc-entry-actions,
+    &:focus-within .toc-entry-actions {
+      background: linear-gradient(var(--fx-hover), var(--fx-hover)), var(--chrome-bg);
+    }
 
     &:hover {
       background: var(--fx-hover);
@@ -5864,11 +5893,18 @@ html[data-ui-size='comfortable'] {
     font-weight: 400;
     line-height: var(--fx-row);
     min-width: 0;
+    // a title wraps to a second line and only then is cut with an ellipsis
+    -webkit-box-orient: vertical;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    line-height: 1.25;
     overflow: hidden;
-    padding: 0 0.15rem;
+    overflow-wrap: anywhere;
+    padding: 0.2rem 0.15rem;
     text-decoration: none;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    text-overflow: clip;
+    white-space: normal;
 
     &:hover,
     &:focus-visible {
@@ -5881,9 +5917,23 @@ html[data-ui-size='comfortable'] {
     }
   }
 
-  .toc-items-container .toc-item-section .toc-link {
-    color: color-mix(in srgb, var(--fx-fg) 78%, transparent) !important;
-    font-weight: 500;
+  // the level of a heading: the top-most level present is bold and a little larger, the second is normal weight, the deeper ones
+  // smaller and muted (a colour, never opacity)
+  .toc-items-container .toc-item-section.toc-rank-0 .toc-link {
+    color: var(--fx-fg) !important;
+    font-size: 1.04em;
+    font-weight: 600;
+  }
+
+  .toc-items-container .toc-item-section.toc-rank-1 .toc-link {
+    color: color-mix(in srgb, var(--fx-fg) 88%, transparent) !important;
+    font-weight: 400;
+  }
+
+  .toc-items-container .toc-item-section.toc-rank-2 .toc-link {
+    color: var(--fx-muted) !important;
+    font-size: 0.92em;
+    font-weight: 400;
   }
 
   .toc-items-container .toc-item-table .toc-link,
