@@ -13,7 +13,9 @@ namespace Elabftw\Enums;
 
 use Elabftw\Exceptions\ImproperActionException;
 
+use function array_filter;
 use function array_map;
+use function count;
 
 class EnumsTest extends \PHPUnit\Framework\TestCase
 {
@@ -104,5 +106,28 @@ class EnumsTest extends \PHPUnit\Framework\TestCase
         $this->assertSame('', ThemeVariant::Light->toCssClass());
         $this->assertSame('dark-mode', ThemeVariant::Dark->toCssClass());
         $this->assertSame('midnight', ThemeVariant::Midnight->toCssClass());
+    }
+
+    public function testNotificationsCategoryRanges(): void
+    {
+        // upstream owns 15, 16 and 100 (booking approval, webhook disabled): the fork must leave them free
+        foreach (array(15, 16, 100) as $upstreamValue) {
+            $this->assertNull(Notifications::tryFrom($upstreamValue));
+        }
+        $forkValues = array(
+            'TodoDeadline' => 1015, 'MentionedInTask' => 1016, 'MentionedInOrder' => 1017, 'TaskAssigned' => 1018,
+            'OrderStatusChanged' => 1019, 'OrderReminder' => 1100, 'OrderChanged' => 1101, 'MentionedInFeedback' => 1102,
+            'AnnouncementPublished' => 1103, 'AccessGranted' => 1104, 'MentionedInEntry' => 1105, 'StepFinished' => 1106,
+            'StepAssigned' => 1107,
+        );
+        foreach (Notifications::cases() as $case) {
+            $this->assertSame($case, Notifications::from($case->value));
+            if (isset($forkValues[$case->name])) {
+                $this->assertSame($forkValues[$case->name], $case->value);
+            } else {
+                $this->assertLessThan(1000, $case->value);
+            }
+        }
+        $this->assertCount(count($forkValues), array_filter(Notifications::cases(), fn(Notifications $c) => $c->value >= 1000));
     }
 }
