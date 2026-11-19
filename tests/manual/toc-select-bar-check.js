@@ -36,7 +36,10 @@ window.tocSelectBarCheck = async function tocSelectBarCheck() {
     // Print and PDF exist once, in the header, and say how many sections they take
     check(`${n} selected: the bar has no Print or PDF of its own`, !bar.querySelector('#tocPrintSelection, #tocPdfSelection'), 'Print/PDF still in the bar');
     const headerPrint = document.getElementById('tocPrintAll'); const headerPdf = document.getElementById('tocPdfAll');
-    const word = `${n} ${n === 1 ? 'section' : 'sections'}`;
+    // the rule: ticking a heading selects its section and every section below it, so with nested entries N ticks can be more than N sections
+    const shown = parseInt((document.getElementById('tocSelectedLabel') || {}).textContent, 10);
+    check(`${n} selected: the count is at least the ticks (descendant sections count too)`, shown >= n, `ticked ${n}, counted ${shown}`);
+    const word = `${shown} ${shown === 1 ? 'section' : 'sections'}`;
     check(`${n} selected: the header Print and PDF say "(${word})"`, !!headerPrint && !!headerPdf && headerPrint.title === `Print (${word})` && headerPdf.title === `PDF (${word})`, `${headerPrint && headerPrint.title} | ${headerPdf && headerPdf.title}`);
     const boxes = els.filter(Boolean).map(box);
     let overlap = '';
