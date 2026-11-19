@@ -373,12 +373,10 @@ export default class TocPanel extends SidePanel {
     const add = document.getElementById('tocSearchAdd') as HTMLButtonElement | null;
     const clear = document.getElementById('tocSearchClear') as HTMLButtonElement | null;
     const mode = document.getElementById('tocSearchMode') as HTMLSelectElement | null;
-    const print = document.getElementById('tocPrintSelection') as HTMLButtonElement | null;
     const copy = document.getElementById('tocCopySelection') as HTMLButtonElement | null;
     if (!input || !add || !clear || !mode || input.dataset.tocSearchReady) return;
 
-    print?.addEventListener('click', () => this.printSelection());
-    // the PDF buttons (the bar's and the header's): the whole entry, or only the ticked sections
+    // Print and PDF exist once, in the header: the whole entry, or only the ticked sections
     const openPdf = (): void => {
       const exporter = document.querySelector<HTMLElement>("[data-action='export-to'][data-format='pdf']");
       if (!exporter) return;
@@ -386,7 +384,6 @@ export default class TocPanel extends SidePanel {
       const param = sections ? `&sections=${encodeURIComponent(sections)}` : '';
       window.open(`/api/v2/${exporter.dataset.type}/${exporter.dataset.id}?format=pdf${param}`, '_blank');
     };
-    document.getElementById('tocPdfSelection')?.addEventListener('click', openPdf);
     document.getElementById('tocPdfAll')?.addEventListener('click', openPdf);
     // always available: the whole entry when nothing is ticked, the ticked sections otherwise
     document.getElementById('tocPrintAll')?.addEventListener('click', () => {
@@ -787,14 +784,15 @@ export default class TocPanel extends SidePanel {
     this.currentFilterActive = filterActive;
     this.currentSectionIds = new Set(sectionIds);
     this.publishSelectedSections(filterActive, sectionIds);
-    const print = document.getElementById('tocPrintSelection') as HTMLButtonElement | null;
     const copy = document.getElementById('tocCopySelection') as HTMLButtonElement | null;
-    if (print) {
-      print.disabled = filterActive && sectionIds.size === 0;
-      print.title = print.disabled
-        ? 'No sections match the current selection'
-        : 'Print the selected or filtered notebook sections';
-    }
+    // nothing matches the filter: Print and PDF of the header have nothing to take (otherwise publishSelectedSections words them)
+    const noMatch = filterActive && sectionIds.size === 0;
+    ['tocPrintAll', 'tocPdfAll'].forEach(id => {
+      const button = document.getElementById(id) as HTMLButtonElement | null;
+      if (!button) return;
+      button.disabled = noMatch;
+      if (noMatch) button.title = 'No sections match the current selection';
+    });
     if (copy) {
       copy.disabled = filterActive && sectionIds.size === 0;
       copy.title = copy.disabled
