@@ -8,7 +8,7 @@ For every inbox/<entry-id>.(png|jpg|jpeg|webp) this
   4. writes web/assets/images/whats-new/<entry-id>.jpg,
   5. sets that entry's image and outlined "highlight" in src/whats-new.json.
 
-regions.json maps an entry id to (all boxes are x, y, w, h as fractions 0..1 of
+regions.json maps an entry id to (optional "source": name of another inbox file to use instead of <entry-id>; all boxes are x, y, w, h as fractions 0..1 of
 the ORIGINAL screenshot, so they do not depend on its pixel size):
   {"crop": [x, y, w, h], "mask": [[x, y, w, h], ...],
    "highlight": [x, y, w, h], "label": "Short text", "alt": "Description"}
@@ -103,15 +103,17 @@ def main() -> int:
     for entry in entries:
         if wanted and entry['id'] not in wanted:
             continue
-        source = find_source(entry['id'])
+        region = regions.get(entry['id'], {})
+        # "source": another inbox name, so several entries that show the same feature can share one screenshot
+        source = find_source(region.get('source', entry['id']))
         if source is None:
             continue
-        process(entry, regions.get(entry['id'], {}), source)
+        process(entry, region, source)
         done.append(entry['id'])
     for f in files:
         f.write_text(json.dumps(lists[f], indent=2, ensure_ascii=False) + '\n')
     print('processed:', ', '.join(done) if done else '(nothing in inbox/)')
-    missing = [e['id'] for e in entries if not find_source(e['id'])]
+    missing = [e['id'] for e in entries if not find_source(regions.get(e['id'], {}).get('source', e['id']))]
     print('no screenshot yet for:', ', '.join(missing) if missing else '(none)')
     return 0
 
