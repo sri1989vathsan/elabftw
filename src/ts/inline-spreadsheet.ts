@@ -335,7 +335,8 @@ function installViewScrollbar(sheetContainer: HTMLElement): () => void {
   const thumb = document.createElement('div');
   thumb.className = 'elabftw-view-xbar-thumb';
   track.append(thumb);
-  sheetContainer.append(track);
+  // beside the grid, never inside it: the tab library turns every child of its container into a page
+  sheetContainer.after(track);
   let scroller: HTMLElement | null = null;
   const update = (): void => {
     if (!scroller) return;
