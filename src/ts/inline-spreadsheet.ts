@@ -3084,13 +3084,14 @@ function applyCoordinateHeaderStyle(container: HTMLElement, appearance: Spreadsh
  * taller than the rows under it.
  */
 function matchHeaderRowToDataRows(container: HTMLElement, appearance: SpreadsheetAppearance): void {
-  const firstRow = container.querySelector<HTMLElement>('.jss_worksheet > tbody > tr');
+  const dataRows = Array.from(container.querySelectorAll<HTMLElement>('.jss_worksheet > tbody > tr'));
   const headerRow = container.querySelector<HTMLElement>('.jss_worksheet > thead > tr');
-  if (!firstRow || !headerRow) return;
+  if (dataRows.length === 0 || !headerRow) return;
+  // the height of a one-line row: the lowest of the rows (a row with wrapped text is taller than the others)
   const wanted = appearance.columnIndexHeight !== DEFAULT_APPEARANCE.columnIndexHeight
     ? appearance.columnIndexHeight
-    : Math.round(firstRow.getBoundingClientRect().height);
-  if (!(wanted > 0)) return;
+    : Math.round(Math.min(...dataRows.map(row => row.getBoundingClientRect().height).filter(height => height > 0), 9999));
+  if (!(wanted > 0) || wanted >= 9999) return;
   // the stylesheet fixes the header cells to this variable (with !important): follow the data rows through it
   container.closest<HTMLElement>('.elabftw-spreadsheet-readonly-view')?.style.setProperty('--spreadsheet-column-index-height', `${wanted}px`);
   [headerRow, ...Array.from(headerRow.children)].forEach(node => {
@@ -10502,8 +10503,8 @@ export function buildReadOnlySpreadsheetHost(
       applyCoordinateHeaderDimensions(sheetContainer, appearance);
       applyCoordinateHeaderStyle(sheetContainer, appearance);
       applySpreadsheetRowHeights(sheetContainer, worksheet, rowHeights);
-      matchHeaderRowToDataRows(sheetContainer, appearance);
       applySpreadsheetColWidths(sheetContainer, worksheet, colWidths);
+      matchHeaderRowToDataRows(sheetContainer, appearance);
       syncFrameToRealColumns();
       applyCellClipHeights(sheetContainer, manuallyResizedRows);
       window.requestAnimationFrame(reserveRoomForHorizontalScrollbar);
