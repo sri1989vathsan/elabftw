@@ -45,7 +45,7 @@ window.foldersExplorerCheck = async function () {
     await wait(2500);
     var panel = $('#foldersPanel');
     check('E1 the panel is open', visible(panel), 'panel hidden');
-    check('E2 the explorer bar has favourites, three views, options and close', !!$('.folder-explorer-bar [data-popover="folderFavoritesMenu"]') && document.querySelectorAll('.folder-view-switch [data-action="select-folder-view"]').length === 3 && !!$('.folder-explorer-bar [data-popover="folderOptionsMenu"]') && !!$('.folder-explorer-bar [data-action="toggle-sidepanel"]'), 'bar incomplete');
+    check('E2 the explorer bar has favourites, three views, options and close', !!$('.folder-explorer-bar [data-popover="folderFavoritesMenu"]') && document.querySelectorAll('.folder-view-switch [data-action="select-folder-view"]').length === 3 && !!$('.folder-explorer-bar [data-popover="folderOptionsMenu"]') && !!$('#foldersPanel [data-action="toggle-sidepanel"]'), 'bar incomplete (Close lives in the shared corner row of the panel, not in the Folders bar)');
     check('E3 the two old dropdowns are out of sight', !visible($('#folderEntityTypeSelect')) && !visible($('#folderQuickLinkSelect')), 'a select is visible');
     check('E4 the All row is gone, Unfiled is the first row of the list, and the breadcrumb is hidden with no folder selected',
       !$('[data-folder-quick="all"]') && !!$('[data-folder-quick="unfiled"]') && !!$('#folderCrumb') && $('#folderCrumb').hidden
@@ -267,7 +267,9 @@ window.foldersExplorerCheck = async function () {
       var hit = inFolder.find(function (e) { return e.fullname && e.fullname !== me.fullname && !/XPL/.test(e.title); });
       if (hit) { theirs = hit; where = Number(fid); break; }
     }
-    if (theirs) {
+    // a system administrator may move other people's experiments: the refusal can only be checked as a plain member
+    if (me.is_sysadmin) results.push({ name: 'X0 skipped: the test user is a sysadmin (log in as a plain member to check the refusal)', ok: true });
+    else if (theirs) {
       var targetTree = treeRow(two, 'data-drop-folder');
       var rowOf = null;
       click('[data-action="select-folder-view"][data-view="list"]');
