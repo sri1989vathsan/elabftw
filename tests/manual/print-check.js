@@ -27,8 +27,7 @@ window.printCheck = async function printCheck() {
   let allCss = '';
   for (const sheet of document.styleSheets) { let list; try { list = sheet.cssRules; } catch { continue; } for (const rule of list) allCss += rule.cssText + '\n'; }
   check('print: a named landscape page "wide" exists and the wide sheet class uses it', /@page wide[^{]*\{[^}]*landscape/.test(allCss) && /print-wide-sheet[^{]*\{[^}]*page:\s*wide/.test(allCss), 'rule missing');
-  check('sheets mode: the choice is on the body for the print code (data-sheets-mode landscape|fit|split)', ['landscape', 'fit', 'split'].includes(document.body.dataset.sheetsMode || ''), `data-sheets-mode=${document.body.dataset.sheetsMode}`);
-  check('sheets mode: a select with the three values is in the page (Export menu / PDF dialog)', [...document.querySelectorAll('select[data-sheets-mode]')].some(sel => ['landscape', 'fit', 'split'].every(v => [...sel.options].some(o => o.value === v))), 'no select[data-sheets-mode]');
+  check('wide tables: the Change wide table setting link is in the page (Export menu / PDF dialog)', !!document.querySelector('[data-action="sheets-mode-change"]'), 'no [data-action=sheets-mode-change]');
   check('print rules never split a row and repeat the header', /break-inside:\s*avoid/.test(printCss) && /table-header-group/.test(printCss), 'rules missing');
 
   const body = document.getElementById('body_view');

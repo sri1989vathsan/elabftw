@@ -154,7 +154,9 @@ foreach ($tables as $t) {
 $check('mode 3 split: each block repeats the row numbers (1-10) and the header row and fits the page width', $ok, 'a block lacks row numbers/header or is too wide');
 $check('mode 3 split: no column is lost or cut (A-G each once)', substr_count($allLetters, 'A,') === 1 && substr_count($allLetters, 'G,') === 1 && substr_count($allLetters, 'D,') === 1, $allLetters);
 $check('mode 3 split: rows are not split over a page', substr_count($m3, 'page-break-inside:avoid') >= 30, 'rows can split');
-$check('the request value is read: sheets=fit|split, anything else is the default', PdfBodyPrep::parseMode('fit') === 'fit' && PdfBodyPrep::parseMode('split') === 'split' && PdfBodyPrep::parseMode('x') === 'landscape' && PdfBodyPrep::parseMode('') === 'landscape', 'parseMode');
+$check('the request value is read: sheets=landscape|split, anything else is the default (fit)', PdfBodyPrep::parseMode('landscape') === 'landscape' && PdfBodyPrep::parseMode('split') === 'split' && PdfBodyPrep::parseMode('fit') === 'fit' && PdfBodyPrep::parseMode('x') === 'fit' && PdfBodyPrep::parseMode('') === 'fit', 'parseMode');
+$check('the default is fit: no sheets= (or an unknown value) never gives a landscape page', !str_contains(PdfBodyPrep::spreadsheets($sample, $page, PdfBodyPrep::parseMode(''), $land), 'pagebreak') && !str_contains(PdfBodyPrep::spreadsheets($wide(14), $page, PdfBodyPrep::parseMode('landscaped'), $land), 'pagebreak'), 'landscape without being asked for');
+$check('the default of spreadsheets() itself is fit', !str_contains(PdfBodyPrep::spreadsheets($sample, $page, landscapeWidthPx: $land), 'pagebreak'), 'default mode is not fit');
 
 // --- saved entries: the editor's purifier drops <colgroup>, the widths come from the sheet's own data (data-spreadsheet)
 $saved = static function (int $cols, int $widthEach, bool $withStyleWidth = true, bool $withColWidths = true) use ($cell, $coord): string {
