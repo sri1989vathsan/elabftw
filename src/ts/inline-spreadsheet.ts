@@ -4622,7 +4622,7 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean, offerPlateB
   const formulaInput = createInput('text', '', 'Selected cell value or formula');
   formulaInput.classList.add('inline-spreadsheet-formula-input');
   formulaInput.disabled = true;
-  formulaInput.placeholder = 'Select a cell to view or edit its value/formula';
+  formulaInput.placeholder = 'Select a cell to edit';
   formulaInput.spellcheck = false;
   formulaBar.append(formulaCellLabel, formulaInput);
   // Statistical functions grow over time (SUM/AVERAGE/... started at 5, now
@@ -8852,7 +8852,7 @@ export function buildReadOnlySpreadsheetHost(
     formulaInputEl.className = 'elabftw-spreadsheet-formula-bar-input';
     formulaInputEl.disabled = true;
     formulaInputEl.spellcheck = false;
-    formulaInputEl.placeholder = 'Select a cell to view or edit its value/formula';
+    formulaInputEl.placeholder = 'Select a cell to edit';
     formulaInputEl.setAttribute('aria-label', 'Selected cell value or formula');
     formulaBarEl.append(formulaLabel, formulaInputEl);
     host.appendChild(formulaBarEl);
