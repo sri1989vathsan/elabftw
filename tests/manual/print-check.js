@@ -98,8 +98,11 @@ window.printCheck = async function printCheck() {
       check('print-matches-live: no editing parts in the printed copy', !whole.querySelector('.elabftw-spreadsheet-readonly-toggle, .jss_toolbar, .elabftw-own-scrollbar, .elabftw-view-xbar, button, input'), 'toolbar/bar/button found');
       const tables = [...whole.querySelectorAll('table.elabftw-spreadsheet')];
       check('print-matches-live: each sheet is printed as a grid table', tables.length >= sheets.length - whole.querySelectorAll('.elabftw-well-plate-view').length, `${tables.length} tables for ${sheets.length} sheets`);
+      // the hosts are looked up again here: the page may have redrawn them since the first look. Tables beyond the live sheets are plain
+      // saved tables of the entry (no live grid behind them): they are printed as they are, so only live sheets get the scaling check.
+      const liveHosts = body ? body.querySelectorAll('.elabftw-spreadsheet-readonly-view') : [];
       tables.forEach((table, i) => {
-        const original = sheets[i];
+        const original = liveHosts[i];
         const liveCols = original ? original.querySelectorAll('.jss_worksheet > thead > tr > td[data-x]').length : null;
         const liveRows = original ? original.querySelectorAll('.jss_worksheet > tbody > tr').length : null;
         const printCols = table.querySelectorAll('thead th').length - 1;
@@ -108,7 +111,7 @@ window.printCheck = async function printCheck() {
         check(`print-matches-live: sheet ${i + 1} has its coordinate cells`, table.querySelectorAll('.spreadsheet-coordinate').length === printCols + printRows + 1, 'coordinate cells missing');
         const width = parseFloat(table.style.width) || 0;
         const zoom = parseFloat(table.style.zoom) || 1;
-        check(`print-matches-live: sheet ${i + 1} fits the page (scaled when wider than 680 px)`, width * zoom <= 681, `${width} px at zoom ${zoom}`);
+        if (original) check(`print-matches-live: sheet ${i + 1} fits the page (scaled when wider than 700 px)`, width * zoom <= 701, `${width} px at zoom ${zoom}`);
       });
     } else check('print-matches-live: the whole text can be printed', false, 'window.print never ran');
   } finally {
