@@ -15,6 +15,21 @@
     "imageAlt": ""
   },
   {
+    "id": "print-pdf-match-sheet",
+    "date": "2026-11-19",
+    "area": "Experiments",
+    "featured": false,
+    "title": "Print and PDF match the sheet on screen",
+    "summary": "A spreadsheet prints and exports as the grid you see: grid lines, fills, widths, number formats. Print and PDF are always in the Contents panel.",
+    "details": [
+      "fa-print::Print and PDF sit in the Contents panel header, also with nothing ticked: they take the whole entry, or only the ticked sections.",
+      "A sheet narrower than the page prints at its own size; a wider one is shrunk evenly (text, lines and row heights) to the full page width. Rows are never split and the header row repeats on each page.",
+      "Hidden columns and rows, empty filler columns and rows, scrollbars and toolbars are left out."
+    ],
+    "image": "",
+    "imageAlt": ""
+  },
+  {
     "id": "reminder-chip",
     "date": "2026-11-19",
     "area": "Organise",

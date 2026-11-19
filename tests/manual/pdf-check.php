@@ -85,5 +85,27 @@ $long = '<table class="elabftw-spreadsheet" style="width:100%"><colgroup><col st
 $outLong = PdfBodyPrep::spreadsheets($long, $page);
 $check('a very long sheet keeps its 200 rows, the header in <thead> (repeated by the PDF engine), rows not split', substr_count($outLong, '<tr') === 201 && str_contains($outLong, '<thead>') && substr_count($outLong, 'page-break-inside:avoid') >= 200, 'rows lost or not kept together');
 
+// --- hidden columns, merged cells, fills
+$hid = '<table class="elabftw-spreadsheet" style="width:100%"><colgroup><col style="width:42px"><col style="width:100px"><col style="width:100px;display:none"><col style="width:100px"></colgroup>'
+    . '<thead><tr>' . $coord('') . $coord('A') . '<th class="spreadsheet-coordinate" style="display:none">B</th>' . $coord('C') . '</tr></thead><tbody>'
+    . '<tr>' . $coord('1') . $cell('keepA') . '<td style="display:none">hiddenB</td>' . $cell('keepC') . '</tr></tbody></table>';
+$outHid = PdfBodyPrep::spreadsheets($hid, $page);
+$check('hidden-columns: a hidden column is not printed, the others are', !str_contains($outHid, 'hiddenB') && str_contains($outHid, 'keepA') && str_contains($outHid, 'keepC') && substr_count($outHid, '<col ') === 3, 'hidden column kept or a visible one lost');
+$mer = '<table class="elabftw-spreadsheet" style="width:100%"><colgroup><col style="width:42px"><col style="width:100px"><col style="width:100px"><col style="width:100px"></colgroup>'
+    . '<thead><tr>' . $coord('') . $coord('A') . $coord('B') . $coord('C') . '</tr></thead><tbody>'
+    . '<tr>' . $coord('1') . '<td colspan="2" style="background-color:#99ccff;font-weight:bold;">merged title</td>' . $cell('') . '</tr>'
+    . '<tr>' . $coord('2') . $cell('a') . $cell('b') . $cell('') . '</tr></tbody></table>';
+$outMer = PdfBodyPrep::spreadsheets($mer, $page);
+$check('merged-cells: the colspan and the fill of a merged cell survive, no column is cut', str_contains($outMer, 'colspan="2"') && str_contains($outMer, 'background-color:#99ccff') && str_contains($outMer, '>C</th>'), 'merge or column lost');
+$fills = PdfBodyPrep::spreadsheets($sheet, $page);
+$check('fills: a coloured cell keeps its colour, an uncoloured one is white (no zebra)', str_contains($fills, 'background-color:#ffcc00') && str_contains($fills, 'background-color:#ffffff'), 'fill lost or cell not white');
+
+// --- whole entry (pdf-whole-entry): nothing selected keeps every section and every sheet
+$entry = '<h2>One</h2><p>text one</p>' . $sheet . '<h2>Two</h2><p>text two</p>' . $wide(4);
+$whole = PdfBodyPrep::spreadsheets(PdfBodyPrep::selectSections($entry, PdfBodyPrep::parseSections('')), $page);
+$check('pdf-whole-entry: with no sections asked every heading, text and sheet is in the PDF', str_contains($whole, 'text one') && str_contains($whole, 'text two') && substr_count($whole, '<table') === 2 && !str_contains($whole, 'Selected sections only'), 'something missing');
+$some = PdfBodyPrep::spreadsheets(PdfBodyPrep::selectSections($entry, PdfBodyPrep::parseSections('2')), $page);
+$check('pdf-selected-sections: only the asked section (and its sheet) is in the PDF', str_contains($some, 'text two') && !str_contains($some, 'text one') && substr_count($some, '<table') === 1, 'wrong sections');
+
 echo $failed === 0 ? "ALL PASSED\n" : "$failed FAILED\n";
 exit($failed === 0 ? 0 : 1);
