@@ -12,7 +12,9 @@ namespace Elabftw\Services;
 use Elabftw\Elabftw\Db;
 use PDO;
 
+use function array_column;
 use function array_filter;
+use function array_merge;
 use function array_slice;
 use function array_values;
 use function count;
@@ -81,6 +83,48 @@ final class WhatsNewPopup
             'more' => count($unseen) - count($shownFeatured) - count($shownCompact),
             'newestId' => (string) $all[0]['id'],
             'newestDate' => (string) ($all[0]['date'] ?? ''),
+        );
+    }
+
+    /**
+     * How many entries the user has not seen yet (for the dot on the navbar button). Independent of the opt-out, which only
+     * stops the automatic popup.
+     */
+    public function unseenCount(?int $now = null): int
+    {
+        $all = ($this->Store ?? new WhatsNewStore())->all();
+        return $all === array() ? 0 : count(self::unseen($all, $this->readSeen(), $now ?? time()));
+    }
+
+    /**
+     * What the navbar button shows when the user asks for it: the unseen entries first, then the most recent seen ones, up to
+     * the same caps as the popup after login, newest first. Does not depend on the opt-out and never changes the seen state.
+     *
+     * @return array{featured: list<array<string, mixed>>, compact: list<array<string, mixed>>, more: int, newestId: string, newestDate: string, unseen: int}|array{}
+     */
+    public function buildOnDemand(?int $now = null): array
+    {
+        $all = ($this->Store ?? new WhatsNewStore())->all();
+        if ($all === array()) {
+            return array();
+        }
+        $unseen = self::unseen($all, $this->readSeen(), $now ?? time());
+        $unseenIds = array_column($unseen, 'id');
+        $rest = array_values(array_filter($all, static fn(array $e): bool => !in_array($e['id'], $unseenIds, true)));
+        $ordered = array_merge($unseen, $rest);
+        $isFeatured = static fn(array $e): bool => !empty($e['featured']);
+        $featured = array_slice(array_values(array_filter($ordered, $isFeatured)), 0, self::MAX_FEATURED);
+        $compact = array_slice(array_values(array_filter($ordered, static fn(array $e): bool => !$isFeatured($e))), 0, self::MAX_COMPACT);
+        $shownIds = array_column(array_merge($featured, $compact), 'id');
+        $unseenShown = count(array_filter($unseenIds, static fn($id): bool => in_array($id, $shownIds, true)));
+
+        return array(
+            'featured' => $featured,
+            'compact' => $compact,
+            'more' => count($unseen) - $unseenShown,
+            'newestId' => (string) $all[0]['id'],
+            'newestDate' => (string) ($all[0]['date'] ?? ''),
+            'unseen' => count($unseen),
         );
     }
 
