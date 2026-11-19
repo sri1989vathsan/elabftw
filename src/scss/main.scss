@@ -9054,6 +9054,9 @@ the form-control fails to do that so we do the border ourselves */
   }
 
   /* don't print all that stuff */
+  .reminder-chip,
+  .reminder-banner,
+  #overlay-container,
   nav,
   footer,
   #menu,

@@ -173,8 +173,18 @@
   let entityActivities: EntityActivity[] = [];
   let entries: CalendarEntry[] = [];
   let reminderEntries: CalendarEntry[] = [];
-  let bannerEntries: { key: string; deadline: string; body: string; deadlineLabel: string; overdue: boolean }[] = [];
-  let bannerCollapsed = true;
+  let bannerEntries: { key: string; deadline: string; body: string; deadlineLabel: string; overdue: boolean; href: string | null }[] = [];
+  // A small chip (clock and count) in the bottom right corner; a click opens the full reminder. It stays the way the person left it for the
+  // rest of the session, so it does not open itself again on every page.
+  const BANNER_OPEN_KEY = 'todo-reminder-banner-open';
+  function readBannerOpen(): boolean {
+    try {
+      return sessionStorage.getItem(BANNER_OPEN_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }
+  let bannerCollapsed = !readBannerOpen();
   let calendarCells: CalendarCell[] = [];
   let agendaEntries: CalendarEntry[] = [];
   let agendaExperiments: AgendaEntityActivity[] = [];
@@ -1030,6 +1040,9 @@
         body: entry.body,
         deadlineLabel: formatDeadline(entry.deadline),
         overdue: deadline < now,
+        href: entry.source === 'step' && entry.entityPage && entry.entityId
+          ? `${entry.entityPage}?mode=view&id=${entry.entityId}#step_view_${entry.id}`
+          : null,
       });
       return accumulator;
     }, []);
@@ -1045,6 +1058,11 @@
 
   function toggleReminderBanner(): void {
     bannerCollapsed = !bannerCollapsed;
+    try {
+      sessionStorage.setItem(BANNER_OPEN_KEY, bannerCollapsed ? '0' : '1');
+    } catch {
+      // the choice is only a convenience
+    }
   }
 
   function updateUrgentBadges(
@@ -1140,43 +1158,64 @@
 </script>
 
 {#if bannerEntries.length > 0}
-  <div class='reminder-banner' role='status' use:portalToContainer>
-    <div class='reminder-banner-header'>
-      <button type='button' class='reminder-banner-toggle' on:click={toggleReminderBanner} aria-expanded={!bannerCollapsed}>
-        <i class='fas fa-clock fa-fw reminder-banner-icon' aria-hidden='true'></i>
-        <span class='reminder-banner-summary'>
-          <span class='reminder-banner-title'>
-            {bannerEntries.length === 1
-              ? t('1 task due soon')
-              : t('{{count}} tasks due soon', { count: bannerEntries.length })}
+  {#if bannerCollapsed}
+    <button
+      type='button'
+      class='reminder-chip'
+      role='status'
+      use:portalToContainer
+      on:click={toggleReminderBanner}
+      aria-expanded='false'
+      aria-label={bannerEntries.length === 1 ? t('1 task due soon') : t('{{count}} tasks due soon', { count: bannerEntries.length })}
+      title={bannerEntries.length === 1 ? t('1 task due soon') : t('{{count}} tasks due soon', { count: bannerEntries.length })}
+    >
+      <i class='fas fa-clock' aria-hidden='true'></i>
+      <span class='reminder-chip-count'>{bannerEntries.length}</span>
+    </button>
+  {:else}
+    <div class='reminder-banner' role='status' use:portalToContainer>
+      <div class='reminder-banner-header'>
+        <button type='button' class='reminder-banner-toggle' on:click={toggleReminderBanner} aria-expanded='true'>
+          <i class='fas fa-clock fa-fw reminder-banner-icon' aria-hidden='true'></i>
+          <span class='reminder-banner-summary'>
+            <span class='reminder-banner-title'>
+              {bannerEntries.length === 1
+                ? t('1 task due soon')
+                : t('{{count}} tasks due soon', { count: bannerEntries.length })}
+            </span>
+            <span class='reminder-banner-subtitle'>{t('Deadlines approaching')}</span>
           </span>
-          <span class='reminder-banner-subtitle'>{t('Deadlines approaching')}</span>
-        </span>
-        <i class='fas fa-fw reminder-banner-chevron' class:fa-chevron-up={!bannerCollapsed} class:fa-chevron-down={bannerCollapsed} aria-hidden='true'></i>
-      </button>
-      <button
-        type='button'
-        class='reminder-banner-dismiss'
-        aria-label={t('Dismiss')}
-        on:click={dismissReminderBanner}
-      >
-        <i class='fas fa-xmark' aria-hidden='true'></i>
-      </button>
-    </div>
-    {#if !bannerCollapsed}
+        </button>
+        <button
+          type='button'
+          class='reminder-banner-dismiss'
+          aria-label={t('Collapse')}
+          title={t('Collapse')}
+          on:click={toggleReminderBanner}
+        >
+          <i class='fas fa-xmark' aria-hidden='true'></i>
+        </button>
+      </div>
       <ul class='reminder-banner-list'>
         {#each bannerEntries as entry (entry.key)}
           <li class='reminder-banner-item'>
             <i class='fas fa-list-check fa-fw' aria-hidden='true'></i>
-            <span class='reminder-banner-item-body'>{entry.body}</span>
+            {#if entry.href}
+              <a class='reminder-banner-item-body' href={entry.href}>{entry.body}</a>
+            {:else}
+              <span class='reminder-banner-item-body'>{entry.body}</span>
+            {/if}
             <span class='reminder-banner-item-when' class:reminder-banner-item-overdue={entry.overdue}>
               {entry.overdue ? t('Overdue') : entry.deadlineLabel}
             </span>
           </li>
         {/each}
       </ul>
-    {/if}
-  </div>
+      <div class='reminder-banner-footer'>
+        <button type='button' class='reminder-banner-clear' on:click={dismissReminderBanner}>{t('Dismiss all')}</button>
+      </div>
+    </div>
+  {/if}
 {/if}
 
 <section class='calendar-todo-month' aria-label={t('Activity calendar')}>
@@ -1510,10 +1549,54 @@
     opacity: 0.8;
   }
 
-  .reminder-banner-chevron {
+  /* the compact form: a small amber pill with the clock and the number of tasks, in the bottom right corner */
+  .reminder-chip {
+    align-items: center;
+    background: var(--lightgold);
+    border: 1px solid rgba(0, 0, 0, 0.18);
+    border-radius: 999px;
+    bottom: 1rem;
+    box-shadow: 0 0.15rem 0.5rem rgba(0, 0, 0, 0.25);
     color: var(--strongest);
-    margin-top: 0.2rem;
-    opacity: 0.7;
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 0.75rem;
+    font-weight: 700;
+    gap: 0.3rem;
+    height: 1.5rem;
+    justify-content: center;
+    min-width: 2.2rem;
+    padding: 0 0.55rem;
+    position: fixed;
+    right: 4.5rem;
+    z-index: 1030;
+  }
+
+  .reminder-chip:hover,
+  .reminder-chip:focus-visible {
+    filter: brightness(0.96);
+  }
+
+  .reminder-banner-footer {
+    border-top: 1px solid rgba(0, 0, 0, 0.15);
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.25rem 0.6rem;
+  }
+
+  .reminder-banner-clear {
+    background: transparent;
+    border: 0;
+    color: var(--strongest);
+    cursor: pointer;
+    font-size: 0.72rem;
+    opacity: 0.75;
+    padding: 0.1rem 0.3rem;
+    text-decoration: underline;
+  }
+
+  .reminder-banner-clear:hover {
+    opacity: 1;
   }
 
   .reminder-banner-dismiss {
