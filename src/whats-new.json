@@ -1,16 +1,15 @@
 [
   {
-    "id": "database-team-switches",
-    "date": "2026-11-18",
-    "area": "Others",
+    "id": "print-pdf-match-sheet",
+    "date": "2026-11-19",
+    "area": "Experiments",
     "featured": false,
-    "title": "Admins can switch the Database creation rights",
-    "summary": "Two team switches decide who may create Database entries and who may create and edit Modules.",
+    "title": "Print and PDF match the sheet on screen",
+    "summary": "A spreadsheet prints and exports as the grid you see: grid lines, fills, widths, number formats. Print and PDF are always in the Contents panel.",
     "details": [
-      "In Admin panel, Team, the Database sub-heading has two switches: Allow users to create Database entries, and Allow users to create and edit Modules. Both are on by default.",
-      "With Modules on, any user of the team can create and edit a module. Turn it off and only admins can. Deleting a module stays with admins, and your personal modules are not affected.",
-      "Turn Create Database entries off and the New entry button is hidden for people who are not admins. Who can read or edit an entry does not change.",
-      "The Database list itself is unchanged."
+      "fa-print::Print and PDF sit in the Contents panel header, also with nothing ticked: they take the whole entry, or only the ticked sections.",
+      "A sheet narrower than the page prints at its own size; a wider one is shrunk evenly (text, lines and row heights) to the full page width. Rows are never split and the header row repeats on each page.",
+      "Hidden columns and rows, empty filler columns and rows, scrollbars and toolbars are left out."
     ],
     "image": "",
     "imageAlt": ""

@@ -2413,6 +2413,31 @@ async function spreadsheetSoak(options = {}) {
         note('preview-equals-live');
       }
     },
+    // Print and the PDF export are built from the stored table, not from the live grid: its column widths, one coordinate cell per row
+    // and its header row must be the live grid's, or paper and screen differ. The print rules (fills kept, no clipping) must be loaded.
+    async 'print-pdf-input-equals-live'() {
+      for (const way of ['external-html', 'plain-text']) {
+        const made = await makeTextSheet(way);
+        if (!made) continue;
+        await live(made.uid);
+        await sleep(700);
+        const m = sheetMetrics(made.uid);
+        const stored = tableEl(made.uid);
+        const table = `print/PDF input (${way})`;
+        if (!m || !stored) { fail(`print-pdf-input-equals-live: no sheet (${way})`); continue; }
+        const widths = [...stored.querySelectorAll(':scope > colgroup > col')].map(c => Math.round(parseFloat(c.style.width) || parseFloat(c.getAttribute('width')) || 0));
+        const dataWidths = widths.slice(widths.length - m.cols.length);
+        const near = (a, b) => a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 2);
+        if (!near(dataWidths, m.cols)) dataLoss.push({ context, table, problem: `stored column widths ${dataWidths.join('/')} differ from the live grid ${m.cols.join('/')}` });
+        if (!stored.querySelector('thead')) dataLoss.push({ context, table, problem: 'stored table has no <thead>: the header row cannot repeat on each printed page' });
+        const coords = stored.querySelectorAll('tbody tr > .spreadsheet-coordinate').length;
+        if (coords !== stored.querySelectorAll('tbody tr').length) dataLoss.push({ context, table, problem: `stored table has ${coords} coordinate cells for ${stored.querySelectorAll('tbody tr').length} rows` });
+        let printRules = '';
+        for (const sheet of document.styleSheets) { let list; try { list = sheet.cssRules; } catch { continue; } for (const r of list) if (r.type === CSSRule.MEDIA_RULE && /print/.test(r.media.mediaText)) printRules += r.cssText; }
+        if (!/print-color-adjust:\s*exact/.test(printRules)) dataLoss.push({ context, table, problem: 'no print-color-adjust: exact in the print rules (fills would be lost on paper)' });
+        note('print-pdf-input-equals-live');
+      }
+    },
     // The size of a sheet is its data: no column of 1, 2, 3 and no empty row below that nobody added.
     async 'no-stray-column-row'() {
       for (const shape of [[3, 1], [3, 2]]) {
