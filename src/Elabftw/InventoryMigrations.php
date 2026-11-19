@@ -65,4 +65,18 @@ final class InventoryMigrations
         'inv_001_database_team_toggles.sql',
         'inv_002_storage_unit_moor_capacity.sql',
     );
+
+    /**
+     * Migrations that cannot run any more once upstream has dropped the table they copy (`CREATE TABLE ... LIKE items_revisions`): migration =>
+     * the table it needs. When that table is missing (a fresh install of merged code) the runner does not execute the file, it records it in the
+     * ledger as applied (with its checksum, the file is never edited) and inv_003_twin_tables.sql, which is next in the list, does the work with the
+     * columns spelled out. When the table exists the migration runs as always. Never add a `LIKE <upstream table>` to a new migration instead
+     * of using this: spell the columns out (ELABFTW-CUSTOMIZATIONS-INVENTORY.md, "Twin tables").
+     *
+     * @var array<string, string>
+     */
+    public const array REPLACED_WHEN_TABLE_MISSING = array(
+        '110_inventory.sql' => 'items_revisions',
+        '111_inventory_steps.sql' => 'items_revisions',
+    );
 }
