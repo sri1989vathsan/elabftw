@@ -9,6 +9,7 @@
         </button>
       </div>
       <div class='modal-body'>
+        <p id='pdfSelectedSectionsNote' class='smallgray' hidden><i class='fas fa-fw fa-list-check'></i> {{ 'Only the sections selected in the Contents panel are exported'|trans }} (<span data-selected-count>0</span>).</p>
         {% include 'export-menu-options.html' with {'format': 'pdf'} %}
       </div>
       <div class='modal-footer'>

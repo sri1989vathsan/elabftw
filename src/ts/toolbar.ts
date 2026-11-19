@@ -159,7 +159,10 @@ on('export-to', (el: HTMLElement) => {
     json = (document.getElementById(`${format}_exportJson`) as HTMLInputElement).checked ? 1 : 0;
   }
   const finalFormat = (document.getElementById(`${format}_exportPdfa`) as HTMLInputElement).checked ? format + 'a' : format;
-  window.open(`/api/v2/${el.dataset.type}/${el.dataset.id}?format=${finalFormat}&changelog=${changelog}&json=${json}&classification=${classification}`, '_blank');
+  // sections picked in the Contents panel: the PDF holds only those (see TocPanel.publishSelectedSections)
+  const sections = format === 'pdf' ? document.body.dataset.tocSections : undefined;
+  const sectionsParam = sections ? `&sections=${encodeURIComponent(sections)}` : '';
+  window.open(`/api/v2/${el.dataset.type}/${el.dataset.id}?format=${finalFormat}&changelog=${changelog}&json=${json}&classification=${classification}${sectionsParam}`, '_blank');
 });
 
 on('export-to-qrpng', (el: HTMLElement) => {
