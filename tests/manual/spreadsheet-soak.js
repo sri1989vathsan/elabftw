@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'text-column-fits', 'text-not-clipped', 'paste-keeps-formatting', 'cell-alignment-consistent', 'alignment-preserved', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'viewport-equals-table-width', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'text-column-fits', 'text-not-clipped', 'paste-keeps-formatting', 'cell-alignment-consistent', 'alignment-preserved', 'toolbar-not-cut', 'row-height-fits-text', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'viewport-equals-table-width', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -2701,13 +2701,164 @@ async function spreadsheetSoak(options = {}) {
       await check('Add rows');
       await save(); await sleep(500);
       await check('a save');
+      // the rows Add rows made take the alignment of their column, in the stored table too (it once kept the library's left)
+      const addedStored = []; { const t = tableEl(uid); for (let r = 5; r < t.rows.length; r++) for (let c = 0; c < 3; c++) addedStored.push([(t.rows[r].cells[c + 1]?.style.textAlign || 'left').replace('start', 'left'), aligns[c]]); }
+      if (addedStored.length === 0 || addedStored.some(([got, want]) => got !== want)) dataLoss.push({ context, table, problem: `the rows added by Add rows are stored as ${addedStored.map(x => x[0]).join(',')}, their columns are ${aligns.join(',')}` });
       await popupEdit(uid, false, 0); await sleep(500);
       await check('opening and cancelling the popup');
       await popupEdit(uid, true, 0); await sleep(1500);
       await check('Update in the popup');
       const previewAligns = await withPreview(uid, host => readLive(host));
       if (previewAligns && JSON.stringify(previewAligns) !== JSON.stringify(expected)) dataLoss.push({ context, table, problem: `the preview shows ${previewAligns.join(',')}, expected ${expected.join(',')}` });
+      // rows and columns come and go: every column is still of one alignment and the columns keep their order (left, centred, right)
+      const order = { left: 0, center: 1, right: 2 };
+      const checkShape = async step => {
+        const root = api.overlayElement(uid) || await live(uid);
+        const columns = new Map();
+        root.querySelectorAll('.jss_worksheet tbody td[data-x][data-y]').forEach(td => {
+          const c = +td.dataset.x;
+          if (!columns.has(c)) columns.set(c, new Set());
+          columns.get(c).add(effective(td));
+        });
+        const list = [...columns.entries()].sort((x, y) => x[0] - y[0]).map(([, set]) => [...set]);
+        if (list.some(set => set.length !== 1)) {
+          const odd = [...root.querySelectorAll('.jss_worksheet tbody td[data-x][data-y]')].filter(td => effective(td) === 'left' && +td.dataset.x > 0).slice(0, 3).map(td => `${cellName(+td.dataset.y, +td.dataset.x)} style="${(td.getAttribute('style') || '').slice(0, 50)}" clip=${td.querySelector(':scope > .jss-cell-clip') ? 'yes' : 'no'}`);
+          dataLoss.push({ context, table, problem: `after ${step}: a column has cells of different alignment (${list.map(set => set.join('+')).join(' | ')}); e.g. ${odd.join('; ')}` });
+        }
+        const seq = list.map(set => order[set[0]] ?? 9);
+        if (seq.some((value, i) => i > 0 && value < seq[i - 1])) dataLoss.push({ context, table, problem: `after ${step}: the columns changed alignment order (${list.map(set => set.join('+')).join(' | ')})` });
+      };
+      for (let i = 0; i < 4; i++) { await structureOp(uid); await sleep(300); await checkShape(`structure change ${i + 1} (${opLog[opLog.length - 1]})`); }
+      // the fill handle: drag the corner of the selected first cell down over the cells below
+      try {
+        const rootFill = await live(uid);
+        press(rootFill.querySelector('td[data-x="1"][data-y="0"]')); await sleep(250);
+        const corner = rootFill.querySelector('.jss_corner');
+        const targetCell = rootFill.querySelector('td[data-x="1"][data-y="2"]');
+        if (corner && targetCell) {
+          const cr = corner.getBoundingClientRect(); const tr = targetCell.getBoundingClientRect();
+          const init = { bubbles: true, cancelable: true, view: window, button: 0, buttons: 1 };
+          corner.dispatchEvent(new MouseEvent('mousedown', { ...init, clientX: cr.x + 2, clientY: cr.y + 2 }));
+          for (const target of [rootFill.querySelector('td[data-x="1"][data-y="1"]'), targetCell]) target.dispatchEvent(new MouseEvent('mousemove', { ...init, clientX: target.getBoundingClientRect().x + 20, clientY: target.getBoundingClientRect().y + 10 }));
+          targetCell.dispatchEvent(new MouseEvent('mouseup', { ...init, buttons: 0, clientX: tr.x + 20, clientY: tr.y + 10 }));
+          await sleep(500);
+        } else note('fill-handle-not-found');
+      } catch (error) { note('fill-handle-error'); }
+      await checkShape('dragging the fill handle');
+      // the interface size
+      const html = document.documentElement;
+      const sizeBefore = html.getAttribute('data-ui-size');
+      try {
+        for (const size of ['comfortable', 'compact']) {
+          html.setAttribute('data-ui-size', size); window.dispatchEvent(new Event('resize')); await sleep(600);
+          await checkShape(`switching the interface to ${size}`);
+        }
+      } finally { if (sizeBefore === null) html.removeAttribute('data-ui-size'); else html.setAttribute('data-ui-size', sizeBefore); }
+      // sorting is switched off in these sheets (columnSorting: false), so there is no sort to try
+      // older data: a sheet whose cells carry no alignment at all (the column option decides) is left-aligned everywhere, live and in the preview
+      const legacyRows = [['HygR_T2A_EndoTagIGF_CD8TM_linker_mCherry', 'short'], ['pLV-EF1α-HygR_T2A_EGFRn_CD8TM-linker-mCherry-pHIntein', 'x']];
+      const beforeLegacy = new Set(api.snapshot(false).map(snap => snap.uid));
+      editor.focus();
+      editor.execCommand('elabftwInsertSpreadsheetData', false, { data: legacyRows, displayData: legacyRows, rows: 2, cols: 2, kind: 'standard', caption: '', colWidths: { 0: 150, 1: 90 }, rowHeights: { 0: 100, 1: 100 } });
+      await sleep(1000);
+      const legacy = newTablesSince(beforeLegacy);
+      if (legacy.length === 1) {
+        models.set(legacy[0].uid, { label: 'alignment legacy', grid: legacyRows.map(r => r.slice()), plate: false, tallRows: true });
+        const rootLegacy = await live(legacy[0].uid);
+        await sleep(400);
+        const shown = [...rootLegacy.querySelectorAll('.jss_worksheet tbody td[data-x][data-y]')].map(effective);
+        const fromPreview = await withPreview(legacy[0].uid, host => [...host.querySelectorAll('.jss_worksheet tbody td[data-x][data-y]')].map(effective));
+        if (shown.some(a => a !== 'left') || (fromPreview && fromPreview.some(a => a !== 'left'))) dataLoss.push({ context, table: 'alignment legacy', problem: `cells without an alignment of their own show ${shown.join(',')} live and ${(fromPreview || []).join(',')} in the preview, expected all left` });
+      } else fail(`alignment-preserved: ${legacy.length} legacy sheets were made`);
       note('alignment-preserved');
+    },
+    // The toolbar above a sheet is whole at every frame width and stays put while the sheet scrolls sideways: every button (and the formula
+    // bar) inside the frame, the toolbar and the frames not scrolled themselves, nothing moves when the grid is scrolled to its far end.
+    // (The "cut toolbar" of a user's screenshot was a crop of the screenshot; this scenario guards against it ever being real.)
+    async 'toolbar-not-cut'() {
+      layoutDirty = true;
+      const rows = Array.from({ length: 4 }, (_, r) => Array.from({ length: 14 }, (_, c) => `r${r + 1}c${c + 1} HygR_T2A_EndoTagIGF`));
+      const before = new Set(api.snapshot(false).map(snap => snap.uid));
+      editor.focus();
+      editor.execCommand('elabftwInsertSpreadsheetData', false, { data: rows, displayData: rows, rows: 4, cols: 14, kind: 'standard', caption: 'toolbar check', colWidths: Object.fromEntries(Array.from({ length: 14 }, (_, c) => [c, 150])) });
+      await sleep(1000);
+      const added = newTablesSince(before);
+      if (added.length !== 1) { fail(`toolbar-not-cut: ${added.length} spreadsheets were made`); return; }
+      const uid = added[0].uid;
+      models.set(uid, { label: 'toolbar not cut', grid: rows.map(r => r.slice()), plate: false });
+      const table = 'toolbar not cut';
+      const container = editor.getContainer();
+      const original = container.style.width;
+      const snapshot = root => {
+        const bar = root.querySelector('.elabftw-spreadsheet-readonly-toggle');
+        const box = root.getBoundingClientRect();
+        const buttons = bar ? [...bar.querySelectorAll('button, input')].filter(el => el.offsetParent !== null) : [];
+        return { bar, box, buttons, rects: buttons.map(el => el.getBoundingClientRect()) };
+      };
+      try {
+        for (const frame of [0, 700, 430, 300]) {
+          container.style.width = frame ? `${frame}px` : original;
+          window.dispatchEvent(new Event('resize'));
+          await sleep(500);
+          const root = await live(uid);
+          await sleep(400);
+          const where = `frame ${frame || 'full'}`;
+          const a = snapshot(root);
+          if (!a.bar || !a.buttons.length) { fail(`toolbar-not-cut: no toolbar buttons (${where})`); continue; }
+          const frameBox = (root.closest('.elabftw-spreadsheet-editor-overlay') || root).getBoundingClientRect();
+          a.rects.forEach((r, i) => {
+            if (r.left < frameBox.left - 1 || r.right > frameBox.right + 1) dataLoss.push({ context, table, problem: `${where}: toolbar button ${a.buttons[i].title || a.buttons[i].className} runs outside the frame (${Math.round(r.left - frameBox.left)} to ${Math.round(r.right - frameBox.left)} of ${Math.round(frameBox.width)} px)` });
+          });
+          for (let el = a.bar; el && el !== document.body; el = el.parentElement) {
+            if (el.scrollLeft !== 0) dataLoss.push({ context, table, problem: `${where}: ${el.className || el.tagName} is scrolled sideways by ${el.scrollLeft} px, which moves the toolbar` });
+          }
+          const scroller = root.querySelector('.jss_content');
+          if (scroller && scroller.scrollWidth > scroller.clientWidth + 1) {
+            scroller.scrollLeft = scroller.scrollWidth; await sleep(250);
+            const b = snapshot(root);
+            if (b.rects.some((r, i) => Math.abs(r.left - a.rects[i].left) > 1 || Math.abs(r.top - a.rects[i].top) > 1)) dataLoss.push({ context, table, problem: `${where}: the toolbar moved when the sheet was scrolled to its right end` });
+            scroller.scrollLeft = 0;
+          }
+        }
+      } finally {
+        container.style.width = original;
+        window.dispatchEvent(new Event('resize'));
+      }
+      note('toolbar-not-cut');
+    },
+    // Row heights follow the wrapped text: a saved height is a ceiling the user chose (a manual drag and the Auto-fit rows button store the same
+    // thing, so a saved height is never changed on load), but the button measures with the real wrapping (long words break inside the cell), and
+    // narrowing a column grows the rows that would otherwise cut the text. A row without a saved height is never clipped.
+    async 'row-height-fits-text'() {
+      layoutDirty = true;
+      const rows = [['pLV-EF1α-HygR_T2A_EGFRn_CD8TM-linker-mCherry-pHIntein-Cas9', 'a'], ['HygR_T2A_EndoTagIGF_CD8TM_linker_mCherry_without_a_break_1234567890', 'b'], ['short', 'c']];
+      const before = new Set(api.snapshot(false).map(snap => snap.uid));
+      editor.focus();
+      editor.execCommand('elabftwInsertSpreadsheetData', false, { data: rows, displayData: rows, rows: 3, cols: 2, kind: 'standard', caption: '', colWidths: { 0: 165, 1: 90 }, rowHeights: { 0: 36, 1: 36 } });
+      await sleep(1000);
+      const added = newTablesSince(before);
+      if (added.length !== 1) { fail(`row-height-fits-text: ${added.length} spreadsheets were made`); return; }
+      const uid = added[0].uid;
+      models.set(uid, { label: 'row height fits text', grid: rows.map(r => r.slice()), plate: false, tallRows: true });
+      const table = 'row height fits text';
+      const clipped = root => [...root.querySelectorAll('.jss_worksheet tbody td[data-x][data-y]')].filter(td => td.textContent.trim()).filter(td => [td, ...td.querySelectorAll(':scope > .jss-cell-clip')].some(el => el.scrollHeight > el.clientHeight + 1)).map(td => cellName(+td.dataset.y, +td.dataset.x));
+      const root = await live(uid);
+      await sleep(500);
+      const withSaved = clipped(root);
+      note('row-height-saved-ceiling');
+      // a saved height is the user's ceiling: the rows keep it (36 px) on load
+      const h0 = Math.round(root.querySelector('.jss_worksheet tbody tr').getBoundingClientRect().height);
+      if (h0 > 60) dataLoss.push({ context, table, problem: `a saved row height of 36 px was changed on load (${h0} px)` });
+      const button = root.querySelector('.elabftw-spreadsheet-readonly-autofit-rows');
+      if (!button) { fail('row-height-fits-text: no Auto-fit rows button'); return; }
+      button.click(); await sleep(900);
+      const afterFit = clipped(api.overlayElement(uid) || root);
+      if (afterFit.length) dataLoss.push({ context, table, problem: `after Auto-fit rows the text of ${afterFit.join(' ')} is still cut off at the bottom (it was in ${withSaved.length} cells before)` });
+      // narrowing the column makes the rows grow with the text
+      await resizeColumn(uid, 0);
+      const afterResize = clipped(api.overlayElement(uid) || root);
+      if (afterResize.length) dataLoss.push({ context, table, problem: `after a column resize the text of ${afterResize.join(' ')} is cut off at the bottom` });
+      note('row-height-fits-text');
     },
     // Print and the PDF export are built from the stored table, not from the live grid: its column widths, one coordinate cell per row
     // and its header row must be the live grid's, or paper and screen differ. The print rules (fills kept, no clipping) must be loaded.
