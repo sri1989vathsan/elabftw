@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace Elabftw\Services;
 
-use Elabftw\Db;
+use Elabftw\Elabftw\Db;
 use PDO;
 
 use function array_filter;
