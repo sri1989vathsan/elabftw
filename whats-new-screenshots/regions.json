@@ -1,39 +1,26 @@
 {
   "activity-calendar": {
-    "alt": "The Activity calendar panel with Day, Week and Month buttons and the month grid",
-    "crop": [
-      0,
-      0,
-      0.6,
-      1
-    ]
+    "source": "calendar-panel",
+    "alt": "The Activity calendar panel with Day, Week and Month buttons, the November month grid with coloured dots for tasks and experiments, and a list of the dates"
   },
   "left-sidebar": {
-    "alt": "The left sidebar with the To-do panel open next to the row of panel buttons",
-    "crop": [
-      0,
-      0,
-      1,
-      0.8
-    ]
+    "source": "sidebar",
+    "alt": "The left sidebar: a column of small buttons for Folders, Search, Quick search, To-do, Calendar and Contents, with the guide button at the bottom",
+    "highlight": [
+      -0.0083,
+      -0.16,
+      0.08,
+      1.0611
+    ],
+    "label": "One click opens a panel"
   },
   "boards": {
-    "alt": "The Boards page with the Plasmid project and its demo cards with deadlines",
-    "crop": [
-      0,
-      0,
-      1,
-      0.8
-    ]
+    "source": "boards",
+    "alt": "The Boards page with the Plasmid project tab, the card filters and the To do column with demo cards and deadlines"
   },
   "cards-linked-experiments": {
-    "alt": "The Boards page with the Plasmid project and its demo cards",
-    "crop": [
-      0,
-      0,
-      1,
-      0.8
-    ]
+    "source": "boards",
+    "alt": "The Boards page with the Plasmid project tab, the card filters and the To do column with demo cards and deadlines"
   },
   "list-indent": {
     "highlight": [
@@ -46,26 +33,16 @@
     "alt": "Several bullet lines selected in the editor; Tab indents them together"
   },
   "navigation": {
-    "alt": "The More menu in the top bar with Orders and the Links section"
+    "source": "more-menu",
+    "alt": "The More menu in the top bar with Orders and other links"
   },
   "notifications-feedback": {
-    "crop": [
-      0.0426,
-      0.0,
-      0.9574,
-      1.0
-    ],
-    "highlight": [
-      0.0426,
-      0.5131,
-      0.8876,
-      0.1814
-    ],
-    "label": "Told when someone shares with you",
-    "alt": "The notifications dropdown, with a notification that someone gave you access to a resource, outlined"
+    "source": "notifications",
+    "alt": "The notification bell menu listing a step deadline and two to-do deadlines, with Clear all, Notification history and Notification settings below"
   },
   "orders": {
-    "alt": "The Orders page: request form on the left, status tabs and the first order on the right"
+    "source": "orders",
+    "alt": "The Orders page with the request form on the left and the list of orders with their status on the right"
   },
   "spreadsheet-editing": {
     "alt": "An experiment page with a spreadsheet of demo samples in the main text",
@@ -98,181 +75,204 @@
     "alt": "The experiment templates list with the demo template Standard cloning protocol"
   },
   "guide-folder-views": {
-    "alt": "The Folders panel in the Cards view with two folders",
-    "crop": [
-      0,
-      0,
-      0.6,
-      1
-    ]
+    "source": "folder-views",
+    "alt": "The Folders panel in list view with the Favourites, Tree, List and Cards view buttons at the top",
+    "highlight": [
+      0.2399,
+      0.012,
+      0.2506,
+      0.076
+    ],
+    "label": "Choose a view"
   },
   "guide-dashboard": {
-    "alt": "The dashboard: four tiles, the Experiments, Resources and Announcements cards with their Create buttons"
+    "source": "dashboard",
+    "alt": "The dashboard with four tiles of your own activity, then cards for experiments, resources and announcements",
+    "highlight": [
+      0.0147,
+      0.1192,
+      0.9784,
+      0.0929
+    ],
+    "label": "Tiles open the matching list"
   },
   "dashboard-tiles": {
-    "alt": "The dashboard with the four tiles at the top and the status chips with counts"
+    "source": "dashboard",
+    "alt": "The dashboard: tiles with the number of experiments and resources modified this week, open steps and open tasks, above the experiment, resource and announcement cards",
+    "highlight": [
+      0.0147,
+      0.1192,
+      0.9784,
+      0.0929
+    ],
+    "label": "Tiles open the matching list"
   },
   "guide-announcements": {
-    "alt": "The Announcements card on the dashboard with a pinned warning and an information announcement"
+    "source": "announcements",
+    "alt": "The Announcements card of the dashboard with a pinned freezer maintenance notice and a lab meeting notice"
   },
   "guide-experiments": {
-    "alt": "The experiments list with a pinned demo experiment, its Goals, Conclusion and Notes, and the layout buttons"
+    "source": "experiments-list",
+    "alt": "The Experiments page: search box, filters, layout buttons and the list of experiments with their category, status and tags"
   },
   "guide-resources": {
-    "alt": "The resources list with three demo resources"
+    "source": "resources-list",
+    "alt": "The Resources page: search box, filters and the list of resources with their category"
   },
   "guide-folders": {
-    "alt": "The Folders panel in the left sidebar: a tree of demo folders with item counts",
-    "crop": [
-      0,
-      0,
-      0.6,
-      1
-    ]
+    "source": "folders",
+    "alt": "The Folders panel with the folder tree of the team: Cell culture, Cloning with Plasmids and Screening, Protein work"
   },
   "folder-explorer": {
-    "alt": "The Folders panel in the Cards view with two folders",
-    "crop": [
-      0,
-      0,
-      0.6,
-      1
-    ]
+    "source": "folder-views",
+    "alt": "The Folders panel in list view with the Favourites, Tree, List and Cards view buttons at the top",
+    "highlight": [
+      0.2399,
+      0.012,
+      0.2506,
+      0.076
+    ],
+    "label": "Choose a view"
   },
   "guide-sidebar": {
-    "alt": "The left sidebar with the To-do panel open next to the row of panel buttons",
-    "crop": [
-      0,
-      0,
-      1,
-      0.8
-    ]
+    "source": "sidebar",
+    "alt": "The left sidebar: a column of small buttons for Folders, Search, Quick search, To-do, Calendar and Contents, with the guide button at the bottom",
+    "highlight": [
+      -0.0083,
+      -0.16,
+      0.08,
+      1.0611
+    ],
+    "label": "One click opens a panel"
   },
   "guide-todo": {
-    "alt": "The To-do panel grouped by due date with demo tasks and steps",
-    "crop": [
-      0,
-      0,
-      1,
-      0.8
-    ]
+    "source": "todo-panel",
+    "alt": "The To-do panel with the tabs Tasks and steps, the add-task field and overdue tasks and steps listed by date"
   },
   "guide-calendar": {
-    "alt": "The Activity calendar panel with Day, Week and Month buttons and the month grid",
-    "crop": [
-      0,
-      0,
-      0.6,
-      1
-    ]
+    "source": "calendar-panel",
+    "alt": "The Activity calendar panel with Day, Week and Month buttons, the November month grid with coloured dots for tasks and experiments, and a list of the dates"
   },
   "guide-search-filters": {
-    "alt": "The Search panel with the type buttons and grouped results for experiments, resources, templates and folders",
-    "crop": [
-      0,
-      0,
-      1,
-      0.88
-    ]
+    "source": "search-panel",
+    "alt": "The Search panel in the left sidebar with its search box, the Exp, Res and All buttons and the results grouped by experiments and resources"
   },
   "guide-toc": {
-    "alt": "The Contents panel in Select mode with two headings ticked, Print and PDF in its header, next to the experiment",
-    "crop": [
-      0,
-      0,
-      1,
-      0.64
-    ]
+    "source": "toc-panel",
+    "alt": "The Contents panel with the headings of the experiment, ticks for each section, and Print and PDF buttons in its header"
   },
   "print-pdf-selected-sections": {
-    "alt": "The Contents panel in Select mode with two headings ticked, Print and PDF in its header",
-    "crop": [
-      0,
-      0,
-      1,
-      0.64
-    ]
+    "source": "toc-panel",
+    "alt": "The Contents panel with the headings of the experiment, ticks for each section, and Print and PDF buttons in its header"
   },
   "side-panel-refresh": {
-    "alt": "The top of the Contents panel with the Refresh and Close buttons in the top corner"
+    "source": "toc-panel",
+    "alt": "The Contents panel with the headings of the experiment, ticks for each section, and Print and PDF buttons in its header"
   },
   "guide-list-layouts": {
-    "alt": "The experiments list in Rows with preview: Pinned group first, entries by month, preview on the right"
+    "source": "list-layouts",
+    "alt": "The row of layout buttons above the experiments list, next to the sort buttons, with the list below",
+    "highlight": [
+      0.6273,
+      0.1123,
+      0.2294,
+      0.0722
+    ],
+    "label": "Pick a layout"
   },
   "list-layouts": {
-    "alt": "The experiments list in Rows with preview: Pinned group first, entries by month, preview on the right"
+    "source": "list-layouts",
+    "alt": "The row of layout buttons above the experiments list, next to the sort buttons, with the list below",
+    "highlight": [
+      0.6273,
+      0.1123,
+      0.2294,
+      0.0722
+    ],
+    "label": "Pick a layout"
   },
   "guide-pins": {
-    "alt": "The experiments list with the Pinned group first, then the entries of November 2026"
+    "source": "pins",
+    "alt": "The first experiment of the list with its pin icon filled in; pinned entries stay at the top of the list",
+    "highlight": [
+      0.9294,
+      0.1296,
+      0.0471,
+      0.0565
+    ],
+    "label": "Click the pin"
   },
   "guide-boards": {
-    "alt": "The Boards page with the Plasmid project and its demo cards with deadlines",
-    "crop": [
-      0,
-      0,
-      1,
-      0.8
-    ]
+    "source": "boards",
+    "alt": "The Boards page with the Plasmid project tab, the card filters and the To do column with demo cards and deadlines"
   },
   "guide-collaboration": {
-    "alt": "The Boards page with the Plasmid project, Assigned to me and Created by me filters and the cards",
-    "crop": [
-      0,
-      0,
-      1,
-      0.8
-    ]
+    "source": "boards",
+    "alt": "The Boards page with the Plasmid project tab, the card filters and the To do column with demo cards and deadlines"
   },
   "guide-orders": {
-    "alt": "The Orders page: request form on the left, status tabs and the first order on the right"
+    "source": "orders",
+    "alt": "The Orders page with the request form on the left and the list of orders with their status on the right"
   },
   "guide-feedback": {
-    "alt": "The Feedback board with the post form and a demo feature request"
+    "source": "feedback",
+    "alt": "The Feedback board with the form to post a feature idea or a bug and the filter buttons"
   },
   "guide-templates": {
-    "alt": "The experiment templates list with the demo template Standard cloning protocol"
+    "source": "templates-list",
+    "alt": "The Experiment templates page listing two templates, PCR reaction setup and Western blot"
   },
   "link-templates-and-versions": {
     "alt": "The experiment templates list with the demo template Standard cloning protocol"
   },
   "guide-create-entry": {
-    "alt": "The Create a new entry window with the Folder choice, My folders, Bookmarked and All folders"
+    "source": "create-dialog",
+    "alt": "The Create dialog with the Experiment, Resource and template tabs, the title field and the Folder chooser"
   },
   "create-with-folder": {
-    "alt": "The Create a new entry window with the Folder choice, My folders, Bookmarked and All folders"
+    "source": "create-dialog",
+    "alt": "The Create dialog with the Experiment, Resource and template tabs, the title field and the Folder chooser"
   },
   "guide-admin-settings": {
-    "alt": "The admin Team tab: usage tiles, the Find a setting box and settings in boxed cards"
+    "source": "admin",
+    "alt": "The Admin panel Team tab with the Configure your team settings and their on/off switches"
   },
   "guide-reminders": {
-    "alt": "The deadline reminder opened from the clock chip: two tasks due soon, with Dismiss all"
+    "source": "reminder-chip",
+    "alt": "The small round reminder chip at the top right of the page with the number of deadlines coming up, and the list it opens",
+    "highlight": [
+      0.9166,
+      0.0554,
+      0.0988,
+      0.0985
+    ],
+    "label": "Deadline chip"
   },
   "reminder-chip": {
-    "alt": "The deadline reminder opened from the clock chip: two tasks due soon, with Dismiss all"
+    "source": "reminder-chip",
+    "alt": "The small round reminder chip at the top right of the page with the number of deadlines coming up, and the list it opens",
+    "highlight": [
+      0.9166,
+      0.0554,
+      0.0988,
+      0.0985
+    ],
+    "label": "Deadline chip"
   },
   "quick-links": {
-    "alt": "The More menu in the top bar with Orders and the Links section"
+    "source": "more-menu",
+    "alt": "The More menu in the top bar with Orders and other links"
   },
   "guide-editor-toolbar": {
     "alt": "The editor toolbar: menu bar, undo, headings, font size, bold, colours and alignment"
   },
   "guide-print-pdf": {
-    "alt": "The Contents panel in Select mode with two sections ticked; Print and PDF sit in its header",
-    "crop": [
-      0,
-      0,
-      1,
-      0.64
-    ]
+    "source": "toc-panel",
+    "alt": "The Contents panel with the headings of the experiment, ticks for each section, and Print and PDF buttons in its header"
   },
   "print-pdf-match-sheet": {
-    "alt": "The Contents panel in Select mode; Print and PDF in its header act on the ticked sections",
-    "crop": [
-      0,
-      0,
-      1,
-      0.64
-    ]
+    "source": "toc-panel",
+    "alt": "The Contents panel with the headings of the experiment, ticks for each section, and Print and PDF buttons in its header"
   },
   "guide-spreadsheets": {
     "alt": "An experiment page with a spreadsheet of demo samples in the main text",
@@ -293,13 +293,8 @@
     ]
   },
   "entry-pages": {
-    "alt": "An experiment page: Goals, Conclusion and Notes as three tiles under the title, a pin, tags and the toolbar",
-    "crop": [
-      0,
-      0,
-      1,
-      0.58
-    ]
+    "source": "entry-view",
+    "alt": "An experiment page: title with category and status, the toolbar, the details block and the main text with its headings"
   },
   "guide-experiment-sections": {
     "alt": "The sections under the main text of an experiment on the edit page: Data, Links, Web links and Files"
@@ -344,9 +339,55 @@
     ]
   },
   "guide-whats-new-popup": {
-    "alt": "Settings, Appearance: the What’s new switch that turns the popup after login on or off"
+    "source": "whats-new-setting",
+    "alt": "Settings, Appearance tab: the switch “Show a popup with the new features after login” that turns the popup on or off",
+    "highlight": [
+      0.0138,
+      0.6438,
+      1.2575,
+      0.1456
+    ],
+    "label": "Popup on or off"
   },
   "whats-new-popup": {
-    "alt": "Settings, Appearance: the What’s new switch that turns the popup after login on or off"
+    "source": "whats-new-popup-shot",
+    "alt": "The What’s new popup after login: a short list of the newest features with a Got it button"
+  },
+  "guide-todo-notifications": {
+    "source": "notifications",
+    "alt": "The notification bell menu listing a step deadline and two to-do deadlines, with Clear all, Notification history and Notification settings below"
+  },
+  "folder-path-bar": {
+    "source": "folder-path",
+    "alt": "The folder path bar at the bottom of an experiment, Cloning then Plasmids, with the experiment text above it",
+    "highlight": [
+      0.0175,
+      0.9284,
+      0.375,
+      0.0676
+    ],
+    "label": "Folder path bar"
+  },
+  "guide-steps": {
+    "source": "steps",
+    "alt": "The Steps and tasks section of an experiment: two steps with tick boxes and deadlines, then the Data, Links and Local files sections",
+    "highlight": [
+      0.0025,
+      0.0638,
+      0.425,
+      0.25
+    ],
+    "label": "Steps and tasks"
+  },
+  "steps-and-tasks": {
+    "source": "steps",
+    "alt": "The Steps and tasks section of an experiment: two steps with tick boxes and deadlines, then the Data, Links and Local files sections",
+    "highlight": [
+      0.0025,
+      0.0638,
+      0.425,
+      0.25
+    ],
+    "label": "Steps and tasks"
   }
 }
