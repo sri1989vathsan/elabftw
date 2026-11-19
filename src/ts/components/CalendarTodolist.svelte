@@ -1165,6 +1165,7 @@
       let right = 16;
       node.style.top = `${top}px`;
       node.style.right = `${right}px`;
+      node.style.maxHeight = '';
       const things = avoidables();
       for (let pass = 0; pass < 6; pass++) {
         const mine = node.getBoundingClientRect();
@@ -1178,6 +1179,9 @@
           // a column of buttons at the right edge: the reminder sits to the left of it
           right += Math.ceil(mine.right - hitBox.left) + 8;
           node.style.right = `${right}px`;
+        } else if (node.classList.contains('reminder-banner') && hitBox.top > mine.top + 110 && hitBox.top < window.innerHeight) {
+          // something lower down (the edit toolbar): the opened reminder gets less high, its list scrolls, rather than lying over it
+          node.style.maxHeight = `${Math.floor(hitBox.top - top - 8)}px`;
         } else {
           top = Math.ceil(hitBox.bottom) + 6;
           node.style.top = `${top}px`;
@@ -1648,6 +1652,8 @@
     background: var(--lightgold);
     border-radius: 0.4rem;
     box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
     position: fixed;
     /* top right like the old toast, dropping down from the chip's place; placeReminder moves it lower when something is in the way */
     max-width: min(340px, calc(100vw - 2rem));
@@ -1774,7 +1780,9 @@
     border-top: 1px solid rgba(0, 0, 0, 0.15);
     list-style: none;
     margin: 0;
+    flex: 1 1 auto;
     max-height: min(220px, calc(100vh - 160px));
+    min-height: 0;
     overflow-y: auto;
     padding: 0;
   }
