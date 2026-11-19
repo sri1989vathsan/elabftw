@@ -2025,9 +2025,10 @@ button[data-action='toggle-pin'] {
   color: var(--fx-muted, #7a8591) !important;
   display: inline-flex;
   flex: 0 0 auto;
-  height: var(--fx-ctl, 1.5rem);
+  // never smaller than 1.5rem to hit, even where a denser theme sets --fx-ctl lower (the Database branch uses 1.4rem)
+  height: max(1.5rem, var(--fx-ctl, 1.5rem));
   justify-content: center;
-  min-width: var(--fx-ctl, 1.5rem);
+  min-width: max(1.5rem, var(--fx-ctl, 1.5rem));
   opacity: 0.55;
   padding: 0 0.25rem;
   width: auto;
