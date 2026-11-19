@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'text-column-fits', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'viewport-equals-table-width', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'text-column-fits', 'text-not-clipped', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'viewport-equals-table-width', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -2411,6 +2411,75 @@ async function spreadsheetSoak(options = {}) {
         if (JSON.stringify(first.aligns) !== JSON.stringify(second.aligns)) dataLoss.push({ context, table, problem: `text alignment changed on the first click: ${first.aligns.join(',')} -> ${second.aligns.join(',')}` });
         if (Math.abs(first.height - second.height) > 4) dataLoss.push({ context, table, problem: `the data area is ${first.height} px high in the preview and ${second.height} px live` });
         note('preview-equals-live');
+      }
+    },
+    // Text is never cut off at the edges of its cell, however narrow the column or the frame: centred, bold, wrapped text with words wider
+    // than the column (long plasmid names: HygR_T2A_EndoTagIGF_CD8TM) must break inside the cell and the row must grow with it.
+    // The sheet has user-sized columns (saved widths that are kept), alternating fills and bold rows; it is read in the live grid and in the
+    // preview a reload builds, at the full frame and two narrower ones. Each cell: scrollWidth <= clientWidth, scrollHeight <= clientHeight.
+    async 'text-not-clipped'() {
+      const names = ['#8 (pLVX-TRE3G)', '#1319 (pLV-EF1α-HygR_T2A_EGFRn_CD8TM-linker-Cherry)', '#1319 (pLV-EF1α-HygR_T2A_EGFRn_CD8TM-linker-Cherry)',
+        '#1318 (pLV-EF1α-HygR_T2A_EndoTagIGF_CD8TM-linker-mCherry)', '#1318 (pLV-EF1α-HygR_T2A_EndoTagIGF_CD8TM-linker-mCherry)',
+        '#1317 (pLV-EF1α-HygR_T2A_EndoTagAS_CD8TM-linker-mCherry)', '#1317 (pLV-EF1α-HygR_T2A_EndoTagAS_CD8TM-linker-mCherry)',
+        '#1316 (pLV-EF1α-HygR_T2A_LaG17_CD8TM-linker-mCherry)', '#1316 (pLV-EF1α-HygR_T2A_LaG17_CD8TM-linker-mCherry)',
+        'HygR_T2A_EndoTagIGF_CD8TM_linker_mCherry_without_any_break_at_all_1234567890'];
+      const rows = [['Template (backbone)', 'Digest'], ...names.map((n, i) => [n, `d${i}`])];
+      const cellStyles = {};
+      rows.forEach((row, r) => row.forEach((_, c) => {
+        const bold = r === 0 || r === 4 || r === 5 || r === 9;
+        cellStyles[`${cellName(r, c)}`] = `text-align: center; vertical-align: middle; background-color: ${r % 2 ? '#f6f7f8' : '#ffffff'};${bold ? ' font-weight: bold;' : ''}`;
+      }));
+      for (const [label, colWidths] of [['column kept at 230 px', { 0: 230, 1: 90 }], ['very narrow column (140 px)', { 0: 140, 1: 90 }], ['column nobody sized', undefined]]) {
+        layoutDirty = true;
+        const before = new Set(api.snapshot(false).map(snap => snap.uid));
+        editor.focus();
+        editor.execCommand('elabftwInsertSpreadsheetData', false, { data: rows, displayData: rows, rows: rows.length, cols: 2, kind: 'standard', caption: '', cellStyles, ...(colWidths ? { colWidths } : {}) });
+        await sleep(1000);
+        const added = newTablesSince(before);
+        if (added.length !== 1) { fail(`text-not-clipped: ${added.length} spreadsheets were made for "${label}", expected 1`); continue; }
+        const uid = added[0].uid;
+        models.set(uid, { label: `text not clipped (${label})`, grid: rows.map(r => r.slice()), plate: false });
+        const table = `text not clipped (${label})`;
+        const check = (where, root, saved) => {
+          const ws = root && root.querySelector('.jss_worksheet');
+          if (!ws) { fail(`text-not-clipped: no grid (${table}, ${where})`); return null; }
+          const cells = [...ws.querySelectorAll('tbody td[data-x][data-y]')].filter(td => td.textContent.trim() !== '');
+          const wide = [], tall = [];
+          cells.forEach(td => {
+            const parts = [td, ...td.querySelectorAll(':scope > .jss-cell-clip')];
+            if (parts.some(el => el.scrollWidth > el.clientWidth + 1)) wide.push(`${cellName(+td.dataset.y, +td.dataset.x)}(${td.scrollWidth}>${td.clientWidth})`);
+            if (parts.some(el => el.scrollHeight > el.clientHeight + 1)) tall.push(`${cellName(+td.dataset.y, +td.dataset.x)}(${td.scrollHeight}>${td.clientHeight})`);
+          });
+          const cols = [...ws.querySelectorAll('thead td[data-x]')].map(td => Math.round(td.getBoundingClientRect().width));
+          const aligns = [...new Set(cells.map(td => getComputedStyle(td).textAlign))];
+          if (!aligns.includes('center')) dataLoss.push({ context, table, problem: `${where}: the test sheet is not centred (${aligns.join(',')}), so it does not test centred text` });
+          if (wide.length) dataLoss.push({ context, table, problem: `${where}: text is cut off at the sides of ${wide.length} cells: ${wide.slice(0, 6).join(' ')} (columns ${cols.join('/')} px)` });
+          if (tall.length) dataLoss.push({ context, table, problem: `${where}: text is cut off at the bottom of ${tall.length} cells: ${tall.slice(0, 6).join(' ')}` });
+          if (saved && cols[0] < saved[0] - 2) dataLoss.push({ context, table, problem: `${where}: column A is ${cols[0]} px, the saved width is ${saved[0]}px` });
+          return cols;
+        };
+        const container = editor.getContainer();
+        const original = container.style.width;
+        let reference = null;
+        try {
+          for (const frame of [0, 700, 430]) {
+            container.style.width = frame ? `${frame}px` : original;
+            window.dispatchEvent(new Event('resize'));
+            await sleep(500);
+            const root = await live(uid);
+            await sleep(400);
+            const cols = check(`live, frame ${frame || 'full'}`, root, colWidths && [colWidths[0], colWidths[1]]);
+            // the same column keeps one width whatever the frame is (frames scroll, they never squeeze the columns)
+            if (cols && reference && Math.abs(cols[0] - reference[0]) > 2) dataLoss.push({ context, table, problem: `live, frame ${frame || 'full'}: column A is ${cols[0]} px, at the full frame it was ${reference[0]} px` });
+            if (cols && !reference) reference = cols;
+            const previewCols = await withPreview(uid, host => check(`preview, frame ${frame || 'full'}`, host, colWidths && [colWidths[0], colWidths[1]]));
+            if (cols && previewCols && Math.abs(cols[0] - previewCols[0]) > 2) dataLoss.push({ context, table, problem: `frame ${frame || 'full'}: column A is ${cols[0]} px live and ${previewCols[0]} px in the preview` });
+          }
+        } finally {
+          container.style.width = original;
+          window.dispatchEvent(new Event('resize'));
+        }
+        note('text-not-clipped');
       }
     },
     // Print and the PDF export are built from the stored table, not from the live grid: its column widths, one coordinate cell per row
