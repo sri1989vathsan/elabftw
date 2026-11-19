@@ -11750,40 +11750,83 @@ const PRINT_MIN_PORTRAIT_SCALE = 0.7;
 /** True for a cell with no text and no fill of its own (a near-white tint such as a zebra stripe is not a fill). */
 function isEmptyPrintCell(cell: HTMLElement): boolean {
   if ((cell.textContent ?? '').trim() !== '') return false;
-  const match = /rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)(?:[ ,/]+([\d.]+))?/.exec(getComputedStyle(cell).backgroundColor);
-  if (!match) return true;
-  if (match[4] !== undefined && Number(match[4]) === 0) return true;
-  return Number(match[1]) >= 240 && Number(match[2]) >= 240 && Number(match[3]) >= 240;
+  const fill = /background(?:-color)?\s*:\s*([^;]+)/i.exec(cell.getAttribute('style') ?? '')?.[1]?.trim().toLowerCase() ?? '';
+  if (fill === '' || fill === 'transparent' || fill === 'none' || fill === 'white') return true;
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(fill);
+  if (hex) {
+    const full = hex[1].length === 3 ? hex[1].split('').map(ch => ch + ch).join('') : hex[1];
+    return [0, 2, 4].every(i => Number.parseInt(full.slice(i, i + 2), 16) >= 240);
+  }
+  const rgb = /^rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)/.exec(fill);
+  return rgb ? [rgb[1], rgb[2], rgb[3]].every(v => Number(v) >= 240) : false;
 }
 
-/**
- * Hides the empty filler columns on the right and empty rows at the bottom of a live grid (a row or column inside the data range stays).
- * Returns the width of the columns that stay and a function that shows everything again.
- */
-function trimEmptyForPrint(host: HTMLElement): { width: number; restore: () => void } | null {
-  const worksheet = host.querySelector<HTMLElement>('.jss_worksheet');
-  if (!worksheet) return null;
-  const hidden: HTMLElement[] = [];
-  const hide = (el: Element | null): void => { if (el instanceof HTMLElement) { el.style.setProperty('display', 'none', 'important'); hidden.push(el); } };
-  const rows = Array.from(worksheet.querySelectorAll<HTMLTableRowElement>(':scope > tbody > tr'));
-  const cells = rows.map(row => Array.from(row.querySelectorAll<HTMLElement>(':scope > td[data-x]')));
-  const colCount = Math.max(0, ...cells.map(row => row.length));
+/** Removes the empty filler columns on the right and the empty rows at the bottom of a static table (a gap inside the data stays). */
+function trimEmptyStaticTable(table: HTMLTableElement): void {
+  if (table.querySelector('td[colspan], td[rowspan]')) return;
+  const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>('tbody > tr'));
+  const dataCells = (row: HTMLElement): HTMLElement[] => Array.from(row.children).filter((c): c is HTMLElement => c instanceof HTMLElement && !c.classList.contains('spreadsheet-coordinate'));
+  const cells = rows.map(dataCells);
   let lastRow = -1;
   let lastCol = -1;
   cells.forEach((row, y) => row.forEach((cell, x) => {
     if (!isEmptyPrintCell(cell)) { lastRow = Math.max(lastRow, y); lastCol = Math.max(lastCol, x); }
   }));
-  if (lastRow < 0) return null;
-  for (let y = lastRow + 1; y < rows.length; y++) hide(rows[y]);
-  const cols = Array.from(worksheet.querySelectorAll<HTMLElement>(':scope > colgroup > col'));
-  // the first <col> belongs to the row numbers
-  for (let x = lastCol + 1; x < colCount; x++) {
-    hide(cols[x + 1] ?? null);
-    hide(worksheet.querySelector(`thead td[data-x="${x}"]`));
-    cells.forEach(row => hide(row[x] ?? null));
+  if (lastRow < 0) return;
+  rows.slice(lastRow + 1).forEach(row => row.remove());
+  const gutter = table.querySelector('tbody tr > .spreadsheet-coordinate') ? 1 : 0;
+  const drop = (el: Element | undefined): void => el?.remove();
+  cells.slice(0, lastRow + 1).forEach(row => row.slice(lastCol + 1).forEach(drop));
+  const head = table.querySelector('thead tr');
+  if (head) Array.from(head.children).slice(lastCol + 1 + gutter).forEach(drop);
+  Array.from(table.querySelectorAll(':scope > colgroup > col')).slice(lastCol + 1 + gutter).forEach(drop);
+}
+
+/** The width of a static table: its <col> widths (the row-number column included), else its own width. */
+function staticTableWidth(table: HTMLTableElement): number {
+  const sum = Array.from(table.querySelectorAll<HTMLTableColElement>(':scope > colgroup > col'))
+    .reduce((total, col) => total + (Number.parseFloat(col.style.width) || Number.parseFloat(col.getAttribute('width') ?? '') || 0), 0);
+  return sum > 0 ? sum : Number.parseFloat(table.style.width) || table.offsetWidth;
+}
+
+/** The grid of a sheet as a plain static table made from its data: a mounted grid, or a table that has not been mounted yet. */
+function staticTableForPrint(el: HTMLElement): HTMLTableElement | null {
+  let data: SpreadsheetData | undefined;
+  if (el instanceof HTMLTableElement) {
+    if (!el.dataset.spreadsheet || el.dataset.spreadsheetStyle === 'well-plate') return null;
+    data = extractFromTable(el);
+  } else {
+    data = spreadsheetHostData.get(el);
+    // a well plate shown as the compact plate prints as it is
+    if (!data || (data.kind === 'well-plate' && data.plateView !== 'sheet')) return null;
+    const sheetContainer = el.querySelector<HTMLDivElement>('.elabftw-spreadsheet-readonly-grid');
+    const liveData = sheetContainer ? getMountedWorksheet(sheetContainer)?.getData?.() : undefined;
+    if (Array.isArray(liveData)) data = { ...data, data: liveData, displayData: liveData };
   }
-  const width = cols.reduce((sum, col) => sum + (hidden.includes(col) ? 0 : (Number.parseFloat(col.getAttribute('width') ?? col.style.width) || 0)), 0);
-  return { width, restore: () => hidden.forEach(el => el.style.removeProperty('display')) };
+  const holder = document.createElement('div');
+  holder.innerHTML = spreadsheetToHTML(data, data.displayData ?? data.data);
+  const table = holder.querySelector<HTMLTableElement>('table.elabftw-spreadsheet');
+  if (!table) return null;
+  table.removeAttribute('data-spreadsheet');
+  trimEmptyStaticTable(table);
+  // the same look as the PDF: grid lines, grey coordinate cells, rows as high as their text
+  table.style.maxWidth = 'none';
+  table.style.tableLayout = 'fixed';
+  table.style.borderCollapse = 'collapse';
+  table.style.margin = '0';
+  table.style.width = `${staticTableWidth(table)}px`;
+  table.querySelectorAll<HTMLElement>('tr').forEach(row => { row.style.height = ''; row.style.breakInside = 'avoid'; });
+  table.querySelectorAll<HTMLElement>('th, td').forEach(cell => {
+    cell.style.border = '1px solid #c8c8c8';
+    cell.style.padding = '2px 4px';
+    cell.style.height = '';
+    cell.style.overflow = 'hidden';
+    if (cell.classList.contains('spreadsheet-coordinate')) {
+      cell.style.textAlign = 'center';
+      if (!/background/i.test(cell.getAttribute('style') ?? '')) cell.style.backgroundColor = '#f3f3f3';
+    }
+  });
+  return table;
 }
 
 /** Actual-size mode: the table as blocks of columns that each fit the page, each with the row numbers and the header row. */
@@ -11853,38 +11896,35 @@ if (typeof window !== 'undefined') {
   const namedPages = (): boolean => /Chrome\//.test(navigator.userAgent) && !/Firefox\//.test(navigator.userAgent);
   window.addEventListener('beforeprint', () => {
     const mode = document.body.dataset.sheetsMode ?? getSheetsMode();
-    document.querySelectorAll<HTMLElement>('.elabftw-spreadsheet-readonly-view').forEach(host => {
-      // the copies made for printing hold static tables, already scaled
-      if (host.closest('#tocPrintSelectionDocument')) return;
-      const trimmed = trimEmptyForPrint(host);
-      if (trimmed) undo.push(trimmed.restore);
-      const saved = Number.parseFloat(host.dataset.viewModeWidth ?? '') || host.offsetWidth;
-      const natural = trimmed && trimmed.width > 0 ? trimmed.width : saved;
-      if (natural <= PRINT_CONTENT_WIDTH) return;
-      if (mode === 'split') {
-        const extracted = spreadsheetHostData.get(host);
-        const html = extracted ? spreadsheetToHTML(extracted, extracted.displayData ?? extracted.data) : '';
-        const holder = document.createElement('div');
-        holder.innerHTML = html;
-        const table = holder.querySelector<HTMLTableElement>('table.elabftw-spreadsheet');
-        const blocks = table ? splitTableForPrint(table, PRINT_CONTENT_WIDTH) : null;
-        if (blocks) {
-          host.style.setProperty('display', 'none', 'important');
-          host.after(blocks);
-          undo.push(() => { blocks.remove(); host.style.removeProperty('display'); });
-          return;
-        }
-      }
+    const scope = document.getElementById('body_view') ?? document.body;
+    // every sheet of the text, mounted or not (the ones below the fold are still raw tables), but not the copies made for Print selection
+    const sheets = Array.from(scope.querySelectorAll<HTMLElement>('.elabftw-spreadsheet-readonly-view, table.elabftw-spreadsheet[data-spreadsheet]'))
+      .filter(el => !el.closest('#tocPrintSelectionDocument') && !el.parentElement?.closest('.elabftw-spreadsheet-readonly-view'));
+    sheets.forEach(el => {
+      const table = staticTableForPrint(el);
+      if (!table) return;
+      const natural = staticTableWidth(table);
       let width = PRINT_CONTENT_WIDTH;
-      if (mode === 'landscape' && namedPages() && PRINT_CONTENT_WIDTH / natural < PRINT_MIN_PORTRAIT_SCALE) {
-        width = PRINT_LANDSCAPE_WIDTH;
-        host.classList.add('print-wide-sheet');
-        undo.push(() => host.classList.remove('print-wide-sheet'));
+      const copy = document.createElement('div');
+      copy.className = 'print-sheet-copy';
+      if (mode === 'split' && natural > PRINT_CONTENT_WIDTH) {
+        const blocks = splitTableForPrint(table, PRINT_CONTENT_WIDTH);
+        if (blocks) copy.append(blocks);
+        else copy.append(table);
+      } else {
+        if (mode === 'landscape' && namedPages() && natural > PRINT_CONTENT_WIDTH && PRINT_CONTENT_WIDTH / natural < PRINT_MIN_PORTRAIT_SCALE) {
+          width = PRINT_LANDSCAPE_WIDTH;
+          copy.classList.add('print-wide-sheet');
+        }
+        // zoom scales text, borders and row heights together and shrinks the layout width with it
+        if (natural > width) copy.style.setProperty('zoom', String(Math.floor(width / natural * 1000) / 1000));
+        copy.append(table);
       }
-      if (natural > width) host.style.setProperty('zoom', String(Math.floor(width / natural * 1000) / 1000));
-      else host.style.removeProperty('zoom');
-      host.style.setProperty('width', `${natural}px`);
-      undo.push(() => { host.style.removeProperty('zoom'); host.style.removeProperty('width'); });
+      // the original stays in the page, hidden, and comes back after printing
+      const hiddenBefore = el.style.getPropertyValue('display');
+      el.style.setProperty('display', 'none', 'important');
+      el.after(copy);
+      undo.push(() => { copy.remove(); if (hiddenBefore) el.style.setProperty('display', hiddenBefore); else el.style.removeProperty('display'); });
     });
   });
   window.addEventListener('afterprint', () => {
