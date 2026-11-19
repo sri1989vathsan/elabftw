@@ -35,7 +35,7 @@ Firefox in one paste: `tests/manual/firefox-soak.js` (it contains the soak itsel
 | `seed` | start of the random choices (the same seed repeats the same run) | 1 |
 | `sessions` | how many times the whole set of scenarios is repeated | 2 |
 | `randomRounds` | steps in the `mixed` scenario | 30 |
-| `scenarios` | names of the scenarios to run (a list) | all 27 |
+| `scenarios` | names of the scenarios to run (a list) | all (the default list at the top of the script) |
 | `settleMs` | wait after a step before reading | 900 |
 | `quick` | shorter waits, at most 10 random rounds | off |
 | `keepTables` | do not remove the scratch tables at the end | off |
@@ -295,6 +295,10 @@ B = both Firefox and Chromium; C = Chromium only (needs the real clipboard).
 | `cut-undo` | Ctrl+X removes from grid and saved table, one Ctrl+Z brings it back, redo cuts again | C |
 | `padding-fit` | text keeps 8 px from the cell edges; a long value up to the 360 px cap is not clipped | B |
 | `text-column-fits` | a sheet of 3 long texts made by typing, external HTML paste, plain tab-separated paste and the insert command: text is left-aligned, the column is fitted to the text (up to the 360 px cap; a column still at the default 100 px counts as unsized, typing into it widens it) | B (pastes by event) |
+| `text-not-clipped` | text is never cut off at the edges of a cell: a 10-row sheet of long plasmid names (centred, bold rows, alternating fills, words wider than the column such as `HygR_T2A_EndoTagIGF_CD8TM`, one 76-character word without a break) with a saved column of 230 px, one of 140 px and one nobody sized; read in the live grid and in the preview at the full frame and at 700 and 430 px. Per cell `scrollWidth <= clientWidth` and `scrollHeight <= clientHeight` (also of the `.jss-cell-clip` wrapper); a saved width is kept; column A has the same width at every frame and in the preview as live | B |
+| `paste-keeps-formatting` | a range copied inside a sheet (header with fill, bold, small grey text; fills, colours, right alignment; a bold italic total row with a top border) keeps its look when pasted into the same sheet and into a second sheet, with the clipboard HTML and with the text only (what the grid's Paste menu entry gives), and after a cut: font size, weight, style, colour, alignment, fill and borders of all 12 cells equal the source's (the target's own old fill/border/alignment are replaced); the stored table has the fill; one undo brings back the target's old look and values, redo applies the paste again | B (synthetic clipboard events; real Ctrl+C / Ctrl+V keys not pressed) |
+| `cell-alignment-consistent` | the "Backbone" sheet (long plasmid names, 6 rows, a centred header) in a left column of 150, 200 (with set row heights) and 330 px and a centred and a right-aligned one of 165 px, read live, with the column selected, and in the preview: one alignment for all rows (as asked), one vertical alignment, left text starts at the same distance from the border in every row (one-line and wrapped alike), right text ends at the same distance, no text closer than the padding to the border, centred text vertically centred, preview alignment equals live, and selecting the column moves no text | B |
+| `alignment-preserved` | a left, a centred and a right-aligned column with long unbreakable text (set row heights): after mounting, a click, typing in a centred and a right-aligned cell, undo, redo, a column resize, Add rows, a save, the popup (cancel and Update) and the preview, every cell still has its alignment, live and in the stored table (before the wrap fix a centred or right-aligned cell with a word wider than its column came out left-aligned: `applyCellClipHeights` left-aligned just those cells to keep their start visible) | B |
 | `preview-equals-live` | the preview a reload would build (`elabftwSpreadsheetDiagnostics.buildPreview(uid)`, from the stored table) equals the live grid: column widths, row heights, alignment, data-area height; for sheets made by external HTML paste, plain-text paste, the insert command and typing | B |
 | `no-stray-column-row` | pasted 3x1 and 3x2 sheets stay 3x1 / 3x2: no column of 1,2,3, no empty row nobody added | B |
 | `toast-inside-viewport` | the app's own toasts and tooltips stay in the window with a margin and do not cover the column letters (the "Last sync was successful" box seen in a screenshot is the Polybox client of the computer, not this page) | B |
@@ -316,6 +320,8 @@ B = both Firefox and Chromium; C = Chromium only (needs the real clipboard).
 
 ### 11.3 How to run, more precisely
 
+- The clipping check alone: `spreadsheetSoak({ seed: 1, sessions: 1, scenarios: ['text-not-clipped'] })` (about one minute, a scratch experiment in edit mode).
+
 - One or a few scenarios: `spreadsheetSoak({ seed: 5, sessions: 1, scenarios: ['formulas-and-structure', 'popup-wide-scroll'] })`.
 - A long run without `await`: read `window.spreadsheetSoakProgress` while it runs and `window.spreadsheetSoakReport` when it is done. In the Browser pane a hidden
   page runs timers slowly: poll in short loops (under about 40 s per call).
@@ -328,6 +334,8 @@ B = both Firefox and Chromium; C = Chromium only (needs the real clipboard).
 - A scripted right-click at the top of the screen lands under the sticky bar ("no menu appeared", about 1 per run).
 - find-in-grid used to report 0 or 2 current matches because earlier runs left the same word in other tables; the word is unique now.
 - "a spreadsheet sticks out of the editor sideways" in the editor-size check depends on the content of the scratch page.
+- `paste-keeps-formatting` sends the copy, cut and paste events itself with a plain object as `clipboardData`, so it also runs in headless Firefox (unlike the scenarios that need the real clipboard). Run it alone: `spreadsheetSoak({ seed: 1, sessions: 1, scenarios: ['paste-keeps-formatting'] })`; in Chromium over the DevTools protocol with `scratchpad/cdp_soak.py <name> 1 <experiment> <port> paste-keeps-formatting`. It looks at the cells with another cell selected (the selected cell wears the selection border).
+- `text-not-clipped` sets the frame by changing the width of the editor container (`editor.getContainer().style.width`) and firing `resize`; it is the soak's stand-in for a narrower window, a side panel or the view page, so it proves that the column widths do not depend on the frame, not the view page itself (that is `view_checks.py`). Before the fix (cells without `overflow-wrap`) it reported 18 findings on the three sheets, 6 per frame/preview combination; with it, none. It does not need the clipboard, so it runs in headless Firefox and in Chromium.
 
 ### 11.5 Results of the last full runs (headless Firefox, 3 parallel runs, seeds 11 / 22 / 33, about 17-18 minutes each; fresh scratch experiment each)
 
