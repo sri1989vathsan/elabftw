@@ -2834,6 +2834,13 @@ body:has(.side-panel:not([hidden])) .elabftw-back-button {
   > .panel-refresh {
     right: calc(var(--panel-corner-right) + var(--panel-corner-size) + var(--panel-corner-gap));
   }
+
+  // the content starts under that row of buttons in every panel
+  > .p-3,
+  > div > .p-3,
+  #experimentsFoldersSidebar {
+    padding-top: calc(var(--panel-corner-top) + var(--panel-corner-size) + 0.25rem) !important;
+  }
 }
 
 .side-panel {
