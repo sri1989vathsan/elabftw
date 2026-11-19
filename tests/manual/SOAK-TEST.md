@@ -369,3 +369,14 @@ Not part of the default soak list (they need the view page, the print path or th
 | PDF end to end | `curl` with a login cookie: `/api/v2/experiments/<id>?format=pdf[&sections=3,4]`, `sips -s format png x.pdf` | a real PDF; page 1 compared by eye with the live grid (images in the report) |
 
 Selection protocol: the Contents panel publishes `document.body.dataset.tocSections` (positions of the ticked headings, 1 based, document order); the PDF dialog and the PDF button of the selection bar send it as `sections=`; `PdfBodyPrep::selectSections` keeps those headings, their text and the headings that hold them. Plain HTML tables of the rich editor (not spreadsheets) print as normal tables and are not changed.
+
+### 12.1 Other checks added on 19 November 2026 (not spreadsheet soak)
+
+| Check | Script | Result (orders build 49) |
+|---|---|---|
+| `reminder-chip-no-overlap` | `reminder-chip-check.js` (`reminderChipCheck()`, two steps: reload between) | 24 checks: chip is a 1.5rem amber pill in the top right under the navbar; opens, collapses on click outside / Esc / scroll / 8 s without the pointer inside (paused while inside); boxes vs navbar, admin tab bar, edit toolbar, notices, scroll buttons |
+| `toc-select-bar-no-overlap` | `toc-select-bar-check.js` | 20 checks with 1 and 5 sections: Print, PDF, Copy and clear visible, not touching, no clipped text, nothing floating over the bar, Back pill clear of the Contents, Folders and Search panels |
+| `sidebar-x-consistency` | `sidebar-x-consistency-check.js` | 29 checks: panel edge and width, scroll bar room, header x, Close and Refresh (right edge, size, height, row, icon, tooltip) identical in Folders, Search, To-do, Calendar and Contents (tolerance 1 px) |
+| `print-whole-entry`, `pdf-whole-entry` | `print-check.js` | nothing ticked: Print and PDF in the panel header take the whole entry; Export menu has Print |
+
+Final Firefox soak on build 43 (seeds 11 / 22 / 33): page errors 0 / 0 / 0, editor size problems 0 / 0 / 0, structure data loss 0 / 0 / 0, menu problems 0 / 1 / 2 (scripted right-click), clipboard artefacts as before (2 data-loss lines of copy-table-format, 15-16 "paste made 0 spreadsheets" style failures) plus the known "popup align center did not show on the cell". A first run on build 41 found a real regression of the new header height (preview 8 px taller than the grid: `preview-equals-live`, page height jumped while scrolling); fixed in build 43 (preview header follows the data rows) and its numbers are in this table. The full soak is to be repeated once on the merged branch.
