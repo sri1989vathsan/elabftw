@@ -7,7 +7,7 @@ import { getEntityTypeFromPage } from './misc';
 import { askConfirm } from './confirm-dialog';
 import { capColourName, capDot } from './cap-colours';
 
-type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null; position?: number | null; kind?: string | null; temperature?: number | null; capacity?: number | null; child_capacity?: number | null; comment?: string | null; owner_id?: number | null; owner_name?: string | null; is_mine?: number | boolean | string | null };
+type Unit = { id: number; name: string; full_path: string; parent_id: number | null; children_count: number; box_rows: number | null; box_cols: number | null; position?: number | null; kind?: string | null; temperature?: number | null; moor_capacity?: number | null; child_capacity?: number | null; comment?: string | null; owner_id?: number | null; owner_name?: string | null; is_mine?: number | boolean | string | null };
 type StorageLocation = { storage_id: number; container_id: number; is_primary?: boolean; comment?: string | null; position: string | null; path: string; qty_stored: number; qty_unit: string; stored_at?: string | null; cap_colour?: string | null; expires_at?: string | null };
 type Row = {
   id: number;
@@ -319,7 +319,7 @@ function kindTag(unit: Unit): HTMLElement | null {
 // how many places fit in a place: its own number, else what its fridge or freezer says about each rack
 const capacityOf = (node: Node, byId: Map<number, Node>): number => {
   const parent = node.unit.parent_id === null ? undefined : byId.get(node.unit.parent_id);
-  return node.unit.capacity ?? parent?.unit.child_capacity ?? 0;
+  return node.unit.moor_capacity ?? parent?.unit.child_capacity ?? 0;
 };
 
 // racks and boxes are drawn inside the fridge or freezer they are in, not in the tree of locations
@@ -1233,7 +1233,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
           parent_id: parent.unit.id,
           kind: newKind,
           ...(Number(positionHere.value) > 0 ? { position: Number(positionHere.value) } : {}),
-          ...(newKind === 'rack' && Number(holdsHere.value) > 0 ? { capacity: Number(holdsHere.value) } : {}),
+          ...(newKind === 'rack' && Number(holdsHere.value) > 0 ? { moor_capacity: Number(holdsHere.value) } : {}),
         }).then(async id => {
           if (newKind === 'box') {
             await ApiC.patch(`storage_units/${id}`, { box_rows: Number(rowsHere.value), box_cols: Number(colsHere.value) });
@@ -1408,7 +1408,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
         name.focus();
         return;
       }
-      void ApiC.post2location('storage_units', { name: unitName, kind: kind.value, ...(temperature.value !== '' && !temperature.hidden ? { temperature: Number(temperature.value) } : {}), ...(Number(holds.value) > 0 && !holds.hidden ? { capacity: Number(holds.value) } : {}), ...(node === null ? (scope === 'mine' ? { personal: true } : {}) : { parent_id: node.unit.id }), ...(Number(position.value) > 0 ? { position: Number(position.value) } : {}) }).then(async id => {
+      void ApiC.post2location('storage_units', { name: unitName, kind: kind.value, ...(temperature.value !== '' && !temperature.hidden ? { temperature: Number(temperature.value) } : {}), ...(Number(holds.value) > 0 && !holds.hidden ? { moor_capacity: Number(holds.value) } : {}), ...(node === null ? (scope === 'mine' ? { personal: true } : {}) : { parent_id: node.unit.id }), ...(Number(position.value) > 0 ? { position: Number(position.value) } : {}) }).then(async id => {
         if (behaves(kind.value) === 'box') {
           await ApiC.patch(`storage_units/${id}`, { box_rows: Number(rows.value), box_cols: Number(cols.value) });
         }
@@ -1465,7 +1465,7 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
     holdsNow.placeholder = 'holds';
     holdsNow.title = 'How many racks (in a fridge or a freezer) or boxes (in a rack) fit in it';
     holdsNow.setAttribute('aria-label', 'How many fit');
-    holdsNow.value = node.unit.capacity ? String(node.unit.capacity) : '';
+    holdsNow.value = node.unit.moor_capacity ? String(node.unit.moor_capacity) : '';
     // said once on the fridge or freezer: each of its racks holds this many boxes (a rack with a number of its own keeps it)
     const eachRack = el('input', 'form-control form-control-sm mr-1');
     eachRack.type = 'number';
@@ -1504,8 +1504,8 @@ export function mountStorageTree(rootElement: HTMLElement | null, order: string,
       if (!eachRack.hidden && eachRack.value !== (node.unit.child_capacity ? String(node.unit.child_capacity) : '')) {
         body.child_capacity = eachRack.value === '' ? null : Number(eachRack.value);
       }
-      if (!holdsNow.hidden && holdsNow.value !== (node.unit.capacity ? String(node.unit.capacity) : '')) {
-        body.capacity = holdsNow.value === '' ? null : Number(holdsNow.value);
+      if (!holdsNow.hidden && holdsNow.value !== (node.unit.moor_capacity ? String(node.unit.moor_capacity) : '')) {
+        body.moor_capacity = holdsNow.value === '' ? null : Number(holdsNow.value);
       }
       if (note.value.trim() !== (node.unit.comment ?? '')) {
         body.comment = note.value.trim();

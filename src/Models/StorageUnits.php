@@ -289,7 +289,7 @@ final class StorageUnits extends AbstractRest
         $hasBox = array_key_exists('box_rows', $params) || array_key_exists('box_cols', $params);
         $hasPosition = array_key_exists('position', $params);
         $hasKind = array_key_exists('kind', $params) || array_key_exists('temperature', $params);
-        $hasCapacity = array_key_exists('capacity', $params) || array_key_exists('child_capacity', $params);
+        $hasCapacity = array_key_exists('moor_capacity', $params) || array_key_exists('child_capacity', $params);
         $hasNote = array_key_exists('comment', $params);
         if (!$hasName && !$hasParent && !$hasBox && !$hasPosition && !$hasKind && !$hasCapacity && !$hasNote) {
             throw new ImproperActionException('No valid update target provided.');
@@ -307,8 +307,8 @@ final class StorageUnits extends AbstractRest
             $this->setNote($params['comment']);
         }
         if ($hasCapacity) {
-            if (array_key_exists('capacity', $params)) {
-                $this->setCapacity($params['capacity']);
+            if (array_key_exists('moor_capacity', $params)) {
+                $this->setMoorCapacity($params['moor_capacity']);
             }
             if (array_key_exists('child_capacity', $params)) {
                 $this->setChildCapacity($params['child_capacity']);
@@ -427,7 +427,7 @@ final class StorageUnits extends AbstractRest
             Filter::intOrNull($reqBody['position'] ?? 0),
             isset($reqBody['kind']) ? (string) $reqBody['kind'] : null,
             $reqBody['temperature'] ?? null,
-            $reqBody['capacity'] ?? null,
+            $reqBody['moor_capacity'] ?? null,
             $personal,
         );
     }
@@ -443,13 +443,13 @@ final class StorageUnits extends AbstractRest
     }
 
     /** how many places fit in this one: a number, or nothing; it cannot be lower than the places it holds now */
-    public function setCapacity(mixed $capacity): void
+    public function setMoorCapacity(mixed $capacity): void
     {
         $value = filter_var($capacity, FILTER_VALIDATE_INT, array('options' => array('min_range' => 1, 'max_range' => 65535)));
         if ($value !== false && $this->id !== null && $this->countChildren($this->id) > $value) {
             throw new ImproperActionException(sprintf(_('It holds %d places already: choose a number that is not lower.'), $this->countChildren($this->id)));
         }
-        $req = $this->Db->prepare('UPDATE storage_units SET capacity = :capacity WHERE id = :id');
+        $req = $this->Db->prepare('UPDATE storage_units SET moor_capacity = :capacity WHERE id = :id');
         $req->bindValue(':capacity', $value === false ? null : $value, $value === false ? PDO::PARAM_NULL : PDO::PARAM_INT);
         $req->bindParam(':id', $this->id, PDO::PARAM_INT);
         $this->Db->execute($req);
@@ -490,7 +490,7 @@ final class StorageUnits extends AbstractRest
             return;
         }
         // its own capacity, else what its parent says about each of its places
-        $req = $this->Db->prepare('SELECT COALESCE(s.capacity, p.child_capacity) FROM storage_units AS s LEFT JOIN storage_units AS p ON p.id = s.parent_id WHERE s.id = :id');
+        $req = $this->Db->prepare('SELECT COALESCE(s.moor_capacity, p.child_capacity) FROM storage_units AS s LEFT JOIN storage_units AS p ON p.id = s.parent_id WHERE s.id = :id');
         $req->bindParam(':id', $parentId, PDO::PARAM_INT);
         $this->Db->execute($req);
         $capacity = $req->fetchColumn();
@@ -562,7 +562,7 @@ final class StorageUnits extends AbstractRest
         $this->checkRoom($parentId);
         $room = filter_var($capacity, FILTER_VALIDATE_INT, array('options' => array('min_range' => 1, 'max_range' => 65535)));
         $degrees = filter_var($temperature, FILTER_VALIDATE_INT, array('options' => array('min_range' => -273, 'max_range' => 100)));
-        $sql = 'INSERT INTO storage_units(parent_id, name, position, kind, temperature, capacity, owner_id) VALUES(:parent_id, :name, :position, :kind, :temperature, :capacity, :owner)';
+        $sql = 'INSERT INTO storage_units(parent_id, name, position, kind, temperature, moor_capacity, owner_id) VALUES(:parent_id, :name, :position, :kind, :temperature, :capacity, :owner)';
         $req = $this->Db->prepare($sql);
         $req->bindParam(':parent_id', $parentId);
         $req->bindValue(':owner', $owner, $owner === null ? PDO::PARAM_NULL : PDO::PARAM_INT);
@@ -781,7 +781,7 @@ final class StorageUnits extends AbstractRest
                 position,
                 kind,
                 temperature,
-                capacity,
+                moor_capacity,
                 child_capacity,
                 comment,
                 owner_id,
@@ -806,7 +806,7 @@ final class StorageUnits extends AbstractRest
                 child.position,
                 child.kind,
                 child.temperature,
-                child.capacity,
+                child.moor_capacity,
                 child.child_capacity,
                 child.comment,
                 child.owner_id,
@@ -832,7 +832,7 @@ final class StorageUnits extends AbstractRest
             position,
             kind,
             temperature,
-            capacity,
+            moor_capacity,
             child_capacity,
             comment,
             owner_id,
