@@ -475,6 +475,54 @@ abstract class AbstractEntity extends AbstractRest
     }
 
     /**
+     * The ids that can make up the first page of readShow() for a plain "pinned first, then last modified" list
+     * (the dashboard): the entries pinned by the current user plus the most recently modified ones, each with the very same
+     * permission, filter and state conditions as readShow(). Adding "AND entity.id IN (...)" to the display params' filterSql
+     * and calling readShow() then returns exactly the same rows in the same order, but readShow() only has to build
+     * a handful of rows instead of every entry the user can read (GROUP BY entity.id plus four correlated sub-selects
+     * per row, linear in the size of the team: 290-420 ms at 8,000 entries).
+     * Why it is a superset of the first page: the page is the pinned entries (all of them, by modified_at) followed by the
+     * most recently modified unpinned ones; the first N unpinned ones are within the N most recently modified of all.
+     *
+     * @return list<int>
+     */
+    public function readFirstPageIdsLastchange(QueryParamsInterface $displayParams, int $limit): array
+    {
+        $canFilter = $this->getSqlBuilder()->getCanFilter(AccessType::Read->value);
+        $table = $this->entityType->value;
+        $common = sprintf(
+            'LEFT JOIN users2teams ON (users2teams.users_id = entity.userid AND users2teams.teams_id = %d)
+            WHERE 1=1 %s %s %s',
+            $this->Users->getTeam(),
+            $displayParams->getFilterSql(),
+            $canFilter,
+            $displayParams->getStatesSql('entity'),
+        );
+        $recentSql = sprintf(
+            'SELECT entity.id FROM %s AS entity %s ORDER BY entity.modified_at DESC, entity.id DESC LIMIT %d',
+            $table,
+            $common,
+            max(1, $limit),
+        );
+        $pinnedSql = sprintf(
+            'SELECT entity.id FROM pin_%1$s2users AS pin INNER JOIN %1$s AS entity ON entity.id = pin.entity_id %2$s AND pin.users_id = :userid',
+            $table,
+            $common,
+        );
+        $ids = array();
+        foreach (array($recentSql, $pinnedSql) as $sql) {
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':userid', $this->Users->userData['userid'], PDO::PARAM_INT);
+            $this->Db->execute($req);
+            foreach ($req->fetchAll(PDO::FETCH_COLUMN) as $id) {
+                $ids[(int) $id] = (int) $id;
+            }
+        }
+
+        return array_values($ids);
+    }
+
+    /**
      * Read the tags of the entity
      * $items the results of all items from readShow()
      */
