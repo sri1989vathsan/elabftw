@@ -10,7 +10,7 @@ import { Action, EntityType, Model, Target, FileType } from './interfaces';
 import type { CheckableItem, Entity } from './interfaces';
 import { DateTime } from 'luxon';
 import type { MathJaxObject } from '@mathjax/src/js/components/startup.js';
-import tinymce from 'tinymce/tinymce';
+import { tinymce } from './tinymce-global';
 import { notify } from './notify';
 import TableSorting from './TableSorting.class';
 declare const MathJax: MathJaxObject;

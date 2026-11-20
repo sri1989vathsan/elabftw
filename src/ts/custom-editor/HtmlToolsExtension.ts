@@ -2,7 +2,7 @@
  * "HTML tools" toolbar button: a dropdown of the tools a sysadmin installed. Picking one opens it in the tool workspace
  * beside the page (HtmlToolsPanel), where its "-> eLabFTW" buttons insert into the main text at the cursor.
  */
-import { Editor } from 'tinymce/tinymce';
+import type { Editor } from 'tinymce/tinymce';
 import { ApiC } from '../api';
 
 interface InstalledTool {

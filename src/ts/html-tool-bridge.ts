@@ -20,12 +20,7 @@
  * @license AGPL-3.0
  */
 import { Notification } from './Notifications.class';
-import {
-  createWellPlateSpreadsheetData,
-  emptySpreadsheetData,
-  SpreadsheetData,
-  WELL_PLATE_PRESETS,
-} from './inline-spreadsheet';
+import type { SpreadsheetData } from './inline-spreadsheet';
 import { ApiC } from './api';
 import { entity } from './getEntity';
 import { escapeExtendedQuery, escapeHTML, reloadElements } from './misc';
@@ -43,7 +38,10 @@ const text = (value: unknown, max = 500): string => (typeof value === 'string' ?
 const wellName = (row: number, col: number): string => `${String.fromCharCode(65 + row)}${col + 1}`;
 
 /** A well plate from a message; null when the message is not usable. */
-export function plateFromMessage(message: Raw): SpreadsheetData | null {
+// The data builders live in the spreadsheet engine, which is loaded only where there is a sheet or an editor: the caller passes it in
+type SpreadsheetEngine = typeof import('./inline-spreadsheet');
+
+export function plateFromMessage(message: Raw, { createWellPlateSpreadsheetData, WELL_PLATE_PRESETS }: SpreadsheetEngine): SpreadsheetData | null {
   const size = Number(message.plateSize);
   if (!WELL_PLATE_PRESETS.some(preset => preset.wells === size) || !isRecord(message.wells)) return null;
   const plate = createWellPlateSpreadsheetData(size);
@@ -88,7 +86,7 @@ export function plateFromMessage(message: Raw): SpreadsheetData | null {
 }
 
 /** A data table from a message; null when the message is not usable. */
-export function tableFromMessage(message: Raw): SpreadsheetData | null {
+export function tableFromMessage(message: Raw, { emptySpreadsheetData }: SpreadsheetEngine): SpreadsheetData | null {
   if (!Array.isArray(message.columns) || !Array.isArray(message.rows)) return null;
   const columns = message.columns.map(column => text(column, 120)).slice(0, 100);
   const rows = message.rows.slice(0, 399).map(row => (Array.isArray(row) ? row.map(cell => text(cell, 2000)).slice(0, 100) : []));
@@ -147,18 +145,18 @@ async function searchItems(message: Raw): Promise<FoundItem[]> {
   }));
 }
 
-function insertIntoEditor(message: Raw): string | null {
+async function insertIntoEditor(message: Raw): Promise<string | null> {
   const editor = (window as unknown as { tinymce?: { activeEditor?: { mode?: { isReadOnly?: () => boolean }; execCommand: (name: string, ui: boolean, value?: unknown) => void; focus: () => void; undoManager: { transact: (fn: () => void) => void } } } }).tinymce?.activeEditor;
   if (!editor || editor.mode?.isReadOnly?.()) return 'Open the entry in edit mode to insert from a tool.';
   switch (message.type) {
   case 'insert-plate': {
-    const plate = plateFromMessage(message);
+    const plate = plateFromMessage(message, await import(/* webpackChunkName: 'inline-spreadsheet' */ './inline-spreadsheet'));
     if (!plate) return 'The tool sent a plate that cannot be inserted.';
     editor.undoManager.transact(() => editor.execCommand('elabftwInsertSpreadsheetData', false, plate));
     return null;
   }
   case 'insert-table': {
-    const sheet = tableFromMessage(message);
+    const sheet = tableFromMessage(message, await import(/* webpackChunkName: 'inline-spreadsheet' */ './inline-spreadsheet'));
     if (!sheet) return 'The tool sent a table that cannot be inserted.';
     editor.undoManager.transact(() => editor.execCommand('elabftwInsertSpreadsheetData', false, sheet));
     return null;
@@ -198,14 +196,16 @@ export function listenForHtmlToolMessages(getFrameWindow: () => Window | null | 
       return;
     }
     const notify = new Notification();
-    let problem: string | null;
-    try {
-      problem = insertIntoEditor(message);
-    } catch (error) {
-      console.error(error);
-      problem = 'Could not insert what the tool sent.';
-    }
-    if (problem) notify.error(problem);
-    else notify.success('Inserted into the main text');
+    void (async (): Promise<void> => {
+      let problem: string | null;
+      try {
+        problem = await insertIntoEditor(message);
+      } catch (error) {
+        console.error(error);
+        problem = 'Could not insert what the tool sent.';
+      }
+      if (problem) notify.error(problem);
+      else notify.success('Inserted into the main text');
+    })();
   });
 }

@@ -1,4 +1,4 @@
-import tinymce from 'tinymce/tinymce';
+import { tinymce } from './tinymce-global';
 import { ApiC } from './api';
 import { captureFocus, restoreFocus, trapTabFocus } from './a11y';
 import { confirmLeaveEditing } from './misc';

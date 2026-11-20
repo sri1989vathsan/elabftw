@@ -7,11 +7,10 @@
  */
 
 import $ from 'jquery';
-import tinymce from 'tinymce/tinymce';
 import { Api } from './Apiv2.class';
 import { on } from './handlers';
 import { notify } from './notify';
-import { getTinymceBaseConfig } from './tinymce';
+import { tinymce, loadTinymce } from './tinymce-global';
 import { htmlToMarkdown, markdownToHtml } from './Editor.class';
 import { initFolderDragDrop } from './folder-dragdrop';
 import { currentFlatFolderLevel, initFolderViews, syncFolderView } from './folder-views';
@@ -549,8 +548,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function initializeReadmeEditor(): Promise<void> {
     if (tinymce.get('folderReadmeEditor')) return;
+    const { tinymce: lib, getTinymceBaseConfig } = await loadTinymce();
+    if (lib.get('folderReadmeEditor')) return;
     const baseConfig = getTinymceBaseConfig('admin');
-    await tinymce.init({
+    await lib.init({
       ...baseConfig,
       selector: '#folderReadmeEditor',
       height: 360,

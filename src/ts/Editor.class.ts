@@ -6,8 +6,7 @@
  * @package elabftw
  */
 import $ from 'jquery';
-import tinymce from 'tinymce/tinymce';
-import { getTinymceBaseConfig } from './tinymce';
+import { tinymce, loadTinymce } from './tinymce-global';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import TurndownService from 'turndown';
@@ -118,7 +117,8 @@ class TinyEditor extends Editor implements EditorInterface {
     this.typeAsInt = 1;
   }
   init(page: string = 'edit'): void {
-    tinymce.init(getTinymceBaseConfig(page));
+    // TinyMCE and our editor extensions are their own chunk, loaded here (edit.ts brings the same chunk along with its own)
+    void loadTinymce().then(({ tinymce: lib, getTinymceBaseConfig }) => lib.init(getTinymceBaseConfig(page)));
   }
   getContent(): string {
     return tinymce.activeEditor.getContent();
