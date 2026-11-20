@@ -173,77 +173,10 @@ RUN cmake -S . -B build \
         --parallel "$(getconf _NPROCESSORS_ONLN)" \
     && strip -s build/bin/obabel
 
-#####################
-# PRIMER3 BUILDER   #
-#####################
-FROM alpine:3.23 AS primer3-builder
-
-# Version 2.6.1
-# https://github.com/primer3-org/primer3/releases/tag/v2.6.1
-ARG PRIMER3_REF=7f9f17d6012f404e83bbf0f931a4d06eb4af465b
-
-RUN apk add --no-cache \
-    build-base \
-    git
-
-WORKDIR /build/primer3
-
-RUN git init \
-    && git remote add origin https://github.com/primer3-org/primer3.git \
-    && git fetch --depth 1 origin "$PRIMER3_REF" \
-    && git checkout --detach FETCH_HEAD
-
-# the sources use old style declarations that the C23 default of the compiler refuses
-RUN make -C src CC="gcc -std=gnu17" -j"$(getconf _NPROCESSORS_ONLN)" primer3_core \
-    && strip -s src/primer3_core
-
-#####################
-# ALIGNERS BUILDER  #
-#####################
-# MAFFT and Clustal Omega, the two multiple alignment programs of the sequence editor (web/sequence-viewer/aligner-external.inc.php).
-# Alpine does not package them: they are built from the sources, which are checked against their sha256.
-FROM alpine:3.23 AS aligners-builder
-
-# https://mafft.cbrc.jp/alignment/software/source.html
-ARG MAFFT_VERSION=7.525
-ARG MAFFT_SHA256=edb34ae9b26d6b55328c18fa060ed741bca8cd599c2f4f8fad0e0871c8082265
-# Clustal Omega 1.2.4 needs argtable2; both tarballs come from the Debian pool, as clustal.org refuses automated downloads
-ARG CLUSTALO_SHA256=8683d2286d663a46412c12a0c789e755e7fd77088fb3bc0342bb71667f05a3ee
-ARG ARGTABLE2_SHA256=8f77e8a7ced5301af6e22f47302fdbc3b1ff41f2b83c43c77ae5ca041771ddbf
-
-RUN apk add --no-cache build-base automake curl
-
-WORKDIR /build
-
-RUN curl -fsSL -o mafft.tgz "https://mafft.cbrc.jp/alignment/software/mafft-${MAFFT_VERSION}-without-extensions-src.tgz" \
-    && curl -fsSL -o clustalo.tgz https://deb.debian.org/debian/pool/main/c/clustalo/clustalo_1.2.4.orig.tar.gz \
-    && curl -fsSL -o argtable2.tgz https://deb.debian.org/debian/pool/main/a/argtable2/argtable2_13.orig.tar.gz \
-    && echo "${MAFFT_SHA256}  mafft.tgz" | sha256sum -c - \
-    && echo "${CLUSTALO_SHA256}  clustalo.tgz" | sha256sum -c - \
-    && echo "${ARGTABLE2_SHA256}  argtable2.tgz" | sha256sum -c - \
-    && tar xzf mafft.tgz && tar xzf clustalo.tgz && tar xzf argtable2.tgz
-
-# the sources use old style declarations that the C23 default of the compiler refuses
-RUN make -C mafft-*/core PREFIX=/opt/mafft CC="gcc -std=gnu17" -j"$(getconf _NPROCESSORS_ONLN)" \
-    && make -C mafft-*/core PREFIX=/opt/mafft install
-
-# the configure scripts of 2012 do not know this platform: the current config.guess and config.sub replace theirs
-RUN for dir in argtable2-13 clustal-omega-1.2.4; do \
-        for f in $(find "$dir" -name config.sub -o -name config.guess); do cp /usr/share/automake-*/"$(basename "$f")" "$f"; done; \
-    done \
-    && build="$(gcc -dumpmachine)" \
-    && cd argtable2-13 \
-    && ./configure --build="$build" --prefix=/opt/argtable --disable-shared CC="gcc -std=gnu17 -include ctype.h -include stdlib.h -include string.h" \
-    && make -j"$(getconf _NPROCESSORS_ONLN)" && make install \
-    && cd ../clustal-omega-1.2.4 \
-    && ./configure --build="$build" --prefix=/opt/clustalo CC="gcc -std=gnu17" CXX="g++ -std=gnu++17" CPPFLAGS=-I/opt/argtable/include LDFLAGS=-L/opt/argtable/lib \
-    && make -j"$(getconf _NPROCESSORS_ONLN)" && make install \
-    && strip -s /opt/clustalo/bin/clustalo
-
-#############################
-# ELABFTW + NGINX + PHP-FPM #
-#############################
-FROM alpine:3.23
+#####################################################
+# BASE: nginx, php, node, s6 (nothing from the source) #
+#####################################################
+FROM alpine:3.23 AS elabftw-base
 
 # set build version with --build-arg ELABFTW_VERSION=X.Y.Z
 ARG ELABFTW_VERSION=dev
@@ -268,15 +201,6 @@ RUN mkdir /var/cache/nginx
 
 # OpenBabel
 COPY --from=openbabel-builder /build/openbabel/build/bin/obabel /usr/local/bin/obabel
-
-# MAFFT and Clustal Omega (the alignment programs of the sequence editor)
-COPY --from=aligners-builder /opt/mafft /opt/mafft
-COPY --from=aligners-builder /opt/clustalo/bin/clustalo /usr/local/bin/clustalo
-RUN ln -s /opt/mafft/bin/mafft /usr/local/bin/mafft
-
-# Primer3 (primer design on the server, GPL-2.0)
-COPY --from=primer3-builder /build/primer3/src/primer3_core /usr/local/bin/primer3_core
-COPY --from=primer3-builder /build/primer3/src/primer3_config /usr/local/share/primer3_config
 
 # install required packages
 # php8-bcmath is required to send emails via Exchange (NTLM authenticator)
@@ -369,23 +293,6 @@ RUN touch /etc/s6-overlay/s6-rc.d/user/contents.d/php
 # ELABFTW
 RUN mkdir /elabftw
 WORKDIR /elabftw
-# we only copy the strict necessary
-COPY ./bin /elabftw/bin
-# the Open Vector Editor files of the sequence viewer are not kept in git (web/sequence-viewer/vendor/ is ignored): fetched here, so a fresh clone builds with them.
-# Before the copy of ./web so that this step stays in the cache when the web files change.
-RUN sh /elabftw/bin/fetch-ove.sh
-COPY ./.babelrc /elabftw
-COPY ./builder.js /elabftw
-COPY ./composer.json /elabftw
-COPY ./composer.lock /elabftw
-COPY ./node-builder.js /elabftw
-COPY ./package.json /elabftw
-COPY ./src /elabftw/src
-COPY ./tsconfig.json /elabftw
-COPY ./var /elabftw/var
-COPY ./web /elabftw/web
-COPY ./yarn.lock /elabftw
-COPY ./.yarnrc.yml /elabftw
 
 # COMPOSER
 ENV COMPOSER_HOME=/run/composer
@@ -396,18 +303,6 @@ COPY --from=composer@sha256:5946476338742b200bb9ff88f8be56275ddae4b3949c72305cb0
 RUN mkdir -p /run/elabftw \
     && chmod 1777 /run/elabftw
 
-# this allows to skip the (long) build in dev mode where /elabftw will be bind-mounted anyway
-# pass it to build command with --build-arg BUILD_ALL=0
-ARG BUILD_ALL=1
-# Limit the Node.js heap used while compiling frontend assets. This can be
-# overridden at build time without carrying NODE_OPTIONS into the final image.
-ARG NODE_MAX_OLD_SPACE_SIZE=4096
-# enable this in CI to skip brotli minification
-ARG CI=0
-# brotli quality of the pre-compressed assets: 11 (default, smallest) for releases, 5-9 for throwaway test images
-# (measured on main.bundle.js, 6.99 MB: q11 15.7 s, q9 1.1 s and +11.6 % size, q6 0.3 s)
-ARG BROTLI_QUALITY=11
-# install php and js dependencies and build assets
 # avoid installing cypress
 ENV CYPRESS_INSTALL_BINARY=0
 # avoid download prompt
@@ -419,25 +314,27 @@ RUN mkdir -p "$TMPDIR" && chmod 1777 "$TMPDIR"
 ENV COREPACK_HOME=/run/elabftw/cache/node/corepack
 RUN mkdir -p $COREPACK_HOME
 
-
 # enable new yarn
 RUN corepack enable
-# some ini settings are set on the command line to override the restrictive production ones already set
-# IMPORTANT: the yarn/build step must be done before the composer/install step because a source file (advancedQuery) will be generated by yarn
-# so in order for composer to take it into account, it must exist before we call the install command of composer.
-# in CI we use -o flag for composer because we will add other classes afterwards (tests)
-RUN if [ "$BUILD_ALL" = "1" ]; then \
-        export NODE_OPTIONS="--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE}" BROTLI_QUALITY="${BROTLI_QUALITY}" \
-        && yarn install --immutable \
-        && if [ "$CI" = "1" ]; then \
-            yarn run buildall:ci \
-            && /usr/bin/php84 -d memory_limit=256M /usr/local/bin/composer install --prefer-dist --no-cache --no-progress -o; \
+
+##################################################################
+# PHP DEPENDENCIES: only rebuilt when composer.json/lock change   #
+##################################################################
+FROM elabftw-base AS php-vendor
+# BUILD_ALL=0 skips the builds (dev mode, where /elabftw is bind-mounted anyway): pass --build-arg BUILD_ALL=0
+ARG BUILD_ALL=1
+# enable this in CI to install the dev dependencies too
+ARG CI=0
+COPY ./composer.json ./composer.lock /elabftw/
+# the autoloader is generated in the last stage, once the source (and the generated parser) is there
+RUN --mount=type=cache,target=/run/composer/cache,sharing=locked \
+    mkdir -p /elabftw/vendor \
+    && if [ "$BUILD_ALL" = "1" ]; then \
+        if [ "$CI" = "1" ]; then \
+            /usr/bin/php84 -d memory_limit=256M /usr/local/bin/composer install --prefer-dist --no-progress --no-scripts --no-autoloader; \
         else \
-            yarn run buildall:prod \
-            && yarn workspaces focus -A --production \
-            && /usr/bin/php84 -d memory_limit=256M /usr/local/bin/composer install --prefer-dist --no-cache --no-progress --no-dev -a; \
-        fi \
-        && rm -rf /run/elabftw/yarn /run/elabftw/cache /run/composer; \
+            /usr/bin/php84 -d memory_limit=256M /usr/local/bin/composer install --prefer-dist --no-progress --no-dev --no-scripts --no-autoloader; \
+        fi; \
     fi
 # Fork patch: smalot/pdfparser hardcodes iconv(..., 'UTF-8//TRANSLIT//IGNORE', ...)
 # to decode PDF font text. musl libc's iconv (this image's libc) doesn't
@@ -449,6 +346,96 @@ RUN if [ "$BUILD_ALL" = "1" ]; then \
 RUN if [ "$BUILD_ALL" = "1" ] && [ -d /elabftw/vendor/smalot/pdfparser ]; then \
         find /elabftw/vendor/smalot/pdfparser -name Font.php -exec \
             sed -i "s/UTF-8\/\/TRANSLIT\/\/IGNORE/UTF-8/g" {} +; \
+    fi
+
+#########################################################################
+# ASSETS: javascript, css, the tex2svg bundle and the search parser.      #
+# Only rebuilt when package.json/yarn.lock or src/ts, src/scss, src/js,   #
+# src/node change: a PHP or Twig change does not touch this stage.        #
+#########################################################################
+FROM node:24-alpine AS assets-builder
+ARG BUILD_ALL=1
+# Limit the Node.js heap used while compiling frontend assets. This can be
+# overridden at build time without carrying NODE_OPTIONS into the final image.
+ARG NODE_MAX_OLD_SPACE_SIZE=4096
+# enable this in CI to skip brotli minification
+ARG CI=0
+# brotli quality of the pre-compressed assets: 11 (default, smallest) for releases, 5-9 for throwaway test images
+# (measured on main.bundle.js, 6.99 MB: q11 15.7 s, q9 1.1 s and +11.6 % size, q6 0.3 s)
+ARG BROTLI_QUALITY=11
+# git is required by yarn, brotli for the pre-compressed assets
+RUN apk add --no-cache git brotli
+WORKDIR /elabftw
+ENV CYPRESS_INSTALL_BINARY=0 \
+    COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable
+COPY ./package.json ./yarn.lock ./.yarnrc.yml /elabftw/
+COPY ./src/tools/yarn-plugin-tinymce.js /elabftw/src/tools/
+# the tinymce plugin of yarn (run by the install) appends these two stylesheets to the tinymce css it extracts into web/assets
+COPY ./src/scss/_tinymce.scss ./src/scss/_custom-editor.scss /elabftw/src/scss/
+# .yarnrc.yml keeps the yarn cache in /run/elabftw/yarn/cache, and the PnP files read the packages from there when webpack runs: so it must stay in
+# this layer. The cache mount only keeps the downloads between builds: a changed lock file fetches just what changed.
+RUN --mount=type=cache,target=/mnt/yarn-downloads,sharing=locked \
+    if [ "$BUILD_ALL" = "1" ]; then \
+        mkdir -p /run/elabftw/yarn/cache \
+        && cp -a /mnt/yarn-downloads/. /run/elabftw/yarn/cache/ \
+        && yarn install --immutable \
+        && cp -a /run/elabftw/yarn/cache/. /mnt/yarn-downloads/; \
+    fi
+COPY ./builder.js ./node-builder.js ./tsconfig.json ./.babelrc /elabftw/
+# the logos that webpack and brotli read from the committed assets
+COPY ./web/assets/images/*.svg /elabftw/web/assets/images/
+COPY ./src/ts /elabftw/src/ts
+COPY ./src/scss /elabftw/src/scss
+COPY ./src/js /elabftw/src/js
+COPY ./src/node /elabftw/src/node
+# what the build produces is gathered in /out, laid out as in /elabftw
+RUN mkdir -p /out/web /out/src/node /out/src/Services/AdvancedSearchQuery/Grammar \
+    && if [ "$BUILD_ALL" = "1" ]; then \
+        export NODE_OPTIONS="--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE}" BROTLI_QUALITY="${BROTLI_QUALITY}" \
+        && if [ "$CI" = "1" ]; then \
+            yarn run buildall:ci; \
+        else \
+            yarn run buildall:prod; \
+        fi \
+        && mv web/assets /out/web/assets \
+        && cp src/node/tex2svg.bundle.js* /out/src/node/ \
+        && cp src/Services/AdvancedSearchQuery/Grammar/Parser.php /out/src/Services/AdvancedSearchQuery/Grammar/; \
+    fi
+
+#############################
+# ELABFTW + NGINX + PHP-FPM #
+#############################
+FROM elabftw-base
+ARG BUILD_ALL=1
+ARG CI=0
+# we only copy the strict necessary
+COPY --from=php-vendor /elabftw/vendor /elabftw/vendor
+COPY ./bin /elabftw/bin
+COPY ./.babelrc /elabftw
+COPY ./builder.js /elabftw
+COPY ./composer.json /elabftw
+COPY ./composer.lock /elabftw
+COPY ./node-builder.js /elabftw
+COPY ./package.json /elabftw
+COPY ./tsconfig.json /elabftw
+COPY ./var /elabftw/var
+COPY ./yarn.lock /elabftw
+COPY ./.yarnrc.yml /elabftw
+COPY ./src /elabftw/src
+COPY ./web /elabftw/web
+# the built assets, tex2svg.bundle.js and the generated search parser (src/Services/AdvancedSearchQuery/Grammar/Parser.php)
+COPY --from=assets-builder /out/ /elabftw/
+# some ini settings are set on the command line to override the restrictive production ones already set
+# IMPORTANT: this must run after the assets are copied: the autoloader is a classmap of src/, which holds the generated parser.
+# (it also runs src/tools/mkbuildinfo.php, a composer pre-autoload-dump script). In CI we use -o for composer because we will add other classes afterwards (tests)
+RUN if [ "$BUILD_ALL" = "1" ]; then \
+        if [ "$CI" = "1" ]; then \
+            /usr/bin/php84 -d memory_limit=256M /usr/local/bin/composer dump-autoload -o; \
+        else \
+            /usr/bin/php84 -d memory_limit=256M /usr/local/bin/composer dump-autoload -a --no-dev; \
+        fi \
+        && rm -rf /run/composer; \
     fi
 # PHP: add php config after composer step so open_basedir is not an issue
 COPY ./containers/elabimg/php/php.ini /etc/php84/php.ini.tpl
