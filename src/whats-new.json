@@ -1469,9 +1469,9 @@
     "details": [
       "fa-print::Contents panel header: Print and PDF take the whole entry, or only the sections ticked in Select mode.",
       "fa-file-pdf::The Export menu has the same PDF window (Export as PDF). In the editor, File > Print everything or Print main text.",
-      "fa-table::You are asked how wide tables should be printed (fit to page, landscape, or split) whenever the entry has a table wider than the page: Fit to page width (smaller text), Landscape page for wide tables, or Actual size, split across pages. Tick Remember my choice to skip the question; Change wide table setting brings it back.",
+      "fa-table::You choose how wide tables print: fit, landscape or split. Remember my choice skips the question; Change wide table setting brings it back.",
       "Sheets print like the live grid: grid lines, labels, fills and bold. Empty trailing rows, columns and hidden ones are left out.",
-      "Ctrl+P cannot ask, so it uses your remembered choice or fit to page. Firefox cannot print one landscape page, so a wide table is fitted to portrait there; the PDF file has landscape pages everywhere."
+      "Ctrl+P cannot ask: it uses your remembered choice or fit. Firefox fits wide tables to portrait; the PDF file has landscape pages."
     ],
     "news": "New: Print and PDF ask how to print wide tables.",
     "featured": false,
