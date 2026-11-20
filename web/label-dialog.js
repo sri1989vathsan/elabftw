@@ -55,7 +55,17 @@
     box.style.maxWidth = '36rem';
     box.style.maxHeight = '92vh';
     box.style.overflowY = 'auto';
-    box.append(element('h5', '', entry.generic ? 'Print a label' : 'Print a label for ' + entry.title));
+    const heading = element('h5', '', entry.generic ? 'Print a label' : 'Print a label for ' + entry.title);
+    // small "i" like the ones of the other pages: opens the guide cards of this area (Others: Print a label, Feedback, Announcements) in a new tab
+    const guide = element('a', 'btn btn-link guide-info-btn p-0 ml-1');
+    guide.href = 'whats-new.php?area=Others';
+    guide.target = '_blank';
+    guide.rel = 'noopener';
+    guide.title = 'About printing labels in the guide';
+    guide.setAttribute('aria-label', 'About printing labels in the guide');
+    guide.append(element('i', 'fas fa-circle-info'));
+    heading.append(guide);
+    box.append(heading);
     const label = element('label', 'd-block');
     label.append(element('span', 'd-block small text-muted', 'Copies'));
     const copies = element('input', 'form-control form-control-sm');

@@ -137,7 +137,7 @@
   </div>
   {% endif %}
 
-  <h2 class='p-2 pl-3 section-title' id='featuresSettings'>{{ 'Features'|trans }}</h2>
+  <h2 class='p-2 pl-3 section-title' id='featuresSettings'>{{ 'Features'|trans }}{{ guide.info('guide-admin-settings', 'Team settings') }}</h2>
   <div class='pl-3 mt-2 mb-5'>
     <section class='settings-card'>
       <h3 class='settings-card-title'>{{ 'Tools menu'|trans }}</h3>
@@ -169,7 +169,7 @@
     </section>
   </div>
 
-  <h2 class='p-2 pl-3 section-title' id='ordersSettings'>{{ 'Orders'|trans }}</h2>
+  <h2 class='p-2 pl-3 section-title' id='ordersSettings'>{{ 'Orders'|trans }}{{ guide.info('guide-orders', 'Orders') }}</h2>
   <div class='pl-3 mt-2 mb-5'>
     <section class='settings-card'>
       <h3 class='settings-card-title'>{{ 'Order status'|trans }}</h3>
@@ -808,7 +808,7 @@
 
   {# SHOW EXISTING ANNOUNCEMENTS #}
   <div id='announcementsAdminDiv'>
-    <h2 class='p-2 pl-3 section-title'>{{ 'Existing announcements'|trans }}</h2>
+    <h2 class='p-2 pl-3 section-title'>{{ 'Existing announcements'|trans }}{{ guide.info('guide-announcements', 'Announcements') }}</h2>
     <div class='pl-3'>
       {% if not announcementsAdminArr %}
         <p class='mt-3'>{{ 'No announcement created yet.'|trans }}</p>
