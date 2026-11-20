@@ -96,14 +96,31 @@ async function ensurePlate(c) {
       ['calendar', `${base}/calendar.php`],
       ['ucp', `${base}/ucp.php`],
       ['sysconfig', `${base}/sysconfig.php`],
+      // pages in a state: a side panel open, the well plate dialog open (it is reached through the Insert menu of the editor)
+      ['panel-contents', `${base}/experiments.php?mode=view&id=${fixture}`, false, `document.getElementById('tocPanelOpener').click(); await new Promise(r => setTimeout(r, 1500));`],
+      ['panel-folders', `${base}/experiments.php`, false, `document.getElementById('foldersPanelOpener').click(); await new Promise(r => setTimeout(r, 2500));`],
+      ['panel-search', `${base}/experiments.php`, false, `document.getElementById('favoritesPanelOpener').click(); await new Promise(r => setTimeout(r, 1500));`],
+      ['panel-todo', `${base}/dashboard.php`, false, `document.getElementById('todolistPanelOpener').click(); await new Promise(r => setTimeout(r, 2000));`],
+      ['plate-dialog', `${base}/experiments.php?mode=edit&id=${plate}`, true, `
+        const wait = ms => new Promise(r => setTimeout(r, ms));
+        const ed = tinymce.activeEditor;
+        const t = ed.getBody().querySelector('table.elabftw-spreadsheet');
+        ed.selection.select(t.querySelector('td, th') || t, true); ed.nodeChanged(); await wait(800);
+        const click = async (sel, re) => { const el = [...document.querySelectorAll(sel)].find(e => re.test((e.getAttribute('aria-label') || e.textContent || '').trim())); if (el) el.click(); await wait(900); };
+        await click('.tox-tbtn', /Spreadsheet tools/); await click('.tox-collection__item', /^Edit selected spreadsheet/);
+        await wait(1500);`],
     ];
     const themes = [['light', ''], ['dark', 'dark-mode'], ['midnight', 'midnight']];
     const sizes = ['compact', 'comfortable'];
-    for (const [name, url, editor] of pages) {
+    for (const [name, url, editor, action] of pages) {
       if (only && !only.split(',').includes(name)) continue;
       await c.nav(url);
       if (editor) await waitEditor(c);
       await sleep(1500);
+      if (action) {
+        try { await c.js(action); } catch (e) { console.log('action failed', name, String(e.message).slice(0, 100)); }
+        console.log(name, 'state:', await c.js(`return { dialog: !!document.querySelector('.wp-dialog'), panel: !!document.querySelector('.side-panel:not([hidden])') }`));
+      }
       for (const [tname, tclass] of themes) {
         for (const size of sizes) {
           await c.js(`const r = document.documentElement; r.classList.remove('dark-mode', 'midnight'); if (${JSON.stringify(tclass)}) r.classList.add(${JSON.stringify(tclass)}); r.setAttribute('data-ui-size', ${JSON.stringify(size)});
