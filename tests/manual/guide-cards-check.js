@@ -18,9 +18,13 @@ const errors = [];
 const warnings = [];
 const fail = m => errors.push(m);
 
+// src/whats-new.json is shared by all branches; src/whats-new-inventory.json exists only on the inventory branch (entries about the Database,
+// storage, sequence editor and so on) and is read by the same loader (WhatsNewStore). When it exists its entries are checked as well.
 let entries;
 try {
   entries = JSON.parse(fs.readFileSync(path.join(root, 'src/whats-new.json'), 'utf8'));
+  const inventoryFile = path.join(root, 'src/whats-new-inventory.json');
+  if (fs.existsSync(inventoryFile)) entries = entries.concat(JSON.parse(fs.readFileSync(inventoryFile, 'utf8')));
 } catch (e) {
   console.error('FAIL invalid JSON: ' + e.message);
   process.exit(1);
@@ -74,7 +78,7 @@ entries.forEach((e, i) => {
 // the label dialog (a card chosen through a lookup, like the templates page, is written as a literal too).
 const used = new Map();
 const scan = (dir, ext) => fs.readdirSync(path.join(root, dir)).filter(f => f.endsWith(ext)).map(f => path.join(root, dir, f));
-const files = [...scan('src/templates', '.html'), ...scan('src/ts', '.ts'), ...scan('src/ts/components', '.svelte')];
+const files = [...scan('src/templates', '.html'), ...scan('src/ts', '.ts'), ...scan('src/ts/components', '.svelte'), ...scan('web', '.js'), ...scan('web', '.php')];
 const areasLinked = new Set();
 for (const file of files) {
   const text = fs.readFileSync(file, 'utf8');
@@ -86,9 +90,11 @@ for (const file of files) {
 }
 // the label dialog (web/label-dialog.js) links to the whats-new page of the area "Others"
 if (/whats-new\.php\?area=Others/.test(fs.readFileSync(path.join(root, 'web/label-dialog.js'), 'utf8'))) areasLinked.add('Others');
+// area links written as a literal: href='whats-new.php?area=Database'
+for (const file of files) for (const m of fs.readFileSync(file, 'utf8').matchAll(/whats-new\.php\?area=([A-Za-z]+)/g)) areasLinked.add(m[1]);
 for (const [card, where] of used) {
   const names = [...new Set(where)].join(', ');
-  if (!ids.has(card)) fail(`card id '${card}' used in ${names} does not exist in whats-new.json`);
+  if (!ids.has(card)) fail(`card id '${card}' used in ${names} does not exist in whats-new.json or whats-new-inventory.json`);
   else if (!guideIds.has(card)) fail(`card id '${card}' used in ${names} is not a guide-* entry`);
 }
 // Cards without an own i button must be reachable another way: through an area i (opens the guide page showing the whole area), or be listed
