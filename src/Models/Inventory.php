@@ -688,4 +688,23 @@ final class Inventory extends AbstractConcreteEntity
     {
         return (int) ($this->entityData['userid'] ?? 0) === (int) ($this->Users->userData['userid'] ?? -1);
     }
+
+    // the folder hooks of AbstractEntity: the Database has a folder tree of its own (experiments_folders.scope = 'inventory')
+    #[Override]
+    protected function usesFolders(): bool
+    {
+        return true;
+    }
+
+    #[Override]
+    protected function folderScope(): string
+    {
+        return 'inventory';
+    }
+
+    #[Override]
+    protected function assignToFolder(int $newId, int $folderId): void
+    {
+        new ExperimentsFolders($this->Users, $folderId, 'inventory')->assignInventory($newId, $folderId);
+    }
 }
