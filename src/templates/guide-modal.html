@@ -10,7 +10,7 @@
               {% if entry.image %}
                 <div class='whats-new-shot{{ entry.highlight and entry.highlight.label ? ' has-label' }} mb-3'>
                   <div class='whats-new-shot-clip'>
-                    <img class='img-fluid' src='whats-new.php?image={{ entry.image|url_encode }}' alt='{{ entry.imageAlt|default(entry.title) }}' loading='lazy'>
+                    <img class='img-fluid' src='{{ App.getWhatsNewImageUrl(entry.image) }}' alt='{{ entry.imageAlt|default(entry.title) }}' loading='lazy'>
                     {% if entry.highlight %}
                       <span class='whats-new-highlight' style='left: {{ entry.highlight.x }}%; top: {{ entry.highlight.y }}%; width: {{ entry.highlight.w }}%; height: {{ entry.highlight.h }}%;'></span>
                     {% endif %}
@@ -30,7 +30,7 @@
               {% for extra in entry.screenshots|default([]) %}
                 <figure class='whats-new-shot mb-3'>
                   <div class='whats-new-shot-clip'>
-                    <img class='img-fluid' src='whats-new.php?image={{ extra.image|url_encode }}' alt='{{ extra.caption|default(entry.title) }}' loading='lazy'>
+                    <img class='img-fluid' src='{{ App.getWhatsNewImageUrl(extra.image) }}' alt='{{ extra.caption|default(entry.title) }}' loading='lazy'>
                   </div>
                   {% if extra.caption %}<figcaption class='small text-muted mt-1'>{{ extra.caption }}</figcaption>{% endif %}
                 </figure>

@@ -16,7 +16,7 @@
               {% if entry.area %}<span class='badge badge-primary mb-1'>{{ entry.area }}</span>{% endif %}
               <h6 class='whats-new-popup-title'>{{ entry.title }}</h6>
               <p class='mb-2'>{{ entry.summary }}</p>
-              {% if entry.image %}<div class='whats-new-popup-shot'><img src='whats-new.php?image={{ entry.image|url_encode }}' alt='{{ entry.imageAlt|default(entry.title) }}' loading='lazy'></div>{% endif %}
+              {% if entry.image %}<div class='whats-new-popup-shot'><img src='{{ App.getWhatsNewImageUrl(entry.image) }}' alt='{{ entry.imageAlt|default(entry.title) }}' loading='lazy'></div>{% endif %}
               {% if entry.details %}
                 <details class='whats-new-popup-details'>
                   <summary>{{ 'Details'|trans }}</summary>

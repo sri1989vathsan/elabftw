@@ -68,7 +68,7 @@
     <label for='wn-image-{{ fid }}'>{{ 'Picture'|trans }}</label>
     {% if entry.image is defined and entry.image %}
       <div class='mb-2'>
-        <img class='whats-new-form-thumb' src='whats-new.php?image={{ entry.image|url_encode }}' alt=''>
+        <img class='whats-new-form-thumb' src='{{ App.getWhatsNewImageUrl(entry.image) }}' alt=''>
       </div>
       <div class='custom-control custom-checkbox mb-2'>
         <input id='wn-remove-{{ fid }}' class='custom-control-input' type='checkbox' name='remove_image' value='1'>
@@ -103,7 +103,7 @@
     <small class='form-text text-muted mb-2'>{{ 'Further pictures shown under the first one, each with an optional caption. Choose several files at once.'|trans }}</small>
     {% for extra in entry.screenshots|default([]) %}
       <div class='d-flex align-items-center mb-2'>
-        <img class='whats-new-form-thumb mr-2' src='whats-new.php?image={{ extra.image|url_encode }}' alt=''>
+        <img class='whats-new-form-thumb mr-2' src='{{ App.getWhatsNewImageUrl(extra.image) }}' alt=''>
         <input type='hidden' name='extra[{{ loop.index0 }}][image]' value='{{ extra.image }}'>
         <input class='form-control mr-2' type='text' name='extra[{{ loop.index0 }}][caption]' maxlength='200' placeholder='{{ 'Caption'|trans }}' aria-label='{{ 'Caption'|trans }}' value='{{ extra.caption|default('') }}'>
         <div class='custom-control custom-checkbox text-nowrap'>
