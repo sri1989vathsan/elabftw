@@ -17,8 +17,13 @@
   // (Search, Folders, To-do...), so the dialog centers in the space that is
   // actually visible instead of the whole window, where a wide side panel
   // would cover part of it. The panel can be opened, resized or closed while
-  // the dialog is up (e.g. "Open Search to link"), so this re-reads the
-  // panel's edge a few times a second rather than only once on open.
+  // the dialog is up (e.g. "Open Search to link"), so the panel's edge is re-read
+  // whenever a panel changes: its size (ResizeObserver: opening, closing and
+  // dragging the resizer all change it), its hidden/style/class attributes,
+  // the end of a CSS transition, the window size, and after any click (a panel
+  // that did not exist yet, like the lazily built Folders panel, is picked up
+  // then). It used to poll every 150 ms, i.e. about 6.7 forced layouts a second
+  // for as long as a dialog was open.
   function avoidSidebar(node: HTMLElement): { destroy(): void } {
     const update = (): void => {
       let left = 0;
@@ -29,9 +34,41 @@
       const value = `${Math.round(left)}px`;
       if (node.style.left !== value) node.style.left = value;
     };
+    const resizeObserver = new ResizeObserver(update);
+    const attributeObserver = new MutationObserver(update);
+    const watched = new Set<Element>();
+    const watch = (): void => {
+      document.querySelectorAll('.side-panel, #sidepanel-buttons').forEach(element => {
+        if (watched.has(element)) return;
+        watched.add(element);
+        resizeObserver.observe(element);
+        attributeObserver.observe(element, { attributes: true, attributeFilter: ['hidden', 'style', 'class'] });
+      });
+    };
+    let frame = 0;
+    const rescan = (): void => {
+      if (frame !== 0) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        watch();
+        update();
+      });
+    };
+    watch();
     update();
-    const timer = window.setInterval(update, 150);
-    return { destroy: () => window.clearInterval(timer) };
+    window.addEventListener('resize', rescan);
+    document.addEventListener('transitionend', rescan, true);
+    document.addEventListener('click', rescan, true);
+    return {
+      destroy: () => {
+        resizeObserver.disconnect();
+        attributeObserver.disconnect();
+        window.removeEventListener('resize', rescan);
+        document.removeEventListener('transitionend', rescan, true);
+        document.removeEventListener('click', rescan, true);
+        if (frame !== 0) window.cancelAnimationFrame(frame);
+      },
+    };
   }
 
   function clickOutside(node: HTMLElement, onOutsideClick: () => void): { destroy(): void } {
