@@ -14,7 +14,7 @@ import {
   RICH_SELECTION_ATTRIBUTE,
   writeRichClipboard,
 } from './ClipboardContent';
-import { restoreStaticSpreadsheetsForPrint } from './inline-spreadsheet';
+import { restoreStaticSpreadsheetsForPrint } from './spreadsheet-print-hook';
 import { askSheetsMode, printWithSheetsChoice } from './sheets-mode';
 import {
   getImageTocLabel,

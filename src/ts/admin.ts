@@ -22,7 +22,7 @@ import { getEditor } from './Editor.class';
 import { ApiC } from './api';
 import { Model, Action } from './interfaces';
 import type { Selected } from './interfaces';
-import tinymce from 'tinymce/tinymce';
+import { tinymce } from './tinymce-global';
 import { notify } from './notify';
 import { on } from './handlers';
 

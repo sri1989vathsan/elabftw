@@ -194,21 +194,70 @@ abstract class AbstractEntity extends AbstractRest
     ): int;
 
     /**
-     * The folder chosen in the create dialog (folder_id of the request): the new experiment or resource goes there. Without one it stays where the
-     * create put it (a template's folder, or the root). The folder must exist in the team of the user (readOne throws if not).
+     * Folder hooks: which entry types live in the folder trees, which tree, and how an entry is put in a folder. A subclass of the fork that has
+     * a tree of its own overrides these in its own file (Inventory does), so the code below is the same on every branch.
      */
-    private function assignChosenFolder(int $newId, array $reqBody): void
+    protected function usesFolders(): bool
     {
-        if (!($this instanceof Experiments || $this instanceof Items) || empty($reqBody['folder_id'])) {
-            return;
-        }
-        $folderId = (int) $reqBody['folder_id'];
+        return $this instanceof Experiments || $this instanceof Items;
+    }
+
+    protected function folderScope(): string
+    {
+        return 'experiments';
+    }
+
+    protected function assignToFolder(int $newId, int $folderId): void
+    {
         $Folders = new ExperimentsFolders($this->Users, $folderId);
-        $Folders->readOne();
         if ($this instanceof Experiments) {
             $Folders->assignExperiment($newId, $folderId);
         } else {
             $Folders->assignResource($newId, $folderId);
+        }
+    }
+
+    /**
+     * The folder chosen in the create dialog (folder_id of the request): the new entry goes there. Without one it stays where the create put it
+     * (a template's folder, or the root). The folder must exist in the team of the user (readOne throws a 404 if not) and, where the folders are
+     * split in trees (experiments_folders.scope exists), be in the tree of this type of entry. This is checked BEFORE anything is inserted, so a
+     * bad folder_id leaves no orphan entry behind.
+     */
+    private function validateChosenFolder(array $reqBody): ?int
+    {
+        if (!$this->usesFolders() || empty($reqBody['folder_id'])) {
+            return null;
+        }
+        $folderId = (int) $reqBody['folder_id'];
+        new ExperimentsFolders($this->Users, $folderId)->readOne();
+        if ($this->foldersHaveScope()) {
+            $req = $this->Db->prepare('SELECT COUNT(*) FROM experiments_folders WHERE id = :id AND team = :team AND scope = :scope');
+            $req->bindValue(':id', $folderId, PDO::PARAM_INT);
+            $req->bindValue(':team', $this->Users->team, PDO::PARAM_INT);
+            $req->bindValue(':scope', $this->folderScope());
+            $this->Db->execute($req);
+            if ((int) $req->fetchColumn() !== 1) {
+                throw new ResourceNotFoundException();
+            }
+        }
+        return $folderId;
+    }
+
+    private function foldersHaveScope(): bool
+    {
+        static $has = null;
+        if ($has === null) {
+            $req = $this->Db->prepare("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'experiments_folders' AND COLUMN_NAME = 'scope'");
+            $this->Db->execute($req);
+            $has = (int) $req->fetchColumn() === 1;
+        }
+        return $has;
+    }
+
+    private function assignChosenFolder(int $newId, ?int $folderId): void
+    {
+        if ($folderId !== null) {
+            $this->assignToFolder($newId, $folderId);
         }
     }
 
@@ -224,6 +273,7 @@ abstract class AbstractEntity extends AbstractRest
         return match ($action) {
             Action::Create => (
                 function () use ($reqBody) {
+                    $chosenFolder = $this->validateChosenFolder($reqBody);
                     $metadata = null;
                     if (!empty($reqBody['metadata'])) {
                         $metadata = is_string($reqBody['metadata'])
@@ -246,7 +296,7 @@ abstract class AbstractEntity extends AbstractRest
                             );
                         }
                         $fromTemplateId = $this->copyEntityFrom(sourceEntity: $template, title: $title, blankExtrafields: false, overrideCreateParams: $overrideCreateParams);
-                        $this->assignChosenFolder($fromTemplateId, $reqBody);
+                        $this->assignChosenFolder($fromTemplateId, $chosenFolder);
                         return $fromTemplateId;
                     }
                     // create a template from current entity
@@ -303,7 +353,7 @@ abstract class AbstractEntity extends AbstractRest
                         contentType: $contentType,
                     );
                     // Assign concrete experiments and resources to their shared folder tree.
-                    $this->assignChosenFolder($newId, $reqBody);
+                    $this->assignChosenFolder($newId, $chosenFolder);
                     return $newId;
                 }
             )(),
@@ -472,6 +522,54 @@ abstract class AbstractEntity extends AbstractRest
         $entities = $req->fetchAll();
 
         return $this->hydrateTags($entities);
+    }
+
+    /**
+     * The ids that can make up the first page of readShow() for a plain "pinned first, then last modified" list
+     * (the dashboard): the entries pinned by the current user plus the most recently modified ones, each with the very same
+     * permission, filter and state conditions as readShow(). Adding "AND entity.id IN (...)" to the display params' filterSql
+     * and calling readShow() then returns exactly the same rows in the same order, but readShow() only has to build
+     * a handful of rows instead of every entry the user can read (GROUP BY entity.id plus four correlated sub-selects
+     * per row, linear in the size of the team: 290-420 ms at 8,000 entries).
+     * Why it is a superset of the first page: the page is the pinned entries (all of them, by modified_at) followed by the
+     * most recently modified unpinned ones; the first N unpinned ones are within the N most recently modified of all.
+     *
+     * @return list<int>
+     */
+    public function readFirstPageIdsLastchange(QueryParamsInterface $displayParams, int $limit): array
+    {
+        $canFilter = $this->getSqlBuilder()->getCanFilter(AccessType::Read->value);
+        $table = $this->entityType->value;
+        $common = sprintf(
+            'LEFT JOIN users2teams ON (users2teams.users_id = entity.userid AND users2teams.teams_id = %d)
+            WHERE 1=1 %s %s %s',
+            $this->Users->getTeam(),
+            $displayParams->getFilterSql(),
+            $canFilter,
+            $displayParams->getStatesSql('entity'),
+        );
+        $recentSql = sprintf(
+            'SELECT entity.id FROM %s AS entity %s ORDER BY entity.modified_at DESC, entity.id DESC LIMIT %d',
+            $table,
+            $common,
+            max(1, $limit),
+        );
+        $pinnedSql = sprintf(
+            'SELECT entity.id FROM pin_%1$s2users AS pin INNER JOIN %1$s AS entity ON entity.id = pin.entity_id %2$s AND pin.users_id = :userid',
+            $table,
+            $common,
+        );
+        $ids = array();
+        foreach (array($recentSql, $pinnedSql) as $sql) {
+            $req = $this->Db->prepare($sql);
+            $req->bindParam(':userid', $this->Users->userData['userid'], PDO::PARAM_INT);
+            $this->Db->execute($req);
+            foreach ($req->fetchAll(PDO::FETCH_COLUMN) as $id) {
+                $ids[(int) $id] = (int) $id;
+            }
+        }
+
+        return array_values($ids);
     }
 
     /**

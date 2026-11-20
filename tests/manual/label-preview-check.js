@@ -1,5 +1,5 @@
 /**
- * "Print a label" dialog (the + menu): the preview must show. Load in the console on any page and call `await labelPreviewCheck()`.
+ * "Print label" dialog (the Tools menu): the preview must show. Load in the console on any page and call `await labelPreviewCheck()`.
  * No label is printed: the dialog only asks for a dry run (the drawing).
  */
 window.labelPreviewCheck = async function labelPreviewCheck() {
@@ -8,8 +8,8 @@ window.labelPreviewCheck = async function labelPreviewCheck() {
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const waitFor = async (fn, ms = 6000) => { const t = Date.now(); while (Date.now() - t < ms) { const v = fn(); if (v) return v; await sleep(150); } return fn(); };
   document.querySelector('.planned-backdrop')?.remove();
-  const item = document.querySelector('[data-action="print-generic-label"]');
-  ok('the + menu has "Print a label"', !!item, '');
+  const item = document.querySelector('[data-print-label-open]');
+  ok('the Tools menu has "Print label"', !!item, '');
   if (!item) return { pass: false, results };
   item.click();
   const svg = await waitFor(() => document.querySelector('.planned-dialog svg'));

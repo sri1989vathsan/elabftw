@@ -1,5 +1,5 @@
 /**
- * The label printing dialog: an item "Print a label" in the + menu of the top bar (on every page) that opens a dialog to print labels on the label
+ * The label printing dialog: the item "Print label" of the Tools menu of the top bar (on every page; head.html) that opens a dialog to print labels on the label
  * printer of the lab (label-print.php): any text with {variables} and one label per row of a pasted spreadsheet table, line formats, a preview with
  * draggable margins and a test pattern. The sizes and the printer are set by admins in the Labels tab of the Admin panel (label-formats.js). Other scripts can
  * open the same dialog for an entry with window.dispatchEvent(new CustomEvent('registry:print-label', { detail: { id, title } })). Needs nothing else.
@@ -31,25 +31,18 @@
     }
     return node;
   };
-  // a label of any text, on any of the label sizes that exist: an item of the + menu of the top bar
-  (function () {
-    const menu = document.getElementById('navbar-create-dropdown');
-    if (!menu || menu.querySelector('[data-action="print-generic-label"]')) {
+  // a label of any text, on any of the label sizes that exist: the item "Print label" of the Tools menu (head.html). One delegated listener, so the
+  // copy of the item in the More menu of a narrow window works too. On the page of an entry, the title of the entry is put in the text.
+  document.addEventListener('click', function (event) {
+    const item = event.target instanceof Element ? event.target.closest('[data-print-label-open]') : null;
+    if (!item) {
       return;
     }
-    const item = document.createElement('div');
-    item.className = 'dropdown-item';
-    item.setAttribute('data-action', 'print-generic-label');
-    item.title = 'Print a label with the text you type, on one of the label sizes';
-    item.style.cursor = 'pointer';
-    const icon = document.createElement('i');
-    icon.className = 'fas fa-print fa-fw mr-1';
-    item.append(icon, document.createTextNode('Print a label'));
-    item.addEventListener('click', function () {
-      window.dispatchEvent(new CustomEvent('registry:print-label', { detail: { generic: true, title: '' } }));
-    });
-    menu.append(item);
-  })();
+    event.preventDefault();
+    const heading = document.getElementById('documentTitle');
+    const prefill = heading ? heading.textContent.trim().slice(0, 200) : '';
+    window.dispatchEvent(new CustomEvent('registry:print-label', { detail: { generic: true, title: '', prefill: prefill } }));
+  });
 
   // the print button of a row: the label of the entry is printed on the label printer of the lab (see label-print.php)
   window.addEventListener('registry:print-label', function (event) {
@@ -62,7 +55,17 @@
     box.style.maxWidth = '36rem';
     box.style.maxHeight = '92vh';
     box.style.overflowY = 'auto';
-    box.append(element('h5', '', entry.generic ? 'Print a label' : 'Print a label for ' + entry.title));
+    const heading = element('h5', '', entry.generic ? 'Print a label' : 'Print a label for ' + entry.title);
+    // small "i" like the ones of the other pages: opens the guide cards of this area (Others: Print a label, Feedback, Announcements) in a new tab
+    const guide = element('a', 'btn btn-link guide-info-btn p-0 ml-1');
+    guide.href = 'whats-new.php?area=Others';
+    guide.target = '_blank';
+    guide.rel = 'noopener';
+    guide.title = 'About printing labels in the guide';
+    guide.setAttribute('aria-label', 'About printing labels in the guide');
+    guide.append(element('i', 'fas fa-circle-info'));
+    heading.append(guide);
+    box.append(heading);
     const label = element('label', 'd-block');
     label.append(element('span', 'd-block small text-muted', 'Copies'));
     const copies = element('input', 'form-control form-control-sm');
@@ -91,6 +94,9 @@
     const styleBox = element('div', 'mb-2');
     const tableBox = element('div', 'mb-2');
     box.append(customLabel, styleBox, tableBox, variablesBox);
+    if (entry.prefill) {
+      custom.value = entry.prefill;
+    }
     // the format of the label: the sizes the admins have made
     const formatLabel = element('label', 'd-block');
     formatLabel.append(element('span', 'd-block small text-muted', 'Label format'));

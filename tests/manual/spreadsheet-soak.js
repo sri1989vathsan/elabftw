@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'text-column-fits', 'text-not-clipped', 'paste-keeps-formatting', 'cell-alignment-consistent', 'alignment-preserved', 'toolbar-not-cut', 'row-height-fits-text', 'editor-height-after-removal', 'undo-typing-over-text', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'viewport-equals-table-width', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-menu-race', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'text-column-fits', 'text-not-clipped', 'paste-keeps-formatting', 'cell-alignment-consistent', 'alignment-preserved', 'toolbar-not-cut', 'row-height-fits-text', 'editor-height-after-removal', 'undo-typing-over-text', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'viewport-equals-table-width', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -304,6 +304,14 @@ async function spreadsheetSoak(options = {}) {
     for (let i = 0; i < 40 && !(filler = (api.overlayElement(uid) || root).querySelector('.elabftw-spreadsheet-filler')); i++) await sleep(100);
     root = api.overlayElement(uid) || root;
     if (!filler) { note('filler-no-room'); return false; }
+    // the grey filler is redrawn every 400 ms (more on a busy machine): press it once it shows the columns the grid has now, or the cell that is
+    // pressed belongs to the old width ("clicking a grey cell should leave 13 columns, there are 12" in one slow soak run)
+    for (let i = 0; i < 40; i++) {
+      filler = (api.overlayElement(uid) || root).querySelector('.elabftw-spreadsheet-filler') || filler;
+      if (Number(filler.dataset.cols) === (api.overlayElement(uid) || root).querySelectorAll('.jss_worksheet thead td[data-x]').length) break;
+      if (i === 0) note('filler-behind-grid');
+      await sleep(100);
+    }
     const cols = model.grid[0].length;
     // the app takes the empty grey columns off again when a press lands outside the table (Save, the page, a menu of the page): the record remembers
     // the width before the first press and applies that rule when it compares sizes
@@ -590,18 +598,40 @@ async function spreadsheetSoak(options = {}) {
 
   // Insert or delete a row or column through the real right-click menu. The record is changed only
   // by what really happened (read back from the table), and the result is then compared strictly.
-  async function structureOp(uid) {
+  async function structureOp(uid, forced) {
     const model = models.get(uid);
     if (model.plate) return;
+    // A press outside the table (a save, the popup, the page) takes the EMPTY grey filler columns off on purpose; the record follows that rule here too,
+    // before it picks a cell, or it would look for a cell in a column that is gone ("cell F2 not found for a menu action", seed 11, mixed round 6)
+    if (model.fillerBase !== undefined) {
+      const rootNow = api.overlayElement(uid);
+      const liveCols = rootNow ? rootNow.querySelectorAll('.jss_worksheet thead td[data-x]').length : 0;
+      if (liveCols >= model.fillerBase && liveCols < model.grid[0].length && model.grid.every(row => row.slice(liveCols).every(value => value === ''))) {
+        model.grid.forEach(row => { row.length = liveCols; });
+        note('record-follows-filler-cleanup');
+      }
+    }
     const rows = model.grid.length; const cols = model.grid[0].length;
-    const kind = pick(['row-after', 'row-before', 'col-after', 'col-before', 'del-row', 'del-col']);
+    const kind = forced?.kind ?? pick(['row-after', 'row-before', 'col-after', 'col-before', 'del-row', 'del-col']);
     if ((kind === 'del-row' && rows <= 2) || (kind === 'del-col' && cols <= 2)) return;
     if ((kind.startsWith('row') && rows >= 14) || (kind.startsWith('col') && cols >= 10)) return;
-    const r = int(0, rows - 1); const c = int(0, cols - 1);
+    const r = forced?.r ?? int(0, rows - 1); const c = forced?.c ?? int(0, cols - 1);
     checkDesync(uid, `before menu-${kind}`);
     note(`menu-${kind}`);
     // Size of the stored table (it follows the live grid a moment after each change).
     const domSize = () => { const t = tableEl(uid); return [t.rows.length - 1, t.rows[0].cells.length - 1]; };
+    // The stored table follows the live grid a little later (a debounce, longer when the machine is busy): read the size it is going to have, not
+    // the size it still has, or a step that was only waiting for the stored table to catch up an earlier change (a grey filler press) reads as
+    // the menu action's own change ("size changed by 1 rows and 2 columns, expected 1 and 0" in one slow soak run).
+    if (!config.noStoredWait) {
+      const liveSize = () => { const r0 = api.overlayElement(uid); return r0 ? [r0.querySelectorAll('.jss_worksheet tbody tr').length, r0.querySelectorAll('.jss_worksheet thead td[data-x]').length] : null; };
+      for (let i = 0; i < 80; i++) {
+        const live0 = liveSize(); const now = domSize();
+        if (!live0 || (live0[0] === now[0] && live0[1] === now[1])) break;
+        if (i === 0) note('stored-table-behind-live-grid');
+        await sleep(100);
+      }
+    }
     const sizeBefore = domSize();
     let clicked = false;
     await timed(`menu-${kind}`, async () => {
@@ -1800,6 +1830,59 @@ async function spreadsheetSoak(options = {}) {
       models.get(uid2).grid.forEach(row => { row.length = Math.min(row.length, left); });
       await verify('filler-then-menu: after a press outside the table', true);
     },
+    // A grey filler press followed by a menu row insert at different delays (0 to 1.1 s), many times: the grid keeps the columns the press added and gains
+    // exactly one row, and the stored table catches up with the grid (same rows, same columns) within a few seconds. This is the race behind the
+    // intermittent "size changed by 1 rows and 2 columns, expected 1 and 0" and "saved table 11x12 instead of 11x14" lines of one soak run:
+    // the stored table lagged behind the filler press (see SOAK-TEST.md 11.6); config.raceRounds sets how many rounds (default 16).
+    async 'filler-then-menu-race'() {
+      const rounds = config.raceRounds || 16;
+      const delays = [0, 50, 150, 300, 450, 600, 800, 1100];
+      let slowest = 0;
+      for (let n = 0; n < rounds; n++) {
+        const delay = delays[n % delays.length];
+        const label = `filler race ${n + 1} (delay ${delay} ms)`;
+        const uid = await createTable(label, { rows: 4, cols: 3 });
+        if (!uid) continue;
+        const table = label;
+        const gridSize = () => { const root = api.overlayElement(uid); return root ? [root.querySelectorAll('.jss_worksheet tbody tr').length, root.querySelectorAll('.jss_worksheet thead td[data-x]').length] : [0, 0]; };
+        const storedSize = () => { const t = tableEl(uid); return t ? [t.rows.length - 1, t.rows[0].cells.length - 1] : [0, 0]; };
+        let root = await selectCell(uid, 0, 0);
+        let filler = null;
+        for (let i = 0; i < 40 && !(filler = (api.overlayElement(uid) || root).querySelector('.elabftw-spreadsheet-filler')); i++) await sleep(100);
+        if (!filler) { note('filler-no-room'); models.delete(uid); continue; }
+        for (let i = 0; i < 40 && Number(filler.dataset.cols) !== (api.overlayElement(uid) || root).querySelectorAll('.jss_worksheet thead td[data-x]').length; i++) await sleep(100);
+        const cells = [...filler.querySelectorAll('.fc[data-i][data-r]')];
+        cells[Math.min(1 + (n % 3), cells.length - 1)].dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window, button: 0, buttons: 1 }));
+        await sleep(delay);
+        // the right-click menu of the second row: Insert a new row before
+        root = api.overlayElement(uid) || root;
+        const td = root.querySelector('td[data-x="0"][data-y="1"]');
+        press(td); await sleep(150);
+        const hr = td.getBoundingClientRect();
+        const rc = { bubbles: true, cancelable: true, view: window, clientX: hr.x + 10, clientY: hr.y + 8, button: 2, buttons: 2 };
+        td.dispatchEvent(new PointerEvent('pointerdown', rc)); td.dispatchEvent(new MouseEvent('mousedown', rc));
+        td.dispatchEvent(new MouseEvent('mouseup', { ...rc, buttons: 0 })); td.dispatchEvent(new MouseEvent('contextmenu', rc));
+        await sleep(300);
+        const menu = openMenu();
+        const item = menu && [...menu.querySelectorAll('a')].find(a => /insert a new row before/i.test(a.textContent));
+        const colsAfterPress = gridSize()[1];
+        if (!item) { note('race-no-menu'); models.delete(uid); api.removeTable(uid); continue; }
+        clickMenuItem(item);
+        const started = performance.now();
+        let g = gridSize(); let st = storedSize();
+        while (performance.now() - started < 10000 && !(g[0] === 5 && st[0] === 5 && st[1] === g[1])) { await sleep(100); g = gridSize(); st = storedSize(); }
+        const took = Math.round(performance.now() - started);
+        slowest = Math.max(slowest, took);
+        if (g[0] !== 5) dataLoss.push({ context, table, problem: `after the row insert the grid has ${g[0]} rows, expected 5` });
+        if (g[1] !== colsAfterPress) dataLoss.push({ context, table, problem: `the grid has ${g[1]} columns after the row insert, ${colsAfterPress} before it` });
+        if (st[0] !== g[0] || st[1] !== g[1]) dataLoss.push({ context, table, problem: `the stored table is ${st[0]}x${st[1]} ${took} ms after the row insert, the grid ${g[0]}x${g[1]}` });
+        note('filler-then-menu-race');
+        models.delete(uid);
+        api.removeTable(uid);
+        await sleep(500);
+      }
+      note(`filler-race-slowest-${slowest}ms`);
+    },
     // The popup after a grey filler press: the columns the person added (and typed in, or inserted) must still be there after the popup's Update or Cancel
     // (the columns that stayed empty from the grey press only may go, as they do when a press lands outside the table).
     async 'filler-then-popup'() {
@@ -2782,6 +2865,8 @@ async function spreadsheetSoak(options = {}) {
         const fromPreview = await withPreview(legacy[0].uid, host => [...host.querySelectorAll('.jss_worksheet tbody td[data-x][data-y]')].map(effective));
         if (shown.some(a => a !== 'left') || (fromPreview && fromPreview.some(a => a !== 'left'))) dataLoss.push({ context, table: 'alignment legacy', problem: `cells without an alignment of their own show ${shown.join(',')} live and ${(fromPreview || []).join(',')} in the preview, expected all left` });
       } else fail(`alignment-preserved: ${legacy.length} legacy sheets were made`);
+      // what this scenario leaves in the text must be saved, or the check after a reload compares the record with an older save
+      await save();
       note('alignment-preserved');
     },
     // The toolbar above a sheet is whole at every frame width and stays put while the sheet scrolls sideways: every button (and the formula
@@ -2905,15 +2990,21 @@ async function spreadsheetSoak(options = {}) {
       if (!uid) return;
       const cell = () => (api.overlayElement(uid)?.querySelector('td[data-x="1"][data-y="1"]')?.textContent || '').trim();
       await typeDirect(uid, 1, 1, 'first', 'Enter'); await sleep(500);
+      // formatting the cell between the two typings (undo-everything's failing order was typing, align right, typing in one cell)
+      { const root = await live(uid); openFormatBar(root); await sleep(300); press(root.querySelector('td[data-x="1"][data-y="1"]')); await sleep(200);
+        const button = findButton(root, ['Align right']); if (button) { button.click(); await sleep(600); } else fail('undo-typing-over-text: no Align right button'); }
       await typeDirect(uid, 1, 1, 'second', 'Enter'); await sleep(500);
       const table = 'undo typing over text';
       if (cell() !== 'second') { fail(`undo-typing-over-text: the cell shows "${cell()}" after typing twice`); return; }
       await undoKey(uid, false);
       if (cell() !== 'first') dataLoss.push({ context, table, problem: `one undo after typing over "first" leaves "${cell()}" in the cell instead of "first"` });
       await undoKey(uid, false);
-      if (cell() !== '') dataLoss.push({ context, table, problem: `a second undo leaves "${cell()}" instead of an empty cell` });
+      if (cell() !== 'first') dataLoss.push({ context, table, problem: `undoing the alignment between the two typings changed the text to "${cell()}" (it must stay "first")` });
+      await undoKey(uid, false);
+      if (cell() !== '') dataLoss.push({ context, table, problem: `a third undo leaves "${cell()}" instead of an empty cell` });
       await undoKey(uid, true);
       if (cell() !== 'first') dataLoss.push({ context, table, problem: `redo gives "${cell()}" instead of "first"` });
+      await undoKey(uid, true);
       await undoKey(uid, true);
       if (cell() !== 'second') dataLoss.push({ context, table, problem: `a second redo gives "${cell()}" instead of "second"` });
       models.delete(uid);

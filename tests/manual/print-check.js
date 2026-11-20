@@ -128,7 +128,8 @@ window.printCheck = async function printCheck() {
   const liveHosts = [...document.querySelectorAll('.elabftw-spreadsheet-readonly-view')].filter(h => h.querySelector('.jss_worksheet'));
   const chromium = /Chrome\//.test(navigator.userAgent) && !/Firefox\//.test(navigator.userAgent);
   const savedMode = document.body.dataset.sheetsMode;
-  const widthOf = h => [...h.querySelectorAll('.jss_worksheet > colgroup > col')].filter(c => c.style.display !== 'none').reduce((a, c) => a + (parseFloat(c.getAttribute('width')) || 0), 0);
+  // the rendered width of the grid: columns hidden by the page (the grey filler columns) stay in the colgroup with their width but take no room
+  const widthOf = h => { const ws = h.querySelector('.jss_worksheet'); const cols = [...h.querySelectorAll('.jss_worksheet > colgroup > col')]; const heads = [...h.querySelectorAll('.jss_worksheet > thead > tr > *')]; const shown = heads.reduce((sum, th) => sum + (th.offsetWidth || th.getBoundingClientRect().width || 0), 0); return Math.round(shown || (ws ? ws.getBoundingClientRect().width : 0) || cols.reduce((a, c) => a + (parseFloat(c.getAttribute('width')) || 0), 0)); };
   for (const mode of ['landscape', 'fit', 'split']) {
     document.body.dataset.sheetsMode = mode;
     window.dispatchEvent(new Event('beforeprint'));

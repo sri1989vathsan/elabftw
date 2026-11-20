@@ -14,6 +14,7 @@ import { ApiC } from './api';
 import { captureFocus, restoreFocus } from './a11y';
 import { entity } from './getEntity';
 import { currentPrintMode, type SheetsMode } from './sheets-mode';
+import { setSpreadsheetPrintRestorer } from './spreadsheet-print-hook';
 import { createSpreadsheetRepaintQueue } from './custom-editor/SpreadsheetPerformance';
 import { buildWellPlateHost, createPlateViewSwitch } from './well-plate-view';
 
@@ -11986,6 +11987,9 @@ export function restoreStaticSpreadsheetsForPrint(originalRoot: ParentNode, clon
     if (finished) raw.replaceWith(placeForPrint(finished, mode));
   });
 }
+
+// the print and copy code of every page reaches this through spreadsheet-print-hook.ts (this file is only loaded where there is a sheet)
+setSpreadsheetPrintRestorer(restoreStaticSpreadsheetsForPrint);
 
 function extractRowHeights(
   tableElement: HTMLTableElement,

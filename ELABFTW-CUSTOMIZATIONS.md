@@ -674,6 +674,11 @@ Five of the tools (all but qPCR, which has its own buttons, and the two registri
 - Global event delegation: all `[data-action]` clicks are intercepted by `#container` listener in `src/ts/common.ts` — use `on(action, fn)` from `src/ts/handlers.ts`, not direct `addEventListener`
 - HTMLPurifier config in `src/Services/Filter.php` must whitelist any new HTML attributes/classes
 
+## Orders API: paging and the default cap
+
+- `GET api/v2/orders` takes `limit`, `offset`, `pinned_limit`, `pinned_offset`, `pinned_only`, `status`, `search`, `sort_by`, `sort_dir` (the Orders page always sends `limit`).
+- **Without `limit` the answer is capped at 500 orders** (pinned first, then newest first), instead of every order of the team (at 20,000 orders: 9.1 MB, 1.5 s, a 110 MB php-fpm worker). A script that needs more pages through the list with `limit` and `offset`. The constant is `Orders::DEFAULT_UNPAGED_LIMIT`. Callers checked when it was introduced: the Orders page (always pages), the order search of the "link an order" autocomplete (`misc.ts`, a search with no `limit`: 500 matches are plenty), and `tests/unit/models/OrdersTest.php` (a handful of rows).
+
 ## Orders: shop sheet drop area and the "Collected" status
 
 - The orders page has a drop area for the signed shop sheets ("Rüstschein" PDFs). For each PDF the procurement number

@@ -32,6 +32,7 @@ use Elabftw\Models\Notifications\UserNotifications;
 use Elabftw\Models\Teams;
 use Elabftw\Models\Users\Users;
 use Elabftw\Services\WhatsNewPopup;
+use Elabftw\Services\WhatsNewStore;
 use Elabftw\Traits\TwigTrait;
 use Exception;
 use Monolog\Handler\ErrorLogHandler;
@@ -227,6 +228,25 @@ final class App
             $this->Log->error('What\'s new popup failed', array(array('Exception' => $e)));
         }
         return $this->whatsNewPopup;
+    }
+
+    /** Address of a picture of the guide ("What's new"): a static file for the shipped ones, whats-new.php?image= for the others. */
+    public function getWhatsNewImageUrl(string $name): string
+    {
+        return new WhatsNewStore()->imageUrl($name);
+    }
+
+    /** Number of "What's new" entries the user has not seen yet (the dot on the navbar button); 0 when anonymous or on any failure. */
+    public function getWhatsNewUnseenCount(): int
+    {
+        if (!$this->Session->get('is_auth') || $this->isAnonymous()) {
+            return 0;
+        }
+        try {
+            return new WhatsNewPopup((int) $this->Users->userData['userid'])->unseenCount();
+        } catch (Exception) {
+            return 0;
+        }
     }
 
     /** Whether the user wants the "What's new" popup after login (a switch in their settings; on by default). */

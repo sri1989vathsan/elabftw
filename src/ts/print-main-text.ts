@@ -10,7 +10,7 @@
  * @license AGPL-3.0
  * @package elabftw
  */
-import { restoreStaticSpreadsheetsForPrint } from './inline-spreadsheet';
+import { restoreStaticSpreadsheetsForPrint } from './spreadsheet-print-hook';
 import { printWithSheetsChoice } from './sheets-mode';
 
 // sections of the page that belong on paper (the others are editing tools, permissions or drawing areas)

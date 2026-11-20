@@ -1,10 +1,11 @@
+{% import 'guide-info.html' as guide -%}
 {% set scriptName = App.Request.getScriptName|split('/')|last %}
 {# HEAD (but when we load show.html from searchpage we don't want it #}
 {%- include 'head.html' -%}
 {# TITLE #}
 {%- block title -%}
   {# this can be overridden by child templates #}
-  <h1 id='pageTitle' {%- if hideTitle %} hidden {%- endif %}>{{ pageTitle|default('eLabFTW') }}</h1>
+  <h1 id='pageTitle' {%- if hideTitle %} hidden {%- endif %}>{{ pageTitle|default('eLabFTW') }}{% if scriptName == 'dashboard.php' %}{{ guide.info('guide-dashboard', 'Dashboard') }}{% endif %}</h1>
 {%- endblock -%}
 
 {# INFO BOX (FLASH MESSAGES) #}

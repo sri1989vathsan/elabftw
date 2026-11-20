@@ -60,7 +60,7 @@
   </div>
 
   {# DISPLAY #}
-  <h2 class='p-2 pl-3 section-title'>{{ 'Display'|trans }}</h2>
+  <h2 class='p-2 pl-3 section-title'>{{ 'Display'|trans }}{{ guide.info('guide-list-layouts', 'Layouts of the lists') }}</h2>
   <div class='pl-3 mt-2 mb-5'>
 
     <div class='d-flex justify-content-between'>
@@ -538,7 +538,7 @@
 
 {# TAB 4 - NOTIFICATIONS SETTINGS #}
 <div data-tabcontent='4' hidden>
-  <h2 class='p-2 pl-3 section-title mb-3' id='notificationsSettings'>{{ 'Notifications settings'|trans }}</h2>
+  <h2 class='p-2 pl-3 section-title mb-3' id='notificationsSettings'>{{ 'Notifications settings'|trans }}{{ guide.info('guide-todo-notifications', 'Notifications') }}</h2>
   <div class='pl-3'>
     <div class='d-flex justify-content-between'>
       <label class='col-form-label font-weight-bold'>{{ 'All notifications'|trans }}</label>

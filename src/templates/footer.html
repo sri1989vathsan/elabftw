@@ -95,7 +95,7 @@
 
 {# "Print a label" in the + menu and its dialog: on every page for people who are logged in (the script does nothing else) #}
 {% if App.Session.has('is_auth') and not App.isAnonymous() %}
-<script src='label-dialog.js?v={{ 'now'|date('YmdHi') }}' defer></script>
+<script src='label-dialog.js?v={{ v }}' defer></script>
 {% endif %}
 
 {# this is read by JS to get info about the state of current user #}

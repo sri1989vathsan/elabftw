@@ -1,3 +1,4 @@
+{% import 'guide-info.html' as guide -%}
 {# A folder as a path (Desktop > Users > ...): each part opens that folder.
    Needs: pathFolderId, pathFolders (the hierarchy rows) and pathPage (the listing page). #}
 {% set folderId = pathFolderId|default(0) %}
@@ -49,6 +50,7 @@
           </div>
         </div>
       {% endif %}
+      <span class='ml-auto'>{{ guide.info('guide-folders', 'Folders') }}</span>
     </nav>
   {% endif %}
 {% endif %}

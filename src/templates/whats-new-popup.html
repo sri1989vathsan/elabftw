@@ -1,8 +1,9 @@
 {# The "What's new" popup, shown once after login when there are entries the user has not seen (decided in App::getWhatsNewPopup, so nothing is drawn otherwise). Behaviour: src/ts/whats-new-popup.ts #}
 {% import 'guide-detail.html' as guide_detail -%}
-{% set wn = App.getWhatsNewPopup() %}
-{% if wn is not empty and scriptName != 'whats-new.php' %}
-  <div class='modal fade whats-new-popup' id='whatsNewPopup' tabindex='-1' role='dialog' aria-labelledby='whatsNewPopupLabel' aria-hidden='true' data-backdrop='false' data-newest-id='{{ wn.newestId }}' data-newest-date='{{ wn.newestDate }}'>
+{# whatsNewOnDemand is set by whats-new.php?popup=1 (the navbar button): same markup, entries chosen by WhatsNewPopup::buildOnDemand #}
+{% set wn = whatsNewOnDemand ?? App.getWhatsNewPopup() %}
+{% if wn is not empty and (whatsNewOnDemand is defined or scriptName != 'whats-new.php') %}
+  <div class='modal fade whats-new-popup' id='whatsNewPopup' tabindex='-1' role='dialog' aria-labelledby='whatsNewPopupLabel' aria-hidden='true' data-backdrop='false' data-newest-id='{{ wn.newestId }}' data-newest-date='{{ wn.newestDate }}'{% if whatsNewOnDemand is defined %} data-on-demand='1' data-unseen='{{ wn.unseen }}'{% endif %}>
     <div class='modal-dialog modal-dialog-centered modal-dialog-scrollable' role='document'>
       <div class='modal-content'>
         <div class='modal-header'>
@@ -15,7 +16,7 @@
               {% if entry.area %}<span class='badge badge-primary mb-1'>{{ entry.area }}</span>{% endif %}
               <h6 class='whats-new-popup-title'>{{ entry.title }}</h6>
               <p class='mb-2'>{{ entry.summary }}</p>
-              {% if entry.image %}<div class='whats-new-popup-shot'><img src='whats-new.php?image={{ entry.image|url_encode }}' alt='{{ entry.imageAlt|default(entry.title) }}' loading='lazy'></div>{% endif %}
+              {% if entry.image %}<div class='whats-new-popup-shot'><img src='{{ App.getWhatsNewImageUrl(entry.image) }}' alt='{{ entry.imageAlt|default(entry.title) }}' loading='lazy'></div>{% endif %}
               {% if entry.details %}
                 <details class='whats-new-popup-details'>
                   <summary>{{ 'Details'|trans }}</summary>
@@ -40,6 +41,7 @@
         </div>
         <div class='modal-footer'>
           <button type='button' class='btn btn-link btn-sm text-muted mr-auto px-0' data-action='whats-new-popup-off'>{{ 'Don’t show these popups'|trans }}</button>
+          {% if whatsNewOnDemand is defined %}<a href='whats-new.php' class='btn btn-link btn-sm px-0 mr-3'>{{ 'Open the full guide'|trans }}</a>{% endif %}
           <button type='button' class='btn btn-primary' data-dismiss='modal' data-whats-new-got-it>{{ 'Got it'|trans }}</button>
         </div>
       </div>
