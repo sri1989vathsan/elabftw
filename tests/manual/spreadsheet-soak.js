@@ -304,6 +304,14 @@ async function spreadsheetSoak(options = {}) {
     for (let i = 0; i < 40 && !(filler = (api.overlayElement(uid) || root).querySelector('.elabftw-spreadsheet-filler')); i++) await sleep(100);
     root = api.overlayElement(uid) || root;
     if (!filler) { note('filler-no-room'); return false; }
+    // the grey filler is redrawn every 400 ms (more on a busy machine): press it once it shows the columns the grid has now, or the cell that is
+    // pressed belongs to the old width ("clicking a grey cell should leave 13 columns, there are 12" in one slow soak run)
+    for (let i = 0; i < 40; i++) {
+      filler = (api.overlayElement(uid) || root).querySelector('.elabftw-spreadsheet-filler') || filler;
+      if (Number(filler.dataset.cols) === (api.overlayElement(uid) || root).querySelectorAll('.jss_worksheet thead td[data-x]').length) break;
+      if (i === 0) note('filler-behind-grid');
+      await sleep(100);
+    }
     const cols = model.grid[0].length;
     // the app takes the empty grey columns off again when a press lands outside the table (Save, the page, a menu of the page): the record remembers
     // the width before the first press and applies that rule when it compares sizes
@@ -602,6 +610,18 @@ async function spreadsheetSoak(options = {}) {
     note(`menu-${kind}`);
     // Size of the stored table (it follows the live grid a moment after each change).
     const domSize = () => { const t = tableEl(uid); return [t.rows.length - 1, t.rows[0].cells.length - 1]; };
+    // The stored table follows the live grid a little later (a debounce, longer when the machine is busy): read the size it is going to have, not
+    // the size it still has, or a step that was only waiting for the stored table to catch up an earlier change (a grey filler press) reads as
+    // the menu action's own change ("size changed by 1 rows and 2 columns, expected 1 and 0" in one slow soak run).
+    if (!config.noStoredWait) {
+      const liveSize = () => { const r0 = api.overlayElement(uid); return r0 ? [r0.querySelectorAll('.jss_worksheet tbody tr').length, r0.querySelectorAll('.jss_worksheet thead td[data-x]').length] : null; };
+      for (let i = 0; i < 80; i++) {
+        const live0 = liveSize(); const now = domSize();
+        if (!live0 || (live0[0] === now[0] && live0[1] === now[1])) break;
+        if (i === 0) note('stored-table-behind-live-grid');
+        await sleep(100);
+      }
+    }
     const sizeBefore = domSize();
     let clicked = false;
     await timed(`menu-${kind}`, async () => {
@@ -1820,6 +1840,7 @@ async function spreadsheetSoak(options = {}) {
         let filler = null;
         for (let i = 0; i < 40 && !(filler = (api.overlayElement(uid) || root).querySelector('.elabftw-spreadsheet-filler')); i++) await sleep(100);
         if (!filler) { note('filler-no-room'); models.delete(uid); continue; }
+        for (let i = 0; i < 40 && Number(filler.dataset.cols) !== (api.overlayElement(uid) || root).querySelectorAll('.jss_worksheet thead td[data-x]').length; i++) await sleep(100);
         const cells = [...filler.querySelectorAll('.fc[data-i][data-r]')];
         cells[Math.min(1 + (n % 3), cells.length - 1)].dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window, button: 0, buttons: 1 }));
         await sleep(delay);
