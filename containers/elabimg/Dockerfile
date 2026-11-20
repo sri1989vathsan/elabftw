@@ -422,7 +422,9 @@ COPY ./tsconfig.json /elabftw
 COPY ./var /elabftw/var
 COPY ./yarn.lock /elabftw
 COPY ./.yarnrc.yml /elabftw
-COPY ./src /elabftw/src
+# src/ts and src/scss are build inputs only (the assets-builder stage compiles them; nothing reads them at run time):
+# left out of the image (-4.2 MB). The patterns are relative to ./src, so only these two top-level folders are skipped.
+COPY --exclude=ts --exclude=scss ./src /elabftw/src
 COPY ./web /elabftw/web
 # the built assets, tex2svg.bundle.js and the generated search parser (src/Services/AdvancedSearchQuery/Grammar/Parser.php)
 COPY --from=assets-builder /out/ /elabftw/
