@@ -25,7 +25,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function startChrome() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'perf-chrome-'));
   const port = 9300 + Math.floor(Math.random() * 500);
-  const proc = spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, '--window-size=1400,900', '--no-first-run', 'about:blank'], { stdio: 'ignore' });
+  const proc = spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, '--window-size=1400,900', '--no-first-run', '--ignore-certificate-errors', 'about:blank'], { stdio: 'ignore' });
   let targets;
   for (let i = 0; i < 50 && !targets; i++) { await sleep(200); try { targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json(); } catch { /* not up */ } }
   const ws = new WebSocket(targets.find(t => t.type === 'page').webSocketDebuggerUrl);
