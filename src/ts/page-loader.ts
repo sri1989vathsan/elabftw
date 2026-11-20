@@ -11,6 +11,7 @@
  */
 const mode = new URLSearchParams(window.location.search).get('mode');
 import { core } from './core';
+import { loadTinymce } from './tinymce-global';
 
 if (document.getElementById('ketcher-root')) {
   void import(
@@ -73,6 +74,19 @@ if (document.getElementById('stepsDiv')) {
     /* webpackChunkName: 'steps-links' */
     './steps-links'
   );
+}
+
+// the spreadsheet engine (view.ts mounts the sheets of the text with it) and TinyMCE are chunks of their own: fetch them at the same time
+// as the page's chunk, not after it, and only where there is a sheet or an editor
+if (mode === 'view' && document.querySelector('#body_view table.elabftw-spreadsheet')) {
+  void import(
+    /* webpackChunkName: 'inline-spreadsheet' */
+    './inline-spreadsheet'
+  );
+}
+
+if (mode === 'edit' || document.querySelector('textarea.mceditable')) {
+  void loadTinymce();
 }
 
 if (mode === 'view') {
