@@ -62,8 +62,10 @@ try:
         time.sleep(2)
         if clear: ev("localStorage.removeItem('elabftw-sheets-mode'); localStorage.removeItem('elabftw-sheets-mode-remembered'); 1")
         # window.print is replaced: nothing goes to a printer; window.open is recorded for the PDF button
-        ev("window.__prints = 0; window.__opened = []; window.print = () => { window.__prints++; const copy = document.querySelector('#tocPrintSelectionDocument .print-sheet-copy'); window.__printMode = !copy ? 'none' : document.querySelector('#tocPrintSelectionDocument .print-split-sheet') ? 'split' : copy.classList.contains('print-wide-sheet') ? 'landscape' : 'fit'; }; window.open = u => { window.__opened.push(String(u)); return null; }; 1")
+        ev("window.requestAnimationFrame = cb => window.setTimeout(cb, 16); window.__prints = 0; window.__opened = []; window.print = () => { window.__prints++; const copy = document.querySelector('#tocPrintSelectionDocument .print-sheet-copy'); window.__printMode = !copy ? 'none' : document.querySelector('#tocPrintSelectionDocument .print-split-sheet') ? 'split' : copy.classList.contains('print-wide-sheet') ? 'landscape' : 'fit'; }; window.open = u => { window.__opened.push(String(u)); return null; }; 1")
     modal_shown = "(()=>{const m=document.getElementById('sheetsModeModal'); return !!m && m.classList.contains('show') && getComputedStyle(m).display !== 'none'})()"
+    def shown():
+        ok = wait(modal_shown, 8); time.sleep(0.8); return ok   # a click during the fade-in is ignored by Bootstrap (a user cannot click that fast)
     modal_gone = "!document.getElementById('sheetsModeModal')"
     click_print = "document.getElementById('tocPrintAll').click(); 1"
 
@@ -83,7 +85,7 @@ try:
     wait(modal_gone, 8)
     time.sleep(1)
     check('Cancel prints nothing and leaves no mode behind', ev("window.__prints === 0 && !document.body.dataset.sheetsMode"), 'printed or mode left')
-    ev(click_print); wait(modal_shown, 8)
+    ev(click_print); shown()
     ev("document.getElementById('sheetsModeChoice-landscape').click(); document.getElementById('sheetsModeRemember').click(); document.getElementById('sheetsModeOk').click(); 1")
     wait(modal_gone, 15); wait('window.__prints === 1', 20)
     check('OK prints once, and the printed copy has the chosen mode (landscape page for the wide table)', ev("window.__prints === 1 && window.__printMode === 'landscape'"), str(ev('[window.__prints, window.__printMode]')))
@@ -93,15 +95,15 @@ try:
     ev(click_print); wait('window.__prints === 2', 20)
     check('with a remembered choice the next Print does not ask and uses it', ev(f"({modal_gone}) && window.__prints === 2 && window.__printMode === 'landscape'"), str(ev('[window.__prints, window.__printMode]')))
     ev("document.querySelector('[data-action=\"sheets-mode-change\"]').click(); 1")
-    check('Change wide table setting brings the question back (Save)', wait(modal_shown, 8) and ev("document.getElementById('sheetsModeOk').textContent.trim() === 'Save' && document.getElementById('sheetsModeChoice-landscape').checked && document.getElementById('sheetsModeRemember').checked"), 'no question or wrong state')
+    check('Change wide table setting brings the question back (Save)', shown() and ev("document.getElementById('sheetsModeOk').textContent.trim() === 'Save' && document.getElementById('sheetsModeChoice-landscape').checked && document.getElementById('sheetsModeRemember').checked"), 'no question or wrong state')
     ev("document.getElementById('sheetsModeRemember').click(); document.getElementById('sheetsModeChoice-fit').click(); document.getElementById('sheetsModeOk').click(); 1")
     wait(modal_gone, 8)
     ev(click_print)
-    check('after un-remembering, Print asks again with Fit preselected', wait(modal_shown, 8) and ev("document.getElementById('sheetsModeChoice-fit').checked"), 'no question')
+    check('after un-remembering, Print asks again with Fit preselected', shown() and ev("document.getElementById('sheetsModeChoice-fit').checked"), 'no question')
     ev("document.getElementById('sheetsModeCancel').click(); 1"); wait(modal_gone, 8)
     # the PDF button of the panel
     ev("document.getElementById('tocPdfAll').click(); 1")
-    check('the PDF button asks too', wait(modal_shown, 8), 'no question')
+    check('the PDF button asks too', shown(), 'no question')
     ev("document.getElementById('sheetsModeChoice-split').click(); document.getElementById('sheetsModeOk').click(); 1")
     wait(modal_gone, 15); wait('window.__opened.length === 1', 20)
     check('the PDF opens with sheets=split', ev("window.__opened.length === 1 && /format=pdf/.test(window.__opened[0]) && /sheets=split/.test(window.__opened[0])"), str(ev('window.__opened')))
