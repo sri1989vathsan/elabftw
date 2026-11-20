@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Checks the pictures of the in-app guide (src/whats-new.json, web/assets/images/whats-new/).
+ * Checks the pictures of the in-app guide (src/whats-new.json and, on the inventory branch, src/whats-new-inventory.json; web/assets/images/whats-new/).
  * Run from the repository root:  node tests/manual/guide-pictures-check.js
  * Exit code 0 = all good, 1 = problems (listed).
  *
@@ -41,6 +41,8 @@ const SAME_FEATURE = [
   ['guide-dashboard', 'dashboard-tiles'],
   ['guide-create-entry', 'create-with-folder'],
   ['guide-orders', 'orders'],
+  ['guide-database', 'database-guide'],
+  ['guide-database-sharing', 'database-team-switches'],
   ['navigation', 'quick-links'],
   ['guide-steps', 'steps-and-tasks'],
   ['guide-toc', 'side-panel-refresh'],
@@ -54,6 +56,9 @@ const fail = m => errors.push(m);
 let entries;
 try {
   entries = JSON.parse(fs.readFileSync(path.join(root, 'src/whats-new.json'), 'utf8'));
+  // the inventory branch has a second file with its own entries (same loader): check those too when it exists
+  const inventoryFile = path.join(root, 'src/whats-new-inventory.json');
+  if (fs.existsSync(inventoryFile)) entries = entries.concat(JSON.parse(fs.readFileSync(inventoryFile, 'utf8')));
 } catch (e) {
   console.error('FAIL invalid JSON: ' + e.message);
   process.exit(1);
