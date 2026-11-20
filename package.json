@@ -130,7 +130,7 @@
     "analyzejs": "yarn run buildprofile && webpack-bundle-analyzer stats.json web/assets -m static -O",
     "api": "tests/run.sh api",
     "apidocv2": "docker run --name swagger --rm -e SWAGGER_JSON=/c/openapi.yaml -v $(pwd)/apidoc/v2/:/c -p 8085:8080 -d swaggerapi/swagger-ui && echo 'APIv2 Doc: http://localhost:8085' && echo 'Run docker stop swagger to remove it.'",
-    "brotli": "printf '%s\\0' web/assets/*.css web/assets/*.js web/assets/*.svg web/assets/images/*.svg | xargs -0 -n1 -P8 brotli -vf",
+    "brotli": "printf '%s\\0' web/assets/*.css web/assets/*.js web/assets/*.svg web/assets/images/*.svg | xargs -0 -n1 -P8 brotli -q ${BROTLI_QUALITY:-11} -vf",
     "build": "webpack-cli --progress --config builder.js",
     "build:dev": "webpack-cli --mode development --config-node-env development --env development --config builder.js",
     "build:prod": "webpack-cli --mode production --config-node-env production --env production --config builder.js --no-devtool",
