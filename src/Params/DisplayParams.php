@@ -156,7 +156,10 @@ final class DisplayParams extends BaseQueryParams
 
         // SCOPE FILTER
         // default scope is the user setting, but can be overridden by query param
-        $scopeInt = $this->requester->userData['scope_' . $this->entityType->value] ?? Scope::Everything->value;
+        // the Database list has its own column (moor_scope_inventory): users has no scope_inventory
+        $scopeColumn = $this->entityType === EntityType::Inventory ? 'moor_scope_inventory' : 'scope_' . $this->entityType->value;
+        $userScope = $this->requester->userData[$scopeColumn] ?? Scope::Everything->value;
+        $scopeInt = $userScope;
         if (Check::id($query->getInt('scope')) !== false) {
             $scopeInt = $query->getInt('scope');
         }
@@ -169,7 +172,7 @@ final class DisplayParams extends BaseQueryParams
             $this->appendFilterSql(FilterableColumn::Owner, $this->requester->userData['userid']);
         }
         // add filter on team only if scope is not set to everything
-        if ($this->requester->userData['scope_' . $this->entityType->value] === Scope::Team->value && $scope !== Scope::Everything) {
+        if ($userScope === Scope::Team->value && $scope !== Scope::Everything) {
             $this->appendFilterSql(FilterableColumn::Team, $this->requester->team ?? 0);
         }
         // TAGS SEARCH

@@ -72,6 +72,8 @@ final class InventoryMigrations
         'inv_006_twin_category_color_fg.sql',
         'inv_007_twin_steps_created_at.sql',
         'inv_008_twin_steps_group_id.sql',
+        'inv_009_inventory_search_index.sql',
+        'inv_010_user_scope_inventory.sql',
     );
 
     /**

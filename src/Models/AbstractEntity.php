@@ -204,7 +204,17 @@ abstract class AbstractEntity extends AbstractRest
             return null;
         }
         $folderId = (int) $reqBody['folder_id'];
-        new ExperimentsFolders($this->Users, $folderId, $this instanceof Inventory ? 'inventory' : 'experiments')->readOne();
+        $scope = $this instanceof Inventory ? 'inventory' : 'experiments';
+        new ExperimentsFolders($this->Users, $folderId, $scope)->readOne();
+        // the folder trees are separate: an entry of the Database goes in a Database folder, an experiment or resource in an experiments folder
+        $req = $this->Db->prepare('SELECT COUNT(*) FROM experiments_folders WHERE id = :id AND team = :team AND scope = :scope');
+        $req->bindValue(':id', $folderId, PDO::PARAM_INT);
+        $req->bindValue(':team', $this->Users->team, PDO::PARAM_INT);
+        $req->bindValue(':scope', $scope);
+        $this->Db->execute($req);
+        if ((int) $req->fetchColumn() !== 1) {
+            throw new ResourceNotFoundException();
+        }
         return $folderId;
     }
 
