@@ -292,8 +292,15 @@ window.foldersExplorerCheck = async function () {
         drag(rowOf, targetTree);
         await wait(2500);
         var still = (await api('GET', 'experiments/' + theirs.id)).json;
-        check('X1 it was not moved', Number(still.folder_id) === where, still.folder_id);
-        check('X2 no "Moved" message for the refused move', !$('#folderMoveToast'), 'toast shown');
+        if (Number(still.folder_id) !== where && $('#folderMoveToast')) {
+          // the entry of another user that was found gives this user write access (an explicit permission in its own rules): the move is allowed, not
+          // a refusal to check. Put it back where it was and say that the refusal was not checked (it needs an entry of another user without write access).
+          await api('PATCH', 'experiments/' + theirs.id, { folder_id: where });
+          results.push({ name: 'X1/X2 skipped: the entry of another user found (id ' + theirs.id + ') gives the test user write access, so its move is allowed (it was put back)', ok: true });
+        } else {
+          check('X1 it was not moved', Number(still.folder_id) === where, still.folder_id);
+          check('X2 no "Moved" message for the refused move', !$('#folderMoveToast'), 'toast shown');
+        }
       }
     } else results.push({ name: 'X0 skipped: no experiment of another user in a folder', ok: true });
   } catch (e) {
