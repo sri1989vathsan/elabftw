@@ -12,8 +12,15 @@
       "Turn Create Database entries off and the New entry button is hidden for people who are not admins. Who can read or edit an entry does not change.",
       "The Database list itself is unchanged."
     ],
-    "image": "",
-    "imageAlt": ""
+    "image": "database-team-switches.jpg",
+    "imageAlt": "Admin panel, Team tab: the Database card with the two switches Allow users to create Database entries and Allow users to create and edit Modules",
+    "highlight": {
+      "x": 3.0,
+      "y": 15.1,
+      "w": 96.3,
+      "h": 20.3,
+      "label": "Database switches"
+    }
   },
   {
     "id": "database-guide",
@@ -23,29 +30,36 @@
     "title": "The Database in the guide, with an \"i\" where you need it",
     "summary": "Five new guide cards explain the Database, its storage, the sequence editor, the family tree and who can edit. A small i opens each one from the place it is about.",
     "details": [
-      "The guide has a new Database area: modules and entries, storage with boxes and tubes, the sequence editor, the family tree of an entry, and who can edit, folders and personal modules.",
-      "Click the small i beside the Database title, beside the Sequence, Lineage and Storage headings of an entry, in the storage browser, or in the Who can edit and My modules boxes to open the matching card.",
+      "The guide has a Database area: modules and entries, storage with boxes and tubes, the sequence editor, the family tree, and who can edit, folders and personal modules.",
+      "Click the small i beside the Database title and Dashboard, the Sequence, Primers and probes, Lineage and Storage headings of an entry, the Storage browser, Add container, Modules, the Database settings of Admin, and the Who can edit and My modules boxes.",
+      "The New entry window has an i that opens the Database guide in a new tab.",
       "On the personal module of a colleague that you only look at, the New entry button is no longer shown, since you cannot add to it."
     ],
-    "image": "guide-database.jpg",
-    "imageAlt": "The Database list with its module tabs and the New entry button, outlined"
+    "image": "database-guide.jpg",
+    "imageAlt": "The top of the Database page with the module tabs and the small i beside the Database title, outlined",
+    "highlight": {
+      "x": 19.8,
+      "y": 2.2,
+      "w": 4.8,
+      "h": 7.8,
+      "label": "Small i"
+    }
   },
   {
     "id": "guide-database",
     "date": "2026-11-11",
     "area": "Database",
     "title": "Database and modules",
-    "summary": "A shared catalogue of what your lab keeps (plasmids, antibodies, cells, primers and more), with one module for each kind and fields that fit it.",
+    "summary": "A shared catalogue of what your lab keeps (plasmids, antibodies, cells, primers and more), one module for each kind.",
     "details": [
-      "fa-database::Open Database in the top bar. Each kind of thing is a module, shown as a tab above the list, for example Plasmids, Antibodies or Primers. Press a tab to see only that module.",
-      "fa-plus::New entry: press the blue New entry button beside the tabs to add one to the module you are in. Choose where it goes: My database (it gets your own My_id), the lab database (everyone sees it and it gets the ID of the lab), or neither, and it stays private to you with no number until you register it.",
-      "fa-table-list::The list is a table with the columns of the module. Press the arrow in front of a row to open it in place, or Expand all and Collapse all. Type in the box under a heading to filter by that column, press Columns to choose which columns show, and use the buttons at the end of a row to edit, copy or print it.",
-      "fa-user::All entries shows the registered database of the lab. My entries shows everything of yours, including entries that have no number yet, and lets you pick All, In database or Not in database.",
-      "fa-id-card::An entry has a Description (what it is), Details (the fields of its module, such as Backbone or Resistance) and sections for the Sequence, Storage, Lineage, Activity, Links, Permissions and files. A yellow bar on an entry without a number offers Register in the lab Database (the ID of the lab) or Register for myself (your next My_id).",
-      "fa-eye::Everyone with an account can read the lab database. The owner and the admins change an entry, and the owner can let others edit it (see Who can edit, folders and personal modules). Only the owner and the admins delete one.",
-      "fa-file-import::Import adds entries from a file and Export saves the list to a file, both above the table."
+      "fa-database::Open Database in the top bar. Each kind of thing is a module, shown as a tab: Plasmids, Antibodies, Primers and so on.",
+      "fa-plus::The blue New entry button under the tabs adds an entry to the module you are in. In Plasmids it asks for a name, parents and a sequence.",
+      "fa-table-list::The table has the columns of the module. Type under a heading to filter, press Columns to choose them, the arrow opens a row in place.",
+      "fa-user::All entries shows the lab Database; My entries shows yours, also those without a number. A yellow bar on an entry offers Register.",
+      "fa-id-card::An entry has Details, Sequence, Storage, Lineage, Activity, Links and Permissions. Everyone reads; the owner and admins change it.",
+      "fa-file-import::Import adds entries from a file and Export saves the list, both above the table."
     ],
-    "imageAlt": "The Database page with a module open: the module tabs, the New entry button and the table of entries with a filter under each heading",
+    "imageAlt": "The Database page with the Plasmids module open: the module tabs, the New entry: Plasmids button and the table of plasmids with a filter under each heading",
     "featured": false,
     "guide": true,
     "order": 200,
@@ -66,11 +80,11 @@
     ],
     "image": "guide-database.jpg",
     "highlight": {
-      "x": 40.8,
-      "y": 27.2,
-      "w": 57.9,
-      "h": 5.7,
-      "label": "Modules and New entry"
+      "x": 82.0,
+      "y": 20.0,
+      "w": 17.4,
+      "h": 6.6,
+      "label": "New entry"
     }
   },
   {
@@ -80,14 +94,14 @@
     "title": "Storage: boxes, slots and tubes",
     "summary": "Record where everything is kept: rooms, freezers, racks and boxes, with every tube in its own slot.",
     "details": [
-      "fa-box-open::Open Storage browser in the Database menu. The tree on the left has three tabs: Lab storage, My storage and Other storage. A place is a location (a room or a shelf), a fridge, a freezer, a rack or a box. Only a location can sit at the top; the others go inside it. Search storage, Expand all and Collapse all help in a big tree.",
-      "fa-plus::Add a location creates a place. Open a place to rename it, change its kind, set where it comes among its neighbours, or move it, with everything in it, into another place.",
-      "fa-table-cells::A box has slots. Set its size (the rows are letters, the columns numbers) and the grid shows every slot; Not a box turns it back into a plain place. A slot holding a tube shows the name of its entry, and a box is never made smaller than a tube that is in it.",
-      "fa-vial::Add a tube: on the page of an entry, the Storage section has Add storage. Choose the place and how many tubes, and how much is in each. The entry page groups its tubes by box.",
-      "fa-hand-pointer::Drag a tube to another free slot to move it. To fill several free slots, drag over them with the mouse, Cmd/Ctrl-click them, or Shift-click the other corner of a block. Hover a tube to see its card, and click it to keep the card open.",
+      "fa-box-open::Open Storage browser in the Database menu. The tree has the tabs Lab storage, My storage and Other storage, with a search.",
+      "fa-plus::Add a location creates a place: a location, fridge, freezer, rack or box. Open a place to rename, change or move it with its contents.",
+      "fa-table-cells::A box has slots: set its size and the grid shows every slot. A tube shows the name of its entry.",
+      "fa-vial::To store a tube, open the entry and press Add storage in its Storage section: choose the place, how many tubes and how much in each.",
+      "fa-hand-pointer::Drag a tube to a free slot to move it. Cmd/Ctrl-click or Shift-click free slots to fill several at once.",
       "fa-user-shield::Anyone who can read an entry can add, move or remove its tubes. Only admins delete a place."
     ],
-    "imageAlt": "A storage box in the storage browser: a 9 by 9 grid of slots with eight tubes in blue, each named after its entry",
+    "imageAlt": "The Storage browser: the tree of places on the left and, for Freezer -80 A, its racks with filled boxes and free places outlined, and the count of racks and slots",
     "featured": false,
     "guide": true,
     "order": 201,
@@ -100,14 +114,19 @@
     ],
     "news": "New: places, boxes with slots, and tubes you can drag from slot to slot.",
     "shot": "A storage box with a grid of slots and tubes in blue",
-    "screenshots": [],
+    "screenshots": [
+      {
+        "image": "guide-database-storage-box.jpg",
+        "caption": "A box opened in the Storage browser: every slot of the 9 by 9 grid, with a tube named after its entry in the filled ones"
+      }
+    ],
     "image": "guide-database-storage.jpg",
     "highlight": {
-      "x": 6.3,
-      "y": 12.2,
-      "w": 39.2,
-      "h": 17.9,
-      "label": "Tubes in their slots"
+      "x": 33.1,
+      "y": 34.8,
+      "w": 76.5,
+      "h": 51.8,
+      "label": "Racks and boxes"
     }
   },
   {
@@ -115,17 +134,16 @@
     "date": "2026-11-11",
     "area": "Database",
     "title": "Sequence editor, reads and primers",
-    "summary": "Open the sequence of a plasmid in a full editor, align sequencing reads to it, and keep its primers and orders together.",
+    "summary": "Open the sequence of a plasmid in a full editor, align sequencing reads to it, and keep its primers with its orders.",
     "details": [
-      "fa-dna::An entry with a .gb, .gbk, .fasta or .dna file attached shows a Sequence section. Press the file to open it in its own page: a circular and a linear map, the sequence with the enzyme cut sites, and the menus File, Edit, View and Tools.",
-      "fa-floppy-disk::The owner and the admins can change the sequence; everyone else sees it read-only. A change is saved on its own a few seconds after the last edit, as a new version of the file, and the earlier versions are kept (the Version history tool, or the show the versions link on the entry). A .dna file is saved back as a .gb file.",
-      "fa-plus::To add a sequence, use the dialog of New entry in the Plasmids module (a name, its parents, and a sequence from a file or pasted), or Add a sequence on the edit page of a plasmid. Tools > Sequence editor opens an empty editor in which you can search for the file of a plasmid.",
-      "fa-screwdriver-wrench::The tool rail on the right of the editor holds Primers and probes, Design primers, Compare digests, Find and add features, Align sequencing reads, Version history, Enzymes by vendor and Tools.",
-      "fa-align-left::Sequencing reads: attach the .ab1 files of a run in the Sequencing reads part of the Sequence section, then press the align button, or drop the files on the Align tool. The reads are aligned to the plasmid, on both strands, with their traces under them. A Clustal file (.aln or .clustal) can be attached to look at an alignment. The Algorithm menu beside the align button (and in the bar of the alignment view) chooses the program that aligns each read: the built-in aligner, MAFFT or Clustal Omega. The place and the strand of a read are found the same way, and the choice is kept for next time. MAFFT and Clustal Omega align the read end to end, so trim the poor ends of a read first. Drop several files (ab1 or fasta) to align them together, press the small cross at the end of a read to take it out, and use Save in the entry on the alignment page to keep what you see as a Clustal file: give it a name and it stays next to the other alignments of the entry, and the Saved menu opens each one on its own. A read that runs over the origin of a circular plasmid is one alignment.",
-      "fa-vial::Primers are entries of the Primers module. On the page of a plasmid you can attach primers to it, see where each one binds, find primers that bind, and send chosen primers to an order. Attached primers are drawn on the map but are not saved in the file.",
-      "fa-cart-shopping::The order dialog names the order (Oligos; IDT or Microsynth) and attaches the IDT or Microsynth sheet. On the Orders page, the + button on an .xlsx sheet lists its primers: new ones are added to the Primers module and all of them are linked to the order."
+      "fa-dna::A plasmid with a .gb, .gbk, .fasta or .dna file shows a Sequence section. Press the file: circular and linear map, sequence, cut sites.",
+      "fa-floppy-disk::A change saves by itself as a new version and the earlier ones are kept. A registered plasmid is locked: unlock it to edit.",
+      "fa-plus::Add a sequence in the New entry window of Plasmids or on a plasmid's edit page. Tools > Sequence editor opens an empty editor.",
+      "fa-screwdriver-wrench::The tool rail on the right has Primers and probes, Design primers, Compare digests, Find and add features and Version history.",
+      "fa-align-left::Attach .ab1 reads and press Alignment of sequencing reads: they are aligned to the plasmid with their traces under them.",
+      "fa-vial::Primers are entries of the Primers module: attach them to a plasmid, see where they bind and send chosen ones to an order."
     ],
-    "imageAlt": "The sequence editor on a plasmid: the circular map with its features, the sequence with enzyme cut sites, and the tool rail on the right",
+    "imageAlt": "The sequence editor on a plasmid: the circular map with its features, the sequence with the CMV promoter, and the tool rail on the right",
     "featured": false,
     "guide": true,
     "order": 202,
@@ -141,10 +159,10 @@
     "screenshots": [],
     "image": "guide-sequence-editor.jpg",
     "highlight": {
-      "x": 96.6,
-      "y": 10.3,
-      "w": 3.4,
-      "h": 46.0,
+      "x": 95.6,
+      "y": 9.0,
+      "w": 4.4,
+      "h": 44.0,
       "label": "Tool rail"
     }
   },
@@ -155,12 +173,12 @@
     "title": "Family tree: parents and daughters",
     "summary": "Record what each construct was made from and what was made from it, and see the whole family as a tree.",
     "details": [
-      "fa-sitemap::The Lineage section of an entry has Parents (what it was made from) and Daughters (what was made from it). Type in Add a parent… or Add a daughter… to search the Database and pick an entry; press the cross on a name to remove the link. Each name opens that entry.",
-      "fa-diagram-project::The Family tree below draws the entry in the middle, its ancestors above and its descendants below, a few generations each way. The names in the tree are links too.",
-      "fa-copy::A copy of an entry, made with Copy in the list or Duplicate in the toolbar, becomes a daughter of the original.",
-      "fa-user-pen::To add or remove the parents of an entry you must be able to edit it, and a link that would make an entry come from its own descendant is refused."
+      "fa-sitemap::The Lineage section has Parents and Daughters. Type in Add a parent or Add a daughter, pick an entry; the cross removes a link.",
+      "fa-diagram-project::The Family tree draws the entry in the middle, its ancestors above and its descendants below. The names are links.",
+      "fa-copy::A copy made with Copy in the list or Duplicate in the toolbar becomes a daughter of the original.",
+      "fa-user-pen::You need edit rights to change the parents of an entry, and a link that makes an entry descend from itself is refused."
     ],
-    "imageAlt": "The Lineage section of an entry: its parents, its daughters and the family tree with the entry in the middle",
+    "imageAlt": "The Lineage section of a plasmid: its two parents, the daughters box and the family tree with the plasmid in the middle",
     "featured": false,
     "guide": true,
     "order": 203,
@@ -176,11 +194,11 @@
     "screenshots": [],
     "image": "guide-lineage.jpg",
     "highlight": {
-      "x": 40.8,
-      "y": 47.5,
-      "w": 25.8,
-      "h": 47.5,
-      "label": "Family tree"
+      "x": 1.2,
+      "y": 2.6,
+      "w": 97.7,
+      "h": 21.8,
+      "label": "Lineage section"
     }
   },
   {
@@ -190,13 +208,13 @@
     "title": "Who can edit, folders and personal modules",
     "summary": "Let colleagues edit your entries, organise the Database in its own folders, and keep modules of your own.",
     "details": [
-      "fa-user-pen::Who can edit: the owner and the admins change an entry and everyone with an account reads it. On the page of an entry, the Who can edit button lets the owner add people or groups who may edit it too. In the list, Actions on selected has Who can edit… for many entries at once. New group… in that window makes a group that only you and its members see.",
-      "fa-folder-tree::Database folders: the Database has folders of its own, apart from the folders of experiments and resources. They show in the Folders tab of the left sidebar while you are in the Database, and you can file entries in them and filter the list by folder.",
-      "fa-user-lock::My modules: in the Database menu, My modules… makes a module that only you see and use, with the fields of another module copied into it if you like. Its entries stay private: they never get an ID of the lab, only your own My_id, and they are filed in a folder called Module Folders. A module can be renamed, recoloured or removed once it has no entries.",
-      "fa-magnifying-glass::Browse someone’s modules…: search the personal modules of colleagues and add one at a time to look at it. Its entries open read-only for 30 minutes, or until you press the cross of that module, and the owner can see in My modules who looked.",
-      "fa-id-badge::Numbers: registering an entry in the lab Database gives it the ID of the lab; Register for myself gives it your own My_id and keeps it private."
+      "fa-user-pen::Who can edit: in Permissions on the edit page, the owner adds people or groups who may edit too. The list has Who can edit… for many.",
+      "fa-folder-tree::The Database has folders of its own, in the Folders tab of the sidebar while you are in the Database. File entries there; filter by folder.",
+      "fa-user-lock::My modules… in the Database menu makes a module only you see. Its entries get your own My_id and no number of the lab.",
+      "fa-magnifying-glass::Browse someone's modules… adds a colleague's personal module read-only for 30 minutes. The owner sees who looked.",
+      "fa-id-badge::Register in the lab Database gives an entry the ID of the lab; Register for myself gives it your own My_id and keeps it private."
     ],
-    "imageAlt": "The Who can edit window of an entry: groups, a list of people to tick and Everyone in the team",
+    "imageAlt": "The Who can edit window of an entry: the groups, a list of people to tick and Everyone in the team",
     "featured": false,
     "guide": true,
     "order": 204,
@@ -210,13 +228,6 @@
     "news": "New: owners can let others edit, the Database has its own folders, and everyone can have modules of their own.",
     "shot": "The Who can edit window of an entry",
     "screenshots": [],
-    "image": "guide-database-sharing.jpg",
-    "highlight": {
-      "x": 3.6,
-      "y": 55.8,
-      "w": 92.9,
-      "h": 20.9,
-      "label": "Pick who may edit"
-    }
+    "image": "guide-database-sharing.jpg"
   }
 ]

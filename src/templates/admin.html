@@ -119,7 +119,7 @@
     </section>
 
     <section class='settings-card'>
-      <h3 class='settings-card-title'>{{ 'Database'|trans }}</h3>
+      <h3 class='settings-card-title'>{{ 'Database'|trans }}{{ guide.info('guide-database', 'Database and modules') }}</h3>
     {% include 'binary-setting.html' with {'model': model, 'src': src,
       'slug': 'users_canwrite_inventory',
       'label': 'Allow users to create Database entries'|trans} %}
@@ -876,7 +876,7 @@
 
 {# TAB 11 DATABASE: the modules, who owns the entries, and the rules of a module #}
 <div data-tabcontent='11' hidden>
-  <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Database'|trans }}</h2>
+  <h2 class='mb-3 p-2 pl-3 section-title'>{{ 'Database'|trans }}{{ guide.info('guide-database', 'Database and modules') }}</h2>
   <div class='pl-3 mb-3' id='databaseSubtabs'>
     <button type='button' class='btn btn-sm btn-primary mr-1' data-dbsub='modules'>{{ 'Modules'|trans }}</button>
     <button type='button' class='btn btn-sm btn-secondary mr-1' data-dbsub='rules'>{{ 'Rules of a module'|trans }}</button>

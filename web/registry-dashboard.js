@@ -97,7 +97,15 @@
     // the head
     const head = element('div', 'rd-head');
     const titles = element('div');
-    titles.append(element('h1', '', 'Dashboard'), element('div', 'rd-sub', 'What is in the Database and what to check'));
+    const heading = element('h1', '', 'Dashboard');
+    // small "i" like the ones of the other pages: the guide cards of the Database area
+    const guide = element('a', 'btn btn-link guide-info-btn p-0 ml-1');
+    guide.href = 'whats-new.php?area=Database';
+    guide.title = 'About the Database in the guide';
+    guide.setAttribute('aria-label', 'About the Database in the guide');
+    guide.append(element('i', 'fas fa-circle-info'));
+    heading.append(guide);
+    titles.append(heading, element('div', 'rd-sub', 'What is in the Database and what to check'));
     const tools = element('div', 'rd-tools');
     const autoLabel = element('label', 'mb-0');
     const auto = element('input');

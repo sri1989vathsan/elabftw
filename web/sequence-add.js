@@ -478,7 +478,17 @@
     const dialog = element('div', 'sa-dialog');
     dialog.setAttribute('role', 'dialog');
     dialog.setAttribute('aria-modal', 'true');
-    dialog.append(element('h4', '', 'New entry: ' + categoryTitle));
+    const heading = element('h4', '', 'New entry: ' + categoryTitle);
+    // small "i" like the ones of the other pages: the guide cards of the Database area, in a new tab so that the entry you are typing stays
+    const guide = element('a', 'btn btn-link guide-info-btn p-0 ml-1');
+    guide.href = 'whats-new.php?area=Database';
+    guide.target = '_blank';
+    guide.rel = 'noopener';
+    guide.title = 'About the Database in the guide';
+    guide.setAttribute('aria-label', 'About the Database in the guide');
+    guide.append(element('i', 'fas fa-circle-info'));
+    heading.append(guide);
+    dialog.append(heading);
 
     const nameLabel = element('label', '', 'Name');
     const name = element('input', 'sa-input');
