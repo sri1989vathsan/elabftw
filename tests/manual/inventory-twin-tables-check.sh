@@ -89,7 +89,7 @@ for f in $(ls "$WORK/up" | sort); do
 done
 check "upgraded: items_revisions is gone (upstream dropped it)" "$(sqlq "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='upg' AND TABLE_NAME='items_revisions'")" "0"
 out="$(runner upg full | tail -1)"; echo "   $out"
-check "upgraded: the runner applies exactly the 6 new migrations (inv_003 no-op, inv_004..008)" "$(echo "$out" | sed -n 's/^applied \([0-9]*\),.*/\1/p')" "6"
+check "upgraded: the runner applies exactly the 8 new migrations (inv_003 no-op, inv_004..010)" "$(echo "$out" | sed -n 's/^applied \([0-9]*\),.*/\1/p')" "8"
 out="$(runner upg full | tail -1)"
 check "upgraded: second run applies nothing" "$(echo "$out" | sed -n 's/^applied \([0-9]*\),.*/\1/p')" "0"
 
@@ -115,6 +115,18 @@ for t in $(sqlq "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SC
     a="$(sqlq "SHOW CREATE TABLE fresh.$t")"; b="$(sqlq "SHOW CREATE TABLE upg.$t")"
     [ "$a" = "$b" ] || bad "fork table $t differs between fresh and upgraded"
 done
+
+echo "== search index and scope column: same on both paths (SHOW CREATE TABLE above includes the keys; these name what must be there)"
+for d in fresh upg; do
+    check "$d: inventory has a FULLTEXT index on exactly (title, body, elabid), the one MATCH(title, body, elabid) needs" \
+        "$(sqlq "SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA='$d' AND TABLE_NAME='inventory' AND INDEX_TYPE='FULLTEXT' GROUP BY INDEX_NAME HAVING GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX)='title,body,elabid'")" "title,body,elabid"
+    check "$d: inventory still has the metadata_search column" "$(sqlq "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$d' AND TABLE_NAME='inventory' AND COLUMN_NAME='metadata_search'")" "1"
+    check "$d: a MATCH(title, body, elabid) query runs (no error 1191)" "$(sql -N -e "SELECT COUNT(*) FROM $d.inventory WHERE MATCH(title, body, elabid) AGAINST ('zzz' IN BOOLEAN MODE)" | grep -c ERROR)" "0"
+    check "$d: users.moor_scope_inventory is TINYINT UNSIGNED NOT NULL DEFAULT 2" "$(sqlq "SELECT CONCAT(COLUMN_TYPE,'/',IS_NULLABLE,'/',COLUMN_DEFAULT) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$d' AND TABLE_NAME='users' AND COLUMN_NAME='moor_scope_inventory'")" "tinyint unsigned/NO/2"
+done
+check "inventory keys are identical on fresh and upgraded" \
+    "$(sqlq "SELECT INDEX_NAME, SEQ_IN_INDEX, COLUMN_NAME, INDEX_TYPE FROM information_schema.STATISTICS WHERE TABLE_SCHEMA='fresh' AND TABLE_NAME='inventory' ORDER BY 1,2" | cksum)" \
+    "$(sqlq "SELECT INDEX_NAME, SEQ_IN_INDEX, COLUMN_NAME, INDEX_TYPE FROM information_schema.STATISTICS WHERE TABLE_SCHEMA='upg' AND TABLE_NAME='inventory' ORDER BY 1,2" | cksum)"
 
 echo "== no new LIKE <table>"
 check "no inv_ migration says LIKE (comments aside)" "$(grep -vh '^--' src/sql/custom/inv_*.sql | grep -ic 'create table[^;]* like ')" "0"
