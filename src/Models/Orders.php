@@ -80,6 +80,10 @@ final class Orders extends AbstractRest
     // must stay bounded at all
     private const int DEFAULT_PINNED_LIMIT = 20;
 
+    // a GET on the orders without "limit" (scripts, the order search of the link autocomplete) returns at most this many
+    // rows, pinned first, then newest: at 20,000 orders the unbounded answer was 9.1 MB, 1.5 s and a 110 MB php-fpm worker
+    private const int DEFAULT_UNPAGED_LIMIT = 500;
+
     public function __construct(private Users $Users, ?int $id = null)
     {
         parent::__construct();
@@ -361,7 +365,7 @@ final class Orders extends AbstractRest
         if ($limit === 0) {
             $sql = self::selectSql() . '
                 WHERE ' . implode(' AND ', $conditions) . "
-                ORDER BY o.pinned DESC, {$sortColumn} {$sortDir}";
+                ORDER BY o.pinned DESC, {$sortColumn} {$sortDir} LIMIT " . self::DEFAULT_UNPAGED_LIMIT;
 
             return array_map($this->hydrate(...), $this->fetchAllBound($sql, $bind));
         }
