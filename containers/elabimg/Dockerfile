@@ -368,9 +368,17 @@ ENV CYPRESS_INSTALL_BINARY=0 \
 RUN corepack enable
 COPY ./package.json ./yarn.lock ./.yarnrc.yml /elabftw/
 COPY ./src/tools/yarn-plugin-tinymce.js /elabftw/src/tools/
-# .yarnrc.yml keeps the yarn cache in /run/elabftw/yarn/cache: a cache mount, so a changed lock file downloads only what changed
-RUN --mount=type=cache,target=/run/elabftw/yarn/cache,sharing=locked \
-    if [ "$BUILD_ALL" = "1" ]; then yarn install --immutable; fi
+# the tinymce plugin of yarn (run by the install) appends these two stylesheets to the tinymce css it extracts into web/assets
+COPY ./src/scss/_tinymce.scss ./src/scss/_custom-editor.scss /elabftw/src/scss/
+# .yarnrc.yml keeps the yarn cache in /run/elabftw/yarn/cache, and the PnP files read the packages from there when webpack runs: so it must stay in
+# this layer. The cache mount only keeps the downloads between builds: a changed lock file fetches just what changed.
+RUN --mount=type=cache,target=/mnt/yarn-downloads,sharing=locked \
+    if [ "$BUILD_ALL" = "1" ]; then \
+        mkdir -p /run/elabftw/yarn/cache \
+        && cp -a /mnt/yarn-downloads/. /run/elabftw/yarn/cache/ \
+        && yarn install --immutable \
+        && cp -a /run/elabftw/yarn/cache/. /mnt/yarn-downloads/; \
+    fi
 COPY ./builder.js ./node-builder.js ./tsconfig.json ./.babelrc /elabftw/
 # the logos that webpack and brotli read from the committed assets
 COPY ./web/assets/images/*.svg /elabftw/web/assets/images/
