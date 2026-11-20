@@ -54,6 +54,15 @@ final class DashboardController extends AbstractHtmlController
         return 'dashboard.html';
     }
 
+    /**
+     * @param list<int> $ids
+     */
+    private function idFilter(array $ids): string
+    {
+        // no candidate at all: nothing can be shown, readShow() must not fall back to listing everything
+        return sprintf(' AND entity.id IN (%s)', $ids === array() ? '0' : implode(',', $ids));
+    }
+
     #[Override]
     protected function getPageTitle(): string
     {
@@ -80,6 +89,10 @@ final class DashboardController extends AbstractHtmlController
             orderby: Orderby::Lastchange,
             limit: self::SHOWN_NUMBER,
         );
+        // Only the entries that can be on the first page are built (see readFirstPageIdsLastchange): the same rows in the
+        // same order as before, without materialising every entry the user can read.
+        $DisplayParamsExp->filterSql .= $this->idFilter($Experiments->readFirstPageIdsLastchange($DisplayParamsExp, self::SHOWN_NUMBER));
+        $DisplayParamsItems->filterSql .= $this->idFilter($Items->readFirstPageIdsLastchange($DisplayParamsItems, self::SHOWN_NUMBER));
         $PermissionsHelper = new PermissionsHelper();
         $ExperimentsStatus = new ExperimentsStatus($this->app->Teams);
         $ItemsStatus = new ItemsStatus($this->app->Teams);
