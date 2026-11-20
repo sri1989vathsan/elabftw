@@ -2365,14 +2365,6 @@ h1:has(> #documentTitle) {
   }
 }
 
-.entity-summary-strip {
-  background: color-mix(in srgb, currentColor 5%, transparent);
-  border-left: 3px solid var(--primary);
-  border-radius: 4px;
-  margin-bottom: 0.6rem;
-  padding: 0.4rem 0.7rem 0.15rem;
-}
-
 // Started on / Owner / Team / Tags: label column with the icon, value column; one left edge with the title.
 .entity-meta-grid {
   align-items: baseline;
@@ -2750,33 +2742,6 @@ body:has(.side-panel:not([hidden])) .elabftw-back-button {
   }
 }
 
-.todo-panel-view-tabs {
-  background: var(--chrome-bg);
-  position: sticky;
-  top: 0;
-  z-index: 2;
-
-  .btn {
-    color: var(--chrome-fg);
-  }
-
-  .btn-outline-primary {
-    border-color: var(--chrome-muted);
-    color: var(--chrome-fg);
-
-    &:hover,
-    &:focus {
-      background-color: var(--primary);
-      border-color: var(--primary);
-      color: var(--chrome-fg);
-    }
-  }
-
-  .fas {
-    color: inherit;
-  }
-}
-
 .list-group-item {
   background-color: var(--white);
   border: 1px solid var(--thirdlevel);
@@ -2899,21 +2864,6 @@ body:has(.side-panel:not([hidden])) .elabftw-back-button {
     color: var(--chrome-muted) !important;
   }
 
-  .side-panel-item {
-    padding: 5px 0 5px 10px;
-
-    /* Favtags will show up as selected */
-    &.selected {
-      background-color: var(--primary);
-      color: var(--chrome-fg);
-      cursor: initial;
-    }
-
-    &:hover:not(.selected) {
-      background-color: var(--disabled);
-    }
-  }
-
   /* Make the titles that you can click on to toggle the steps visibly clickable */
   [data-action='toggle-next']:hover {
     background-color: var(--secondary);
@@ -2948,22 +2898,6 @@ body:has(.side-panel:not([hidden])) .elabftw-back-button {
         .fas {
           color: inherit;
         }
-      }
-    }
-  }
-
-  .folder-quick-links .btn {
-    color: var(--chrome-fg);
-
-    &.active,
-    &:hover,
-    &:focus {
-      background: var(--primary);
-      border-color: var(--primary);
-      color: var(--primary-fg, #fff);
-
-      .fas {
-        color: inherit;
       }
     }
   }
@@ -3059,8 +2993,7 @@ body:has(.side-panel:not([hidden])) .elabftw-back-button {
     }
   }
 
-  .folder-flat-main,
-  .folder-details-text {
+  .folder-flat-main {
     align-items: center;
     display: flex;
     min-width: 0;
@@ -3070,8 +3003,7 @@ body:has(.side-panel:not([hidden])) .elabftw-back-button {
     flex: 1 1 auto;
   }
 
-  .folder-flat-main > .folder-flat-link,
-  .folder-details-text > .folder-flat-link {
+  .folder-flat-main > .folder-flat-link {
     flex: 1 1 auto;
     min-width: 0;
   }
