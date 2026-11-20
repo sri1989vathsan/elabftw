@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'text-column-fits', 'text-not-clipped', 'paste-keeps-formatting', 'cell-alignment-consistent', 'alignment-preserved', 'toolbar-not-cut', 'row-height-fits-text', 'editor-height-after-removal', 'undo-typing-over-text', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'viewport-equals-table-width', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-menu-race', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'text-column-fits', 'text-not-clipped', 'paste-keeps-formatting', 'cell-alignment-consistent', 'alignment-preserved', 'toolbar-not-cut', 'row-height-fits-text', 'editor-height-after-removal', 'undo-typing-over-text', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'viewport-equals-table-width', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -590,14 +590,14 @@ async function spreadsheetSoak(options = {}) {
 
   // Insert or delete a row or column through the real right-click menu. The record is changed only
   // by what really happened (read back from the table), and the result is then compared strictly.
-  async function structureOp(uid) {
+  async function structureOp(uid, forced) {
     const model = models.get(uid);
     if (model.plate) return;
     const rows = model.grid.length; const cols = model.grid[0].length;
-    const kind = pick(['row-after', 'row-before', 'col-after', 'col-before', 'del-row', 'del-col']);
+    const kind = forced?.kind ?? pick(['row-after', 'row-before', 'col-after', 'col-before', 'del-row', 'del-col']);
     if ((kind === 'del-row' && rows <= 2) || (kind === 'del-col' && cols <= 2)) return;
     if ((kind.startsWith('row') && rows >= 14) || (kind.startsWith('col') && cols >= 10)) return;
-    const r = int(0, rows - 1); const c = int(0, cols - 1);
+    const r = forced?.r ?? int(0, rows - 1); const c = forced?.c ?? int(0, cols - 1);
     checkDesync(uid, `before menu-${kind}`);
     note(`menu-${kind}`);
     // Size of the stored table (it follows the live grid a moment after each change).
@@ -1799,6 +1799,58 @@ async function spreadsheetSoak(options = {}) {
       const left = tableEl(uid2).rows[0].cells.length - 1;
       models.get(uid2).grid.forEach(row => { row.length = Math.min(row.length, left); });
       await verify('filler-then-menu: after a press outside the table', true);
+    },
+    // A grey filler press followed by a menu row insert at different delays (0 to 1.1 s), many times: the grid keeps the columns the press added and gains
+    // exactly one row, and the stored table catches up with the grid (same rows, same columns) within a few seconds. This is the race behind the
+    // intermittent "size changed by 1 rows and 2 columns, expected 1 and 0" and "saved table 11x12 instead of 11x14" lines of one soak run:
+    // the stored table lagged behind the filler press (see SOAK-TEST.md 11.6); config.raceRounds sets how many rounds (default 16).
+    async 'filler-then-menu-race'() {
+      const rounds = config.raceRounds || 16;
+      const delays = [0, 50, 150, 300, 450, 600, 800, 1100];
+      let slowest = 0;
+      for (let n = 0; n < rounds; n++) {
+        const delay = delays[n % delays.length];
+        const label = `filler race ${n + 1} (delay ${delay} ms)`;
+        const uid = await createTable(label, { rows: 4, cols: 3 });
+        if (!uid) continue;
+        const table = label;
+        const gridSize = () => { const root = api.overlayElement(uid); return root ? [root.querySelectorAll('.jss_worksheet tbody tr').length, root.querySelectorAll('.jss_worksheet thead td[data-x]').length] : [0, 0]; };
+        const storedSize = () => { const t = tableEl(uid); return t ? [t.rows.length - 1, t.rows[0].cells.length - 1] : [0, 0]; };
+        let root = await selectCell(uid, 0, 0);
+        let filler = null;
+        for (let i = 0; i < 40 && !(filler = (api.overlayElement(uid) || root).querySelector('.elabftw-spreadsheet-filler')); i++) await sleep(100);
+        if (!filler) { note('filler-no-room'); models.delete(uid); continue; }
+        const cells = [...filler.querySelectorAll('.fc[data-i][data-r]')];
+        cells[Math.min(1 + (n % 3), cells.length - 1)].dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, view: window, button: 0, buttons: 1 }));
+        await sleep(delay);
+        // the right-click menu of the second row: Insert a new row before
+        root = api.overlayElement(uid) || root;
+        const td = root.querySelector('td[data-x="0"][data-y="1"]');
+        press(td); await sleep(150);
+        const hr = td.getBoundingClientRect();
+        const rc = { bubbles: true, cancelable: true, view: window, clientX: hr.x + 10, clientY: hr.y + 8, button: 2, buttons: 2 };
+        td.dispatchEvent(new PointerEvent('pointerdown', rc)); td.dispatchEvent(new MouseEvent('mousedown', rc));
+        td.dispatchEvent(new MouseEvent('mouseup', { ...rc, buttons: 0 })); td.dispatchEvent(new MouseEvent('contextmenu', rc));
+        await sleep(300);
+        const menu = openMenu();
+        const item = menu && [...menu.querySelectorAll('a')].find(a => /insert a new row before/i.test(a.textContent));
+        const colsAfterPress = gridSize()[1];
+        if (!item) { note('race-no-menu'); models.delete(uid); api.removeTable(uid); continue; }
+        clickMenuItem(item);
+        const started = performance.now();
+        let g = gridSize(); let st = storedSize();
+        while (performance.now() - started < 10000 && !(g[0] === 5 && st[0] === 5 && st[1] === g[1])) { await sleep(100); g = gridSize(); st = storedSize(); }
+        const took = Math.round(performance.now() - started);
+        slowest = Math.max(slowest, took);
+        if (g[0] !== 5) dataLoss.push({ context, table, problem: `after the row insert the grid has ${g[0]} rows, expected 5` });
+        if (g[1] !== colsAfterPress) dataLoss.push({ context, table, problem: `the grid has ${g[1]} columns after the row insert, ${colsAfterPress} before it` });
+        if (st[0] !== g[0] || st[1] !== g[1]) dataLoss.push({ context, table, problem: `the stored table is ${st[0]}x${st[1]} ${took} ms after the row insert, the grid ${g[0]}x${g[1]}` });
+        note('filler-then-menu-race');
+        models.delete(uid);
+        api.removeTable(uid);
+        await sleep(500);
+      }
+      note(`filler-race-slowest-${slowest}ms`);
     },
     // The popup after a grey filler press: the columns the person added (and typed in, or inserted) must still be there after the popup's Update or Cancel
     // (the columns that stayed empty from the grey press only may go, as they do when a press lands outside the table).
