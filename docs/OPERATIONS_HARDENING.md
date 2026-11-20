@@ -8,6 +8,11 @@ docker compose up -d --build --wait
 
 The web health check calls `/healthcheck.php`, so Docker only marks the service healthy after Nginx, PHP and MySQL are available. Runtime ports, URLs, CPU/memory bounds and log rotation can be adjusted in `.env`; see `.env.example`.
 
+Memory switches (both in `.env`, both documented in `.env.example`):
+
+- `ELABFTW_MYSQL_PERFORMANCE_SCHEMA` (default `OFF`): MySQL's `performance_schema` alone costs 220-360 MiB of the MySQL container (measured: idle 525-575 -> 213 MiB; after the same 75 requests 517 -> 293 MiB). Set it to `ON` while profiling with `performance_schema.events_statements_summary_by_digest`, then back to `OFF`.
+- `ELABFTW_PHP_MAX_CHILDREN` (default `20`, the image's own default is 50): upper bound of php-fpm workers. A worker takes about 36 MB at rest, 45 MB after normal pages and about 110 MB after the heaviest API calls, so 50 workers could not fit the 2g limit of the web container. Raise it together with `ELABFTW_WEB_MEMORY_LIMIT` if requests queue up.
+
 ## Maintenance
 
 Run fork-owned maintenance manually:
