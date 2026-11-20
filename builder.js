@@ -31,6 +31,11 @@ module.exports = (env, argv) => {
     entry: {
       main: [
         './src/scss/main.scss',
+        // The spreadsheet engine is not in this bundle any more (it is a chunk of its own, see page-loader.ts), but its two stylesheets stay
+        // here, right after main.scss: that is where they always were in main.min.css, and a few of our rules in main.scss rely on being
+        // overridden by them (equal specificity, later wins). In an async chunk's CSS they would come before main.min.css instead.
+        'jspreadsheet-ce/dist/jspreadsheet.css',
+        'jsuites/dist/jsuites.css',
         './src/ts/common.ts',
         './src/ts/experiments-folders.ts',
         './src/ts/page-loader.ts',
