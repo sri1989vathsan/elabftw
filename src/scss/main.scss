@@ -831,11 +831,6 @@ h5 {
   background-color: var(--lightgold);
 }
 
-.hover-action:hover {
-  color: var(--primary);
-  transition: color 0.8s ease;
-}
-
 button:disabled {
   cursor: not-allowed;
 }
@@ -976,8 +971,7 @@ tr:first-child td {
     font-size: 100%;
   }
 
-  .item-date,
-  .item-owner {
+  .item-date {
     white-space: nowrap;
   }
 
@@ -992,11 +986,6 @@ tr:first-child td {
     max-width: 20ch;
     overflow-wrap: normal;  // don't force per-character wrapping
     word-break: keep-all;
-  }
-
-  .item-rating {
-    min-width: 66px;
-    text-align: center;
   }
 }
 
@@ -1075,11 +1064,6 @@ tr:first-child td {
   color: var(--primary-fg);
   font-weight: bold;
   margin-bottom: 0;
-}
-
-.overlay-success {
-  animation: slideInOut 3.5s ease-in-out forwards;
-  background-color: var(--primary);
 }
 
 .overlay-error,
@@ -1239,24 +1223,6 @@ tr:first-child td {
 
       &:hover {
         color: var(--secondlevel);
-      }
-    }
-  }
-
-  .left-icon {
-    &.bgnd-blue {
-      background-color: var(--primary);
-
-      &:hover {
-        background-color: var(--secondlevel);
-      }
-    }
-
-    &.bgnd-dark {
-      background-color: var(--medium);
-
-      &:hover {
-        background-color: var(--secondlevel);
       }
     }
   }
@@ -2365,14 +2331,6 @@ h1:has(> #documentTitle) {
   }
 }
 
-.entity-summary-strip {
-  background: color-mix(in srgb, currentColor 5%, transparent);
-  border-left: 3px solid var(--primary);
-  border-radius: 4px;
-  margin-bottom: 0.6rem;
-  padding: 0.4rem 0.7rem 0.15rem;
-}
-
 // Started on / Owner / Team / Tags: label column with the icon, value column; one left edge with the title.
 .entity-meta-grid {
   align-items: baseline;
@@ -2750,33 +2708,6 @@ body:has(.side-panel:not([hidden])) .elabftw-back-button {
   }
 }
 
-.todo-panel-view-tabs {
-  background: var(--chrome-bg);
-  position: sticky;
-  top: 0;
-  z-index: 2;
-
-  .btn {
-    color: var(--chrome-fg);
-  }
-
-  .btn-outline-primary {
-    border-color: var(--chrome-muted);
-    color: var(--chrome-fg);
-
-    &:hover,
-    &:focus {
-      background-color: var(--primary);
-      border-color: var(--primary);
-      color: var(--chrome-fg);
-    }
-  }
-
-  .fas {
-    color: inherit;
-  }
-}
-
 .list-group-item {
   background-color: var(--white);
   border: 1px solid var(--thirdlevel);
@@ -2899,21 +2830,6 @@ body:has(.side-panel:not([hidden])) .elabftw-back-button {
     color: var(--chrome-muted) !important;
   }
 
-  .side-panel-item {
-    padding: 5px 0 5px 10px;
-
-    /* Favtags will show up as selected */
-    &.selected {
-      background-color: var(--primary);
-      color: var(--chrome-fg);
-      cursor: initial;
-    }
-
-    &:hover:not(.selected) {
-      background-color: var(--disabled);
-    }
-  }
-
   /* Make the titles that you can click on to toggle the steps visibly clickable */
   [data-action='toggle-next']:hover {
     background-color: var(--secondary);
@@ -2948,22 +2864,6 @@ body:has(.side-panel:not([hidden])) .elabftw-back-button {
         .fas {
           color: inherit;
         }
-      }
-    }
-  }
-
-  .folder-quick-links .btn {
-    color: var(--chrome-fg);
-
-    &.active,
-    &:hover,
-    &:focus {
-      background: var(--primary);
-      border-color: var(--primary);
-      color: var(--primary-fg, #fff);
-
-      .fas {
-        color: inherit;
       }
     }
   }
@@ -3059,8 +2959,7 @@ body:has(.side-panel:not([hidden])) .elabftw-back-button {
     }
   }
 
-  .folder-flat-main,
-  .folder-details-text {
+  .folder-flat-main {
     align-items: center;
     display: flex;
     min-width: 0;
@@ -3070,8 +2969,7 @@ body:has(.side-panel:not([hidden])) .elabftw-back-button {
     flex: 1 1 auto;
   }
 
-  .folder-flat-main > .folder-flat-link,
-  .folder-details-text > .folder-flat-link {
+  .folder-flat-main > .folder-flat-link {
     flex: 1 1 auto;
     min-width: 0;
   }
@@ -6856,26 +6754,6 @@ body.html-tool-workspace-resizing * {
   font-weight: 400;
 }
 
-.date-reference-heading-row {
-  align-items: center;
-  background-color: var(--firstlevel);
-  border: 1px solid var(--secondary);
-  border-radius: 0.35rem;
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: minmax(0, 1fr) minmax(8rem, 12rem);
-  margin-bottom: 1rem;
-  padding: 0.65rem 0.75rem;
-}
-
-.date-reference-heading-toggle {
-  align-items: center;
-  display: flex;
-  font-weight: 600;
-  gap: 0.5rem;
-  margin: 0;
-}
-
 .experiment-title-preset-row {
   display: grid;
   gap: 0.5rem;
@@ -6892,7 +6770,6 @@ body.html-tool-workspace-resizing * {
 
   .date-reference-help,
   .date-reference-field,
-  .date-reference-heading-row,
   .experiment-title-heading-preview {
     margin-bottom: 0.65rem;
   }
@@ -9063,10 +8940,6 @@ the form-control fails to do that so we do the border ourselves */
   background-color: var(--white);
 }
 
-.border-secondlevel {
-  border-color: var(--secondlevel);
-}
-
 .bg-firstlevel {
   background-color: var(--firstlevel);
 }
@@ -9473,23 +9346,6 @@ input[type='color'] {
   border-radius: 0.25rem;
   color: var(--mediumstrong);
   padding: 4px 8px;
-}
-
-.admin-badge {
-  background-color: var(--lightblue);
-  border: 1px solid var(--gold);
-  border-radius: 0.25rem;
-  padding: 4px 8px;
-  position: relative;
-
-  &::before {
-    color: var(--dangerred);
-    content: 'Admin';
-    font-size: 75%;
-    left: 0;
-    position: absolute;
-    top: -16px;
-  }
 }
 
 .increased-spacing {
@@ -10146,10 +10002,6 @@ section.text-center .form-control {
   width: 1em;
 }
 
-.round-spot-ghost {
-  border: 1px dashed var(--medium);
-}
-
 .table-bordered,
 .table-bordered td,
 .table-bordered th,
@@ -10248,13 +10100,6 @@ section.text-center .form-control {
   border: 1px solid transparent;
   border-radius: 5px;
   padding: 1px;
-}
-
-.active-filter-badge {
-  background-color: var(--firstlevel);
-  border: 1px solid var(--secondlevel);
-  border-radius: 5px;
-  padding: 0.25rem;
 }
 
 .malleable {
@@ -11243,11 +11088,6 @@ div > .sticky-navbar {
   padding-top: 0.35rem;
   text-align: left;
   width: 100%;
-}
-
-.pm-reassign-select {
-  max-width: 10rem;
-  width: auto;
 }
 
 .pm-overlay {
@@ -12321,10 +12161,6 @@ button.wp-legend-item {
   padding: 0.5rem 0.9rem 0;
 }
 
-.wp-dialog-body.is-sheets {
-  grid-template-columns: minmax(0, 1fr);
-}
-
 .wp-box {
   border: 1px solid var(--secondary, #ccc);
   border-radius: 8px;
@@ -12338,87 +12174,6 @@ button.wp-legend-item {
 
 .wp-tooltip-extra {
   margin-top: 2px;
-}
-
-.wp-sheet-tabs {
-  border-bottom: 1px solid var(--secondary, #ccc);
-  display: flex;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-}
-
-.wp-sheet-tab {
-  align-items: center;
-  background: none;
-  border: 0;
-  border-bottom: 3px solid transparent;
-  color: inherit;
-  cursor: pointer;
-  display: inline-flex;
-  gap: 6px;
-  padding: 6px 12px;
-
-  &.is-active {
-    border-bottom-color: #2a6df4;
-    font-weight: 600;
-  }
-}
-
-.wp-sheet-scroll {
-  max-height: 55vh;
-  overflow: auto;
-}
-
-.wp-sheet {
-  border-collapse: collapse;
-  font-size: 13px;
-
-  th,
-  td {
-    border: 1px solid var(--secondary, #ccc);
-    padding: 0;
-  }
-
-  th {
-    background-color: var(--firstlevel, #eee);
-    font-size: 12px;
-    padding: 4px 8px;
-    text-align: left;
-  }
-
-  input {
-    background: transparent;
-    border: 0;
-    box-sizing: border-box;
-    color: inherit;
-    min-width: 140px;
-    padding: 4px 8px;
-    width: 100%;
-  }
-}
-
-.wp-sheet-well {
-  color: #677089;
-  font-family: monospace;
-  padding: 4px 8px !important;
-}
-
-.wp-col-head {
-  align-items: center;
-  display: flex;
-
-  input {
-    font-weight: 600;
-    min-width: 100px;
-    padding: 0;
-  }
-
-  button {
-    background: none;
-    border: 0;
-    cursor: pointer;
-    opacity: 0.6;
-  }
 }
 
 .wp-dialog [hidden] {
@@ -12464,10 +12219,6 @@ button.wp-legend-item {
 .wp-dialog-side.is-dynamic .wp-box-new,
 .wp-dialog-side.is-dynamic .wp-clear-group {
   display: none;
-}
-
-.wp-sheet th.is-group-by {
-  box-shadow: inset 0 0 0 2px #2a6df4;
 }
 
 .wp-import-body {
