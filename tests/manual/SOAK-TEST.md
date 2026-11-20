@@ -391,6 +391,7 @@ Selection protocol: the Contents panel publishes `document.body.dataset.tocSecti
 
 | Check | Script | Result (orders build 49) |
 |---|---|---|
+| `first-load-toast` | `first-load-toast-check.js` (`firstLoadToastCheck()` on a page just opened, nothing clicked) | no toast appears in the first 5 s: the folder-view lookup (a read sent as PATCH) lacked `notifOnSaved: 0`, so every page load showed "Saved" about 1.5 s after it opened |
 | `reminder-chip-no-overlap` | `reminder-chip-check.js` (`reminderChipCheck()`, two steps: reload between) | 24 checks: chip is a 1.5rem amber pill in the top right under the navbar; opens, collapses on click outside / Esc / scroll / 8 s without the pointer inside (paused while inside); boxes vs navbar, admin tab bar, edit toolbar, notices, scroll buttons |
 | `toc-select-bar-no-overlap` | `toc-select-bar-check.js` | 20 checks with 1 and 5 sections: Print, PDF, Copy and clear visible, not touching, no clipped text, nothing floating over the bar, Back pill clear of the Contents, Folders and Search panels |
 | `sidebar-x-consistency` | `sidebar-x-consistency-check.js` | 29 checks: panel edge and width, scroll bar room, header x, Close and Refresh (right edge, size, height, row, icon, tooltip) identical in Folders, Search, To-do, Calendar and Contents (tolerance 1 px) |

@@ -724,7 +724,7 @@ export function initFolderViews(): void {
     }
   };
   // the choice belongs to the user, not to this browser: the saved one wins over what this browser remembers
-  void ApiC.patch('experiments_folders', { action: 'get_folder_view' })
+  void ApiC.patch('experiments_folders', { action: 'get_folder_view', notifOnSaved: 0, notifOnError: 0 })
     .then(response => response.json())
     .then((data: { folder_view?: string | null }) => {
       if (!data.folder_view) return;
@@ -737,7 +737,7 @@ export function initFolderViews(): void {
   on('select-folder-view', (el: HTMLElement) => {
     const view = parseFolderView(el.dataset.view ?? null);
     remember(view);
-    void ApiC.patch('experiments_folders', { action: 'set_folder_view', view }).catch(() => { /* kept in this browser at least */ });
+    void ApiC.patch('experiments_folders', { action: 'set_folder_view', view, notifOnSaved: 0, notifOnError: 0 }).catch(() => { /* kept in this browser at least */ });
     closePopovers();
     syncFolderView();
   });
