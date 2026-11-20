@@ -81,6 +81,7 @@ enum UsersColumn: string
     case ScopeExperiments = 'scope_experiments';
     case ScopeEvents = 'scope_events';
     case ScopeItems = 'scope_items';
+    case MoorScopeInventory = 'moor_scope_inventory';
     case ScopeItemsTypes = 'scope_items_types';
     case ScopeExperimentsTemplates = 'scope_experiments_templates';
     case ScopeTeamgroups = 'scope_teamgroups';

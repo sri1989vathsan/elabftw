@@ -62,6 +62,7 @@ final class UserParams extends ContentParams
             UsersColumn::ScopeExperiments->value,
             UsersColumn::ScopeEvents->value,
             UsersColumn::ScopeItems->value,
+            UsersColumn::MoorScopeInventory->value,
             UsersColumn::ScopeItemsTypes->value,
             UsersColumn::ScopeTeamgroups->value => (string) (Scope::tryFrom($this->asInt()) ?? Scope::Team)->value,
             UsersColumn::ScCreate->value,
