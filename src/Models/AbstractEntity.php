@@ -194,30 +194,70 @@ abstract class AbstractEntity extends AbstractRest
     ): int;
 
     /**
-     * The folder chosen in the create dialog (folder_id of the request): the new experiment or resource goes there. Without one it stays where the
-     * create put it (a template's folder, or the root). The folder must exist in the team of the user (readOne throws a 404 if not). This is
-     * checked BEFORE anything is inserted, so a bad folder_id leaves no orphan entry behind.
+     * Folder hooks: which entry types live in the folder trees, which tree, and how an entry is put in a folder. A subclass of the fork that has
+     * a tree of its own overrides these in its own file (Inventory does), so the code below is the same on every branch.
      */
-    private function validateChosenFolder(array $reqBody): ?int
+    protected function usesFolders(): bool
     {
-        if (!($this instanceof Experiments || $this instanceof Items) || empty($reqBody['folder_id'])) {
-            return null;
-        }
-        $folderId = (int) $reqBody['folder_id'];
-        new ExperimentsFolders($this->Users, $folderId)->readOne();
-        return $folderId;
+        return $this instanceof Experiments || $this instanceof Items;
     }
 
-    private function assignChosenFolder(int $newId, ?int $folderId): void
+    protected function folderScope(): string
     {
-        if ($folderId === null) {
-            return;
-        }
+        return 'experiments';
+    }
+
+    protected function assignToFolder(int $newId, int $folderId): void
+    {
         $Folders = new ExperimentsFolders($this->Users, $folderId);
         if ($this instanceof Experiments) {
             $Folders->assignExperiment($newId, $folderId);
         } else {
             $Folders->assignResource($newId, $folderId);
+        }
+    }
+
+    /**
+     * The folder chosen in the create dialog (folder_id of the request): the new entry goes there. Without one it stays where the create put it
+     * (a template's folder, or the root). The folder must exist in the team of the user (readOne throws a 404 if not) and, where the folders are
+     * split in trees (experiments_folders.scope exists), be in the tree of this type of entry. This is checked BEFORE anything is inserted, so a
+     * bad folder_id leaves no orphan entry behind.
+     */
+    private function validateChosenFolder(array $reqBody): ?int
+    {
+        if (!$this->usesFolders() || empty($reqBody['folder_id'])) {
+            return null;
+        }
+        $folderId = (int) $reqBody['folder_id'];
+        new ExperimentsFolders($this->Users, $folderId)->readOne();
+        if ($this->foldersHaveScope()) {
+            $req = $this->Db->prepare('SELECT COUNT(*) FROM experiments_folders WHERE id = :id AND team = :team AND scope = :scope');
+            $req->bindValue(':id', $folderId, PDO::PARAM_INT);
+            $req->bindValue(':team', $this->Users->team, PDO::PARAM_INT);
+            $req->bindValue(':scope', $this->folderScope());
+            $this->Db->execute($req);
+            if ((int) $req->fetchColumn() !== 1) {
+                throw new ResourceNotFoundException();
+            }
+        }
+        return $folderId;
+    }
+
+    private function foldersHaveScope(): bool
+    {
+        static $has = null;
+        if ($has === null) {
+            $req = $this->Db->prepare("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'experiments_folders' AND COLUMN_NAME = 'scope'");
+            $this->Db->execute($req);
+            $has = (int) $req->fetchColumn() === 1;
+        }
+        return $has;
+    }
+
+    private function assignChosenFolder(int $newId, ?int $folderId): void
+    {
+        if ($folderId !== null) {
+            $this->assignToFolder($newId, $folderId);
         }
     }
 
