@@ -25,7 +25,15 @@ window.tocSelectBarCheck = async function tocSelectBarCheck() {
   const checks = () => [...document.querySelectorAll('#tocItems .toc-item-section [data-toc-section-checkbox]')];
   const measure = async (n) => {
     click(document.getElementById('tocSelectNone')); await sleep(300);
-    checks().slice(0, n).forEach(c => click(c));
+    // Ticking a heading selects its whole branch, so a child that a ticked parent already selected shows as ticked, and clicking it would UNtick it.
+    // Click only boxes that are not ticked yet: n clicks, n headings chosen by the person.
+    let clicked = 0;
+    for (let guard = 0; guard < 200 && clicked < n; guard++) {
+      const next = checks().find(c => !c.checked);
+      if (!next) break;
+      click(next); clicked++;
+      await sleep(60);
+    }
     await sleep(500);
     const bar = document.getElementById('tocSelectBar');
     check(`${n} selected: the bar shows`, !!bar && !bar.hidden, 'hidden');
@@ -38,7 +46,8 @@ window.tocSelectBarCheck = async function tocSelectBarCheck() {
     const headerPrint = document.getElementById('tocPrintAll'); const headerPdf = document.getElementById('tocPdfAll');
     // the rule: ticking a heading selects its section and every section below it, so with nested entries N ticks can be more than N sections
     const shown = parseInt((document.getElementById('tocSelectedLabel') || {}).textContent, 10);
-    check(`${n} selected: the count is at least the ticks (descendant sections count too)`, shown >= n, `ticked ${n}, counted ${shown}`);
+    const tickedBoxes = checks().filter(c => c.checked).length;
+    check(`${n} selected: the count is the number of ticked headings (a ticked parent ticks its sub-sections)`, shown === tickedBoxes && shown >= Math.min(clicked, n), `clicked ${clicked}, ticked boxes ${tickedBoxes}, counted ${shown}`);
     const word = `${shown} ${shown === 1 ? 'section' : 'sections'}`;
     check(`${n} selected: the header Print and PDF say "(${word})"`, !!headerPrint && !!headerPdf && headerPrint.title === `Print (${word})` && headerPdf.title === `PDF (${word})`, `${headerPrint && headerPrint.title} | ${headerPdf && headerPdf.title}`);
     const boxes = els.filter(Boolean).map(box);
