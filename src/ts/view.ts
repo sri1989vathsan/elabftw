@@ -9,7 +9,6 @@ import { ApiC } from './api';
 import { entity } from './getEntity';
 import { on } from './handlers';
 import { Action } from './interfaces';
-import { activateLazySpreadsheetViews } from './inline-spreadsheet';
 import './comments';
 
 on('override-exclusive-edit-lock', () => {
@@ -29,4 +28,8 @@ document.title = titleElement?.textContent ? `${titleElement.textContent} - eLab
 // spreadsheet in a long document staying mounted for the rest of the
 // page's life -- see activateLazySpreadsheetViews().
 const bodyView = document.getElementById('body_view');
-if (bodyView) activateLazySpreadsheetViews(bodyView);
+// The spreadsheet engine is a chunk of its own (page-loader.ts asks for it at the same time as this file), loaded only for a text that has one.
+if (bodyView?.querySelector('table.elabftw-spreadsheet')) {
+  void import(/* webpackChunkName: 'inline-spreadsheet' */ './inline-spreadsheet')
+    .then(({ activateLazySpreadsheetViews }) => activateLazySpreadsheetViews(bodyView));
+}

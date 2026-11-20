@@ -96,6 +96,18 @@ module.exports = (env, argv) => {
     optimization: {
       splitChunks: {
         chunks: 'async',
+        cacheGroups: {
+          // The two stylesheets of the spreadsheet engine (jspreadsheet-ce, jsuites): not in main.min.css, but a file of their own that is loaded
+          // with the engine (import() waits for it) and, because of its name (late-), put AFTER main.min.css by the insert function below: in
+          // main.min.css they always came after main.scss, and a few of our rules in main.scss rely on being overridden by them.
+          lateSpreadsheetStyles: {
+            test: /[\\/](?:jspreadsheet-ce|jsuites)[\\/].*\.css$/,
+            name: 'late-spreadsheet',
+            type: 'css/mini-extract',
+            chunks: 'async',
+            enforce: true,
+          },
+        },
       },
       minimize: !isDevelopment,
       minimizer: [
@@ -128,6 +140,11 @@ module.exports = (env, argv) => {
           insert: function(linkTag) {
             var mainStylesheet = document.getElementById('main-stylesheet');
             if (mainStylesheet && mainStylesheet.parentNode) {
+              // a stylesheet named late-* goes after main.min.css (see lateSpreadsheetStyles above), the others before it
+              if (/\/late-[^/]*\.css/.test(linkTag.href)) {
+                mainStylesheet.parentNode.insertBefore(linkTag, mainStylesheet.nextSibling);
+                return;
+              }
               mainStylesheet.parentNode.insertBefore(linkTag, mainStylesheet);
               return;
             }
