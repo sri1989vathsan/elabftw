@@ -387,7 +387,11 @@ final class Orders extends AbstractRest
         // separate COUNT query.
         $pinnedLimit = $query->getInt('pinned_limit') ?: self::DEFAULT_PINNED_LIMIT;
         $pinnedOffset = max(0, $query->getInt('pinned_offset'));
-        $pinnedSql = self::selectSql() . '
+        // The planner prefers idx_custom_orders_team (team, status, created_at) and sorts every row of the team;
+        // idx_custom_orders_team_list (migration 107) walks the page directly. Only for the plain created_at sort
+        // without a search (a search is better served by the FULLTEXT index).
+        $indexHint = ($sortColumn === 'o.created_at' && $search === '') ? 'FORCE INDEX (idx_custom_orders_team_list)' : '';
+        $pinnedSql = self::selectSql($indexHint) . '
             WHERE ' . implode(' AND ', $conditions) . "
             AND o.pinned = 1
             ORDER BY {$sortColumn} {$sortDir} LIMIT " . ($pinnedLimit + 1) . " OFFSET {$pinnedOffset}";
@@ -401,7 +405,7 @@ final class Orders extends AbstractRest
 
         // ask for one extra row so the frontend can tell whether there's a
         // next page without a separate COUNT query
-        $unpinnedSql = self::selectSql() . '
+        $unpinnedSql = self::selectSql($indexHint) . '
             WHERE ' . implode(' AND ', $conditions) . "
             AND o.pinned = 0
             ORDER BY {$sortColumn} {$sortDir} LIMIT " . ($limit + 1) . " OFFSET {$offset}";
@@ -468,7 +472,7 @@ final class Orders extends AbstractRest
      * WHERE clause differs, so both get the same shape (items, comments,
      * uploads and extracted PDF text) without duplicating these subqueries.
      */
-    private static function selectSql(): string
+    private static function selectSql(string $indexHint = ''): string
     {
         return 'SELECT o.id, o.title, o.notes, o.procurement_id, o.order_number, o.order_date, o.status, o.archived, o.pinned, o.common, o.created_at, o.userid,
                 o.labcollector_type, o.labcollector_id,
@@ -505,7 +509,7 @@ final class Orders extends AbstractRest
                     FROM custom_order_uploads AS upload
                     WHERE upload.order_id = o.id
                 ), JSON_ARRAY()) AS uploads
-            FROM custom_orders AS o
+            FROM custom_orders AS o ' . $indexHint . '
             LEFT JOIN users AS author ON author.userid = o.userid';
     }
 
