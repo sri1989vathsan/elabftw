@@ -289,6 +289,26 @@ function pasteTextAt(worksheet: JssInstance, col: number, row: number, text: str
  * Ctrl/Cmd+X on a grid: the grid's own copy handler puts the selection on the clipboard (it marks `done` here), and the
  * caller then clears the cells through the same path as Delete, so the cut is one undo step and the saved table agrees.
  */
+// One shared 50 ms timer for the focus-reclaim poll of every editable sheet (see focusPollTick in the grid setup). It only
+// exists while at least one sheet has `lastFocusWasInGrid` set (grid focus), so a page with five idle sheets has no
+// such timer at all instead of five that wake 20 times a second each.
+const focusReclaimTicks = new Set<() => void>();
+let focusReclaimTimer: number | null = null;
+function startFocusReclaim(tick: () => void): void {
+  focusReclaimTicks.add(tick);
+  if (focusReclaimTimer !== null) return;
+  focusReclaimTimer = window.setInterval(() => {
+    focusReclaimTicks.forEach(run => run());
+  }, 50);
+}
+function stopFocusReclaim(tick: () => void): void {
+  focusReclaimTicks.delete(tick);
+  if (focusReclaimTicks.size === 0 && focusReclaimTimer !== null) {
+    window.clearInterval(focusReclaimTimer);
+    focusReclaimTimer = null;
+  }
+}
+
 let cutCopy: { done: boolean } | null = null;
 function copyForCut(container: HTMLElement): boolean {
   const sink = container.querySelector<HTMLElement>('.jss_textarea, #jss_textarea');
@@ -9699,7 +9719,7 @@ export function buildReadOnlySpreadsheetHost(
   // formula bar. Reassert focus on the input whenever it loses it while
   // still composing, regardless of what stole it or when.
   let reclaimFocusHandler: ((event: FocusEvent) => void) | null = null;
-  // reclaimFocusHandler and the focusPollInterval below both steal focus
+  // reclaimFocusHandler and the shared focus poll (focusPollTick) below both steal focus
   // back into this grid whenever it lands on <body> and lastFocusWasInGrid
   // is still true -- correct when jspreadsheet's own redraw transiently
   // defocuses everything mid-edit, but <body> is *also* where focus lands
@@ -9731,6 +9751,19 @@ export function buildReadOnlySpreadsheetHost(
   // specifically); this covers plain in-grid cell editing, the more
   // common case and the one actually reported.
   let lastFocusWasInGrid = false;
+  // Every change of the flag goes through here: while it is true (and the sheet is editable) the shared 50 ms poll
+  // watches for focus falling back to <body> (see the long comment further down); while it is false there is nothing
+  // to reclaim and no timer runs for this sheet. focusPollTick is one stable function per sheet.
+  const focusPollTick = (): void => {
+    if (!lastFocusWasInGrid || document.activeElement !== document.body) return;
+    document.body.classList.add('elabftw-spreadsheet-editing');
+    pickReclaimTarget()?.focus({ preventScroll: true });
+  };
+  const setLastFocusWasInGrid = (value: boolean): void => {
+    lastFocusWasInGrid = value;
+    if (value && editable) startFocusReclaim(focusPollTick);
+    else stopFocusReclaim(focusPollTick);
+  };
   // The most recent cell oncreateeditor started editing -- kept as a
   // fallback reclaim target for the case a live trace showed pickReclaim
   // Target()'s other selectors can't handle: jspreadsheet sometimes closes
@@ -9844,7 +9877,7 @@ export function buildReadOnlySpreadsheetHost(
     const originalValue = rescueInputOriginalValue ?? value;
     lastEditingCol = null;
     lastEditingRow = null;
-    lastFocusWasInGrid = false;
+    setLastFocusWasInGrid(false);
     rescueInputEl.hidden = true;
     rescueInputCol = null;
     rescueInputRow = null;
@@ -9979,7 +10012,7 @@ export function buildReadOnlySpreadsheetHost(
       const sink = sheetContainer.querySelector<HTMLElement>('.jss_textarea');
       const focusSink = (): void => {
         sink?.focus({ preventScroll: true });
-        lastFocusWasInGrid = true;
+        setLastFocusWasInGrid(true);
       };
       focusSink();
       window.setTimeout(focusSink, 0);
@@ -10192,7 +10225,7 @@ export function buildReadOnlySpreadsheetHost(
       // narrower relocation case this was covering is a much smaller loss
       // than cross-table interference.
       const inSpreadsheetStructure = target instanceof Element && sheetContainer.contains(target);
-      lastFocusWasInGrid = inSpreadsheetStructure;
+      setLastFocusWasInGrid(inSpreadsheetStructure);
       const inAnySpreadsheetGrid = target instanceof Element
         && (target.closest('.elabftw-spreadsheet-readonly-grid') !== null || inSpreadsheetStructure);
       document.body.classList.toggle('elabftw-spreadsheet-editing', inAnySpreadsheetGrid);
@@ -10202,7 +10235,7 @@ export function buildReadOnlySpreadsheetHost(
       const target = event.target;
       const withinEditingSurface = target instanceof Node
         && (host.contains(target) || (rescueInputEl !== null && rescueInputEl.contains(target)));
-      if (!withinEditingSurface) lastFocusWasInGrid = false;
+      if (!withinEditingSurface) setLastFocusWasInGrid(false);
     };
     document.addEventListener('pointerdown', suppressReclaimHandler, true);
     // No prior Ctrl/Cmd+Z handling existed for this overlay at all --
@@ -10448,14 +10481,6 @@ export function buildReadOnlySpreadsheetHost(
   // specifically: jspreadsheet recreates that element under a new,
   // unpredictable reference each time, so there is no single stable node
   // to observe.
-  let focusPollInterval: ReturnType<typeof setInterval> | null = null;
-  if (editable) {
-    focusPollInterval = setInterval(() => {
-      if (!lastFocusWasInGrid || document.activeElement !== document.body) return;
-      document.body.classList.add('elabftw-spreadsheet-editing');
-      pickReclaimTarget()?.focus({ preventScroll: true });
-    }, 50);
-  }
   if (!editable) {
     const toggleCollapsed = (): void => {
       const collapsed = sheetContainer.hidden = !sheetContainer.hidden;
@@ -11112,7 +11137,7 @@ export function buildReadOnlySpreadsheetHost(
         // the focus recovery poll reopen the editor after it closes.
         lastEditingCol = null;
         lastEditingRow = null;
-        lastFocusWasInGrid = false;
+        setLastFocusWasInGrid(false);
         const originalCellStyle = activeEditorCellStyles.get(cell);
         if (originalCellStyle) {
           cell.style.overflow = originalCellStyle.overflow;
@@ -11365,7 +11390,7 @@ export function buildReadOnlySpreadsheetHost(
       if (reclaimFocusHandler) document.removeEventListener('focusin', reclaimFocusHandler);
       if (suppressReclaimHandler) document.removeEventListener('pointerdown', suppressReclaimHandler, true);
       if (onUndoRedoKey) document.removeEventListener('keydown', onUndoRedoKey, true);
-      if (focusPollInterval !== null) clearInterval(focusPollInterval);
+      stopFocusReclaim(focusPollTick);
       rescueInputEl?.remove();
       releaseRescueKeys?.();
       if (onCellDoubleClick) window.removeEventListener('dblclick', onCellDoubleClick, true);
