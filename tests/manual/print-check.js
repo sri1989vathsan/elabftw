@@ -10,6 +10,13 @@
  * says so; with none ticked it holds the whole text. window.print is replaced for the check, nothing is sent to a printer.
  */
 window.printCheck = async function printCheck() {
+  // a wide table makes Print ask how to print it (print-prompt-check.py covers that): answer it beforehand with a remembered "fit", put back at the end
+  const keys = ['elabftw-sheets-mode', 'elabftw-sheets-mode-remembered'];
+  const savedKeys = keys.map(k => localStorage.getItem(k));
+  localStorage.setItem(keys[0], 'fit'); localStorage.setItem(keys[1], '1');
+  try { return await printCheckRun(); } finally { keys.forEach((k, i) => savedKeys[i] === null ? localStorage.removeItem(k) : localStorage.setItem(k, savedKeys[i])); }
+};
+async function printCheckRun() {
   const results = [];
   const check = (name, ok, detail) => results.push({ name, ok: !!ok, detail: ok ? undefined : detail });
   const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -148,4 +155,4 @@ window.printCheck = async function printCheck() {
   if (savedMode) document.body.dataset.sheetsMode = savedMode; else delete document.body.dataset.sheetsMode;
   check('print: afterprint puts the sheets back (nothing hidden, no zoom, no split copies)', liveHosts.every(h => h.style.display !== 'none' && !h.style.zoom && !h.classList.contains('print-wide-sheet')) && !document.querySelector('.print-split-sheet'), 'leftovers after afterprint');
   return { pass: results.every(r => r.ok), results };
-};
+}
