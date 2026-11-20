@@ -195,16 +195,25 @@ abstract class AbstractEntity extends AbstractRest
 
     /**
      * The folder chosen in the create dialog (folder_id of the request): the new experiment or resource goes there. Without one it stays where the
-     * create put it (a template's folder, or the root). The folder must exist in the team of the user (readOne throws if not).
+     * create put it (a template's folder, or the root). The folder must exist in the team of the user (readOne throws a 404 if not). This is
+     * checked BEFORE anything is inserted, so a bad folder_id leaves no orphan entry behind.
      */
-    private function assignChosenFolder(int $newId, array $reqBody): void
+    private function validateChosenFolder(array $reqBody): ?int
     {
         if (!($this instanceof Experiments || $this instanceof Items) || empty($reqBody['folder_id'])) {
-            return;
+            return null;
         }
         $folderId = (int) $reqBody['folder_id'];
+        new ExperimentsFolders($this->Users, $folderId)->readOne();
+        return $folderId;
+    }
+
+    private function assignChosenFolder(int $newId, ?int $folderId): void
+    {
+        if ($folderId === null) {
+            return;
+        }
         $Folders = new ExperimentsFolders($this->Users, $folderId);
-        $Folders->readOne();
         if ($this instanceof Experiments) {
             $Folders->assignExperiment($newId, $folderId);
         } else {
@@ -224,6 +233,7 @@ abstract class AbstractEntity extends AbstractRest
         return match ($action) {
             Action::Create => (
                 function () use ($reqBody) {
+                    $chosenFolder = $this->validateChosenFolder($reqBody);
                     $metadata = null;
                     if (!empty($reqBody['metadata'])) {
                         $metadata = is_string($reqBody['metadata'])
@@ -246,7 +256,7 @@ abstract class AbstractEntity extends AbstractRest
                             );
                         }
                         $fromTemplateId = $this->copyEntityFrom(sourceEntity: $template, title: $title, blankExtrafields: false, overrideCreateParams: $overrideCreateParams);
-                        $this->assignChosenFolder($fromTemplateId, $reqBody);
+                        $this->assignChosenFolder($fromTemplateId, $chosenFolder);
                         return $fromTemplateId;
                     }
                     // create a template from current entity
@@ -303,7 +313,7 @@ abstract class AbstractEntity extends AbstractRest
                         contentType: $contentType,
                     );
                     // Assign concrete experiments and resources to their shared folder tree.
-                    $this->assignChosenFolder($newId, $reqBody);
+                    $this->assignChosenFolder($newId, $chosenFolder);
                     return $newId;
                 }
             )(),
