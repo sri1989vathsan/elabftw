@@ -36,7 +36,7 @@ async function startChrome() {
     if (d.id && pending.has(d.id)) { pending.get(d.id)(d); pending.delete(d.id); } else if (d.method) listeners.forEach(l => l(d));
   });
   const send = (method, params = {}) => new Promise((res, rej) => { const i = ++id; pending.set(i, d => d.error ? rej(new Error(JSON.stringify(d.error))) : res(d.result)); ws.send(JSON.stringify({ id: i, method, params })); });
-  await send('Page.enable'); await send('Network.enable'); await send('Performance.enable');
+  await send('Page.enable'); await send('Network.enable'); await send('Performance.enable'); await send('Runtime.enable');
   await send('Emulation.setDeviceMetricsOverride', { width: 1400, height: 900, deviceScaleFactor: 1, mobile: false });
   const js = async code => {
     const r = await send('Runtime.evaluate', { expression: `(async()=>{${code}})()`, awaitPromise: true, returnByValue: true });
@@ -88,10 +88,12 @@ async function measureOne(c, url, { cache, throttle }) {
   const reqs = new Map();
   const onEvent = d => {
     const p = d.params;
+    if (d.method === 'Runtime.exceptionThrown') c.__exceptions = (c.__exceptions || 0) + 1;
     if (d.method === 'Network.responseReceived' && ['Script', 'Stylesheet'].includes(p.type)) reqs.set(p.requestId, { url: p.response.url, type: p.type, fromCache: p.response.fromDiskCache || p.response.fromServiceWorker, enc: p.response.headers['content-encoding'] || p.response.headers['Content-Encoding'] || '', raw: 0, wire: 0 });
     if (d.method === 'Network.dataReceived' && reqs.has(p.requestId)) reqs.get(p.requestId).raw += p.dataLength;
     if (d.method === 'Network.loadingFinished' && reqs.has(p.requestId)) reqs.get(p.requestId).wire = p.encodedDataLength;
   };
+  c.__exceptions = 0;
   c.on(onEvent);
   await c.send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__lt = []; try { new PerformanceObserver(l => l.getEntries().forEach(e => window.__lt.push([e.startTime, e.duration]))).observe({ type: 'longtask', buffered: true }); } catch (e) {}` }).then(r => { c.__scriptId = r.identifier; });
   await c.send('Page.navigate', { url });
@@ -117,7 +119,7 @@ async function measureOne(c, url, { cache, throttle }) {
   return {
     jsFiles: js.length, jsRaw: sum(js, 'raw'), jsWire: sum(js, 'wire'), cssFiles: css.length, cssRaw: sum(css, 'raw'), cssWire: sum(css, 'wire'),
     names: js.map(r => r.url.split('/').pop().split('?')[0]).sort().join(' '),
-    dcl: nav.dcl, load: nav.load, tti: tti ?? nav.ltEnd, tbt: nav.tbt, longTasks: nav.longTasks,
+    exceptions: c.__exceptions, dcl: nav.dcl, load: nav.load, tti: tti ?? nav.ltEnd, tbt: nav.tbt, longTasks: nav.longTasks,
     compileMs: (m.V8CompileDuration ?? 0) * 1000, scriptMs: m.ScriptDuration * 1000, taskMs: m.TaskDuration * 1000, heapMB: m.JSHeapUsedSize / 1048576,
   };
 }
@@ -143,9 +145,9 @@ async function measureOne(c, url, { cache, throttle }) {
         for (const cache of [false, true]) {
           const runs = [];
           if (cache) { await measureOne(c, url, { cache: true, throttle }); } // fills the cache
-          for (let i = 0; i < 5; i++) runs.push(await measureOne(c, url, { cache, throttle }));
+          for (let i = 0; i < Number(process.env.RUNS || 5); i++) runs.push(await measureOne(c, url, { cache, throttle }));
           const row = { label, page: name, cpu: `${throttle}x`, cache: cache ? 'warm' : 'cold', names: runs[0].names };
-          for (const k of ['jsFiles', 'jsRaw', 'jsWire', 'cssFiles', 'cssRaw', 'cssWire', 'dcl', 'load', 'tti', 'tbt', 'longTasks', 'compileMs', 'scriptMs', 'taskMs', 'heapMB']) row[k] = Math.round(median(runs.map(r => r[k])) * 10) / 10;
+          for (const k of ['jsFiles', 'jsRaw', 'jsWire', 'cssFiles', 'cssRaw', 'cssWire', 'dcl', 'load', 'tti', 'tbt', 'longTasks', 'exceptions', 'compileMs', 'scriptMs', 'taskMs', 'heapMB']) row[k] = Math.round(median(runs.map(r => r[k])) * 10) / 10;
           out.push(row);
           console.log(JSON.stringify(row));
         }
