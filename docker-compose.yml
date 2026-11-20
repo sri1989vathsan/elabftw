@@ -119,6 +119,9 @@ services:
       PHP_TIMEZONE: Europe/Zurich
       TZ: Europe/Zurich
       MAX_PHP_MEMORY: 512M
+      # php-fpm workers (default of the image: 50). A normal page peaks at ~45 MB per worker, the heaviest API calls
+      # at ~110 MB, so 50 workers cannot fit the 2g limit of this container
+      PHP_MAX_CHILDREN: "${ELABFTW_PHP_MAX_CHILDREN:-20}"
       DEV_MODE: "false"
 
       # The one-shot migration service owns initialization and upgrades.
@@ -200,6 +203,9 @@ services:
   mysql:
     image: mysql:8.4
     restart: unless-stopped
+    # performance_schema alone is 220-360 MiB of this container (measured); switch it on
+    # again with ELABFTW_MYSQL_PERFORMANCE_SCHEMA=ON when profiling with the statement digests
+    command: ["--performance_schema=${ELABFTW_MYSQL_PERFORMANCE_SCHEMA:-OFF}"]
 
     environment:
       MYSQL_ROOT_PASSWORD: ${ELABFTW_MYSQL_ROOT_PASSWORD}
