@@ -74,7 +74,7 @@ class MakePdf extends AbstractMakePdf
     // positions (1 based, document order) of the headings of the sections to export; empty exports everything
     protected array $selectedSections = array();
     // what to do with a spreadsheet wider than the page, see PdfBodyPrep::spreadsheets()
-    protected string $sheetsMode = PdfBodyPrep::MODE_LANDSCAPE;
+    protected string $sheetsMode = PdfBodyPrep::MODE_FIT;
 
     protected AbstractEntity $Entity;
 

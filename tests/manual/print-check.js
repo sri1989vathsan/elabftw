@@ -10,6 +10,13 @@
  * says so; with none ticked it holds the whole text. window.print is replaced for the check, nothing is sent to a printer.
  */
 window.printCheck = async function printCheck() {
+  // a wide table makes Print ask how to print it (print-prompt-check.py covers that): answer it beforehand with a remembered "fit", put back at the end
+  const keys = ['elabftw-sheets-mode', 'elabftw-sheets-mode-remembered'];
+  const savedKeys = keys.map(k => localStorage.getItem(k));
+  localStorage.setItem(keys[0], 'fit'); localStorage.setItem(keys[1], '1');
+  try { return await printCheckRun(); } finally { keys.forEach((k, i) => savedKeys[i] === null ? localStorage.removeItem(k) : localStorage.setItem(k, savedKeys[i])); }
+};
+async function printCheckRun() {
   const results = [];
   const check = (name, ok, detail) => results.push({ name, ok: !!ok, detail: ok ? undefined : detail });
   const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -27,8 +34,7 @@ window.printCheck = async function printCheck() {
   let allCss = '';
   for (const sheet of document.styleSheets) { let list; try { list = sheet.cssRules; } catch { continue; } for (const rule of list) allCss += rule.cssText + '\n'; }
   check('print: a named landscape page "wide" exists and the wide sheet class uses it', /@page wide[^{]*\{[^}]*landscape/.test(allCss) && /print-wide-sheet[^{]*\{[^}]*page:\s*wide/.test(allCss), 'rule missing');
-  check('sheets mode: the choice is on the body for the print code (data-sheets-mode landscape|fit|split)', ['landscape', 'fit', 'split'].includes(document.body.dataset.sheetsMode || ''), `data-sheets-mode=${document.body.dataset.sheetsMode}`);
-  check('sheets mode: a select with the three values is in the page (Export menu / PDF dialog)', [...document.querySelectorAll('select[data-sheets-mode]')].some(sel => ['landscape', 'fit', 'split'].every(v => [...sel.options].some(o => o.value === v))), 'no select[data-sheets-mode]');
+  check('wide tables: the Change wide table setting link is in the page (Export menu / PDF dialog)', !!document.querySelector('[data-action="sheets-mode-change"]'), 'no [data-action=sheets-mode-change]');
   check('print rules never split a row and repeat the header', /break-inside:\s*avoid/.test(printCss) && /table-header-group/.test(printCss), 'rules missing');
 
   const body = document.getElementById('body_view');
@@ -149,4 +155,4 @@ window.printCheck = async function printCheck() {
   if (savedMode) document.body.dataset.sheetsMode = savedMode; else delete document.body.dataset.sheetsMode;
   check('print: afterprint puts the sheets back (nothing hidden, no zoom, no split copies)', liveHosts.every(h => h.style.display !== 'none' && !h.style.zoom && !h.classList.contains('print-wide-sheet')) && !document.querySelector('.print-split-sheet'), 'leftovers after afterprint');
   return { pass: results.every(r => r.ok), results };
-};
+}

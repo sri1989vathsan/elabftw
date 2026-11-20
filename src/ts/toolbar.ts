@@ -14,7 +14,7 @@ import i18next from './i18n';
 import { Action, Model } from './interfaces';
 import { collectForm, reloadElements } from './misc';
 import { notify } from './notify';
-import { bindSheetsModeSelects, getSheetsMode } from './sheets-mode';
+import { askSheetsMode, bindSheetsModeSettings } from './sheets-mode';
 
 on(Action.Duplicate, () => {
   const copyFiles = (document.getElementById('duplicateKeepFilesSelect') as HTMLInputElement);
@@ -170,7 +170,7 @@ on(Action.CancelRequestableAction, (el: HTMLElement) => {
   }
 });
 
-bindSheetsModeSelects();
+bindSheetsModeSettings();
 
 // Print in the Export menu: the same code path as the Print button of the Contents panel (the whole entry, or the ticked sections)
 on('print-entry', () => {
@@ -194,8 +194,17 @@ on('export-to', (el: HTMLElement) => {
   // sections picked in the Contents panel: the PDF holds only those (see TocPanel.publishSelectedSections)
   const sections = format === 'pdf' ? document.body.dataset.tocSections : undefined;
   const sectionsParam = sections ? `&sections=${encodeURIComponent(sections)}` : '';
-  const sheetsParam = format === 'pdf' ? `&sheets=${getSheetsMode()}` : '';
-  window.open(`/api/v2/${el.dataset.type}/${el.dataset.id}?format=${finalFormat}&changelog=${changelog}&json=${json}&classification=${classification}${sectionsParam}${sheetsParam}`, '_blank');
+  const open = (sheetsParam: string): void => {
+    window.open(`/api/v2/${el.dataset.type}/${el.dataset.id}?format=${finalFormat}&changelog=${changelog}&json=${json}&classification=${classification}${sectionsParam}${sheetsParam}`, '_blank');
+  };
+  if (format !== 'pdf') {
+    open('');
+    return;
+  }
+  // a PDF of an entry with a table wider than the page asks first how to draw it (sheets-mode.ts); no wide table: nothing asked
+  void askSheetsMode('Export').then(sheets => {
+    if (sheets !== null) open(`&sheets=${sheets}`);
+  });
 });
 
 on('export-to-qrpng', (el: HTMLElement) => {
