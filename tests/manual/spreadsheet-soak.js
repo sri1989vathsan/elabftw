@@ -601,6 +601,16 @@ async function spreadsheetSoak(options = {}) {
   async function structureOp(uid, forced) {
     const model = models.get(uid);
     if (model.plate) return;
+    // A press outside the table (a save, the popup, the page) takes the EMPTY grey filler columns off on purpose; the record follows that rule here too,
+    // before it picks a cell, or it would look for a cell in a column that is gone ("cell F2 not found for a menu action", seed 11, mixed round 6)
+    if (model.fillerBase !== undefined) {
+      const rootNow = api.overlayElement(uid);
+      const liveCols = rootNow ? rootNow.querySelectorAll('.jss_worksheet thead td[data-x]').length : 0;
+      if (liveCols >= model.fillerBase && liveCols < model.grid[0].length && model.grid.every(row => row.slice(liveCols).every(value => value === ''))) {
+        model.grid.forEach(row => { row.length = liveCols; });
+        note('record-follows-filler-cleanup');
+      }
+    }
     const rows = model.grid.length; const cols = model.grid[0].length;
     const kind = forced?.kind ?? pick(['row-after', 'row-before', 'col-after', 'col-before', 'del-row', 'del-col']);
     if ((kind === 'del-row' && rows <= 2) || (kind === 'del-col' && cols <= 2)) return;
