@@ -22,6 +22,7 @@ use function dirname;
 use function error_log;
 use function file_get_contents;
 use function file_put_contents;
+use function filemtime;
 use function getenv;
 use function getimagesize;
 use function in_array;
@@ -34,6 +35,7 @@ use function mb_substr;
 use function mkdir;
 use function preg_match;
 use function random_bytes;
+use function rawurlencode;
 use function trim;
 use function rename;
 use function uasort;
@@ -208,6 +210,20 @@ final class WhatsNewStore
         }
 
         return null;
+    }
+
+    /**
+     * The address of a picture. A picture shipped with the code is a static file that nginx serves with a one-year cache (the
+     * version in the address is the file's date, so a replaced picture is fetched again); one that an admin uploaded, or any
+     * other name, goes through whats-new.php?image= (the same address as before, still working).
+     */
+    public function imageUrl(string $name): string
+    {
+        if ($this->isSafeFileName($name) && !is_file(self::DATA_DIR . '/images/' . $name) && is_file(self::SHIPPED_IMAGES . '/' . $name)) {
+            return 'assets/images/whats-new/' . rawurlencode($name) . '?v=' . (int) filemtime(self::SHIPPED_IMAGES . '/' . $name);
+        }
+
+        return 'whats-new.php?image=' . rawurlencode($name);
     }
 
     public function isSafeFileName(string $name): bool
