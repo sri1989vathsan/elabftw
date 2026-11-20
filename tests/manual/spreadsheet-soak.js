@@ -2855,6 +2855,8 @@ async function spreadsheetSoak(options = {}) {
         const fromPreview = await withPreview(legacy[0].uid, host => [...host.querySelectorAll('.jss_worksheet tbody td[data-x][data-y]')].map(effective));
         if (shown.some(a => a !== 'left') || (fromPreview && fromPreview.some(a => a !== 'left'))) dataLoss.push({ context, table: 'alignment legacy', problem: `cells without an alignment of their own show ${shown.join(',')} live and ${(fromPreview || []).join(',')} in the preview, expected all left` });
       } else fail(`alignment-preserved: ${legacy.length} legacy sheets were made`);
+      // what this scenario leaves in the text must be saved, or the check after a reload compares the record with an older save
+      await save();
       note('alignment-preserved');
     },
     // The toolbar above a sheet is whole at every frame width and stays put while the sheet scrolls sideways: every button (and the formula
