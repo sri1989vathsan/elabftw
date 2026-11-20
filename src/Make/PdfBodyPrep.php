@@ -112,12 +112,12 @@ final class PdfBodyPrep
 
     /**
      * Draws every spreadsheet of the body like the grid on screen. $mode says what to do with a sheet wider than the page:
-     * 'landscape' (default): scaled to the portrait page width when that keeps at least 70%, else on a landscape page (scaled to its width
-     * when still wider); 'fit': always portrait, scaled to the page width; 'split': actual size, the columns that do not fit continue on the
+     * 'landscape': scaled to the portrait page width when that keeps at least 70%, else on a landscape page (scaled to its width
+     * when still wider); 'fit' (default): always portrait, scaled to the page width; 'split': actual size, the columns that do not fit continue on the
      * next page (first column, row numbers and header row repeated). A narrower sheet is left at 100% in every mode.
      * $landscapeWidthPx is the printable width of a landscape page.
      */
-    public static function spreadsheets(string $html, ?float $pageWidthPx = null, string $mode = self::MODE_LANDSCAPE, ?float $landscapeWidthPx = null, string $pageFormat = 'A4'): string
+    public static function spreadsheets(string $html, ?float $pageWidthPx = null, string $mode = self::MODE_FIT, ?float $landscapeWidthPx = null, string $pageFormat = 'A4'): string
     {
         if (!str_contains($html, 'elabftw-spreadsheet')) {
             return $html;
@@ -151,7 +151,7 @@ final class PdfBodyPrep
     /** The "Sheets in print and PDF" choice of the request (sheets=landscape|fit|split); anything else is the default. */
     public static function parseMode(string $raw): string
     {
-        return in_array($raw, array(self::MODE_FIT, self::MODE_SPLIT), true) ? $raw : self::MODE_LANDSCAPE;
+        return in_array($raw, array(self::MODE_LANDSCAPE, self::MODE_SPLIT), true) ? $raw : self::MODE_FIT;
     }
 
     /** The child elements of an element, in order. */

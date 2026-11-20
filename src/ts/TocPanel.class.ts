@@ -15,7 +15,7 @@ import {
   writeRichClipboard,
 } from './ClipboardContent';
 import { restoreStaticSpreadsheetsForPrint } from './spreadsheet-print-hook';
-import { getSheetsMode } from './sheets-mode';
+import { askSheetsMode, printWithSheetsChoice } from './sheets-mode';
 import {
   getImageTocLabel,
   getSpreadsheetTocLabel,
@@ -383,12 +383,15 @@ export default class TocPanel extends SidePanel {
       if (!exporter) return;
       const sections = document.body.dataset.tocSections;
       const param = sections ? `&sections=${encodeURIComponent(sections)}` : '';
-      window.open(`/api/v2/${exporter.dataset.type}/${exporter.dataset.id}?format=pdf${param}&sheets=${getSheetsMode()}`, '_blank');
+      void askSheetsMode('Export').then(sheets => {
+        if (sheets !== null) window.open(`/api/v2/${exporter.dataset.type}/${exporter.dataset.id}?format=pdf${param}&sheets=${sheets}`, '_blank');
+      });
     };
     document.getElementById('tocPdfAll')?.addEventListener('click', openPdf);
     // always available: the whole entry when nothing is ticked, the ticked sections otherwise
     document.getElementById('tocPrintAll')?.addEventListener('click', () => {
-      if (document.body.dataset.tocSections) this.printSelection();
+      // when a table is wider than the page the user is asked first how to print it (sheets-mode.ts)
+      if (document.body.dataset.tocSections) printWithSheetsChoice(() => this.printSelection());
       else printEverything(this.getEditor()?.getBody());
     });
     copy?.addEventListener('click', () => void this.copySelection(copy));
