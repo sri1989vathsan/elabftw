@@ -832,11 +832,6 @@ h5 {
   background-color: var(--lightgold);
 }
 
-.hover-action:hover {
-  color: var(--primary);
-  transition: color 0.8s ease;
-}
-
 button:disabled {
   cursor: not-allowed;
 }
@@ -977,8 +972,7 @@ tr:first-child td {
     font-size: 100%;
   }
 
-  .item-date,
-  .item-owner {
+  .item-date {
     white-space: nowrap;
   }
 
@@ -993,11 +987,6 @@ tr:first-child td {
     max-width: 20ch;
     overflow-wrap: normal;  // don't force per-character wrapping
     word-break: keep-all;
-  }
-
-  .item-rating {
-    min-width: 66px;
-    text-align: center;
   }
 }
 
@@ -1076,11 +1065,6 @@ tr:first-child td {
   color: var(--primary-fg);
   font-weight: bold;
   margin-bottom: 0;
-}
-
-.overlay-success {
-  animation: slideInOut 3.5s ease-in-out forwards;
-  background-color: var(--primary);
 }
 
 .overlay-error,
@@ -1240,24 +1224,6 @@ tr:first-child td {
 
       &:hover {
         color: var(--secondlevel);
-      }
-    }
-  }
-
-  .left-icon {
-    &.bgnd-blue {
-      background-color: var(--primary);
-
-      &:hover {
-        background-color: var(--secondlevel);
-      }
-    }
-
-    &.bgnd-dark {
-      background-color: var(--medium);
-
-      &:hover {
-        background-color: var(--secondlevel);
       }
     }
   }
@@ -9006,10 +8972,6 @@ the form-control fails to do that so we do the border ourselves */
   background-color: var(--white);
 }
 
-.border-secondlevel {
-  border-color: var(--secondlevel);
-}
-
 .bg-firstlevel {
   background-color: var(--firstlevel);
 }
@@ -9416,23 +9378,6 @@ input[type='color'] {
   border-radius: 0.25rem;
   color: var(--mediumstrong);
   padding: 4px 8px;
-}
-
-.admin-badge {
-  background-color: var(--lightblue);
-  border: 1px solid var(--gold);
-  border-radius: 0.25rem;
-  padding: 4px 8px;
-  position: relative;
-
-  &::before {
-    color: var(--dangerred);
-    content: 'Admin';
-    font-size: 75%;
-    left: 0;
-    position: absolute;
-    top: -16px;
-  }
 }
 
 .increased-spacing {
@@ -10089,10 +10034,6 @@ section.text-center .form-control {
   width: 1em;
 }
 
-.round-spot-ghost {
-  border: 1px dashed var(--medium);
-}
-
 .table-bordered,
 .table-bordered td,
 .table-bordered th,
@@ -10191,13 +10132,6 @@ section.text-center .form-control {
   border: 1px solid transparent;
   border-radius: 5px;
   padding: 1px;
-}
-
-.active-filter-badge {
-  background-color: var(--firstlevel);
-  border: 1px solid var(--secondlevel);
-  border-radius: 5px;
-  padding: 0.25rem;
 }
 
 .malleable {
@@ -11186,11 +11120,6 @@ div > .sticky-navbar {
   padding-top: 0.35rem;
   text-align: left;
   width: 100%;
-}
-
-.pm-reassign-select {
-  max-width: 10rem;
-  width: auto;
 }
 
 .pm-overlay {
