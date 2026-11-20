@@ -12,6 +12,7 @@ namespace Elabftw\Controllers;
 use Elabftw\Exceptions\ImproperActionException;
 use Elabftw\Exceptions\ResourceNotFoundException;
 use Elabftw\Exceptions\UnauthorizedException;
+use Elabftw\Services\WhatsNewPopup;
 use Elabftw\Services\WhatsNewStore;
 use Override;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -67,6 +68,10 @@ final class WhatsNewController extends AbstractHtmlController
         if ($image !== '') {
             return $this->imageResponse($image);
         }
+        // the "What's new" button of the navbar: the popup markup for the entries to show now, drawn on demand
+        if ($this->app->Request->query->getString('popup') === '1') {
+            return $this->popupResponse();
+        }
         $card = $this->app->Request->query->getString('card');
         if ($card !== '') {
             return $this->cardResponse($card);
@@ -114,6 +119,15 @@ final class WhatsNewController extends AbstractHtmlController
             'whatsNewAreas' => array_values(array_unique(array_filter(array_column($all, 'area')))),
             'whatsNewCanEdit' => $this->canEdit(),
         ));
+    }
+
+    private function popupResponse(): Response
+    {
+        $wn = new WhatsNewPopup((int) $this->app->Users->userData['userid'], $this->Store)->buildOnDemand();
+        $Response = new Response($wn === array() ? '' : $this->app->render('whats-new-popup.html', array('whatsNewOnDemand' => $wn)));
+        $Response->headers->set('Cache-Control', 'no-store');
+
+        return $Response;
     }
 
     /** Only sysadmins edit; team admins and everyone else just read. */
