@@ -1,9 +1,8 @@
 {% extends 'base.html' %}
-{% import 'guide-info.html' as guide -%}
 
 {% block title %}
 <div class='d-flex'>
-  <h1 id='pageTitle'>{{ pageTitle }}{{ guide.info('guide-database-storage', 'Storage') }}</h1>
+  <h1 id='pageTitle'>{{ pageTitle }}</h1>
   <a class='ml-auto' href='/api/v2/reports?scope=inventory&format=csv'>
     <button class='btn btn-secondary'>{{ 'Export'|trans }}</button>
   </a>
