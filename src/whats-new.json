@@ -109,13 +109,13 @@
       "The row of column letters is as high as the other rows, and no empty strip is left above the header or under the last row.",
       "Text in a column that was never sized by hand is fitted to the text and starts at the left."
     ],
-    "image": "sheet-frame-fits.jpg",
+    "image": "sheet-frame-fits.png",
     "imageAlt": "A spreadsheet in the text of an experiment showing all five of its columns and its rows inside the text frame",
     "highlight": {
-      "x": 3.2,
-      "y": 18.8,
-      "w": 72.9,
-      "h": 42.0,
+      "x": 4.9,
+      "y": 24.0,
+      "w": 81.0,
+      "h": 46.7,
       "label": "All columns visible"
     }
   },
@@ -226,7 +226,7 @@
       "On the edit page, Save keeps your changes and Save and go back saves and opens the view page of the entry.",
       "The editor toolbar is one row. The three dots at its end open the rest of the buttons."
     ],
-    "image": "entry-pages.jpg",
+    "image": "entry-pages.png",
     "imageAlt": "An experiment page: title with category and status, the toolbar, the details block and the main text with its headings"
   },
   {
@@ -309,8 +309,8 @@
       "The same @ list works in comments: the person you mention is told if they can read the entry.",
       "A step with a deadline shows in the To-do panel and on that day in the Activity calendar."
     ],
-    "image": "steps-and-tasks.jpg",
-    "imageAlt": "The Steps and tasks section of an experiment: two steps with tick boxes and deadlines, then the Data, Links and Local files sections",
+    "image": "steps-and-tasks.png",
+    "imageAlt": "The Steps and tasks section of an experiment with three steps, their tick boxes and deadlines, and the main text above it",
     "highlight": {
       "x": 0.2,
       "y": 6.4,
@@ -331,13 +331,13 @@
       "When the folder has subfolders, the last button opens a menu of them to go one level down. The bar stays at the bottom of the window as you scroll.",
       "The back arrow (also on the edit page) and Save and go back now return to that folder."
     ],
-    "image": "folder-path-bar.jpg",
+    "image": "folder-path-bar.png",
     "imageAlt": "The folder path bar at the bottom of an experiment, Cloning then Plasmids, with the experiment text above it",
     "highlight": {
-      "x": 1.8,
-      "y": 92.8,
-      "w": 37.5,
-      "h": 6.8,
+      "x": 3.3,
+      "y": 64.9,
+      "w": 38.5,
+      "h": 8.2,
       "label": "Folder path bar"
     }
   },
@@ -354,12 +354,12 @@
       "Pasting a copied formula in a spreadsheet moves its references like Excel, and pasting and resizing rows or columns are part of Undo.",
       "Printing from the edit page no longer puts plates and tables on top of each other."
     ],
-    "image": "plate-view-and-copy.jpg",
+    "image": "plate-view-and-copy.png",
     "imageAlt": "A well plate in an experiment: the Plate and Spreadsheet switch and the copy button above the wells",
     "highlight": {
-      "x": 31.2,
-      "y": 10.8,
-      "w": 68.1,
+      "x": 88.3,
+      "y": 11.5,
+      "w": 10.0,
       "h": 8.1,
       "label": "Plate or Spreadsheet"
     }
@@ -376,13 +376,13 @@
       "Each link has buttons to open it on a Mac, to copy the Windows path to paste into Explorer, and to insert a reference to it in the main text.",
       "The label keeps a long path readable. Remove a link with the trash icon while editing."
     ],
-    "image": "link-to-data.jpg",
-    "imageAlt": "The Data section of an experiment with a network folder link labelled Raw data folder and the path and label fields to add another",
+    "image": "link-to-data.png",
+    "imageAlt": "The Data section of an experiment with two network folder links, Raw data folder and Plate reader exports, and the path and label fields to add another",
     "highlight": {
-      "x": 3.5,
-      "y": 3.7,
-      "w": 48.1,
-      "h": 34.3,
+      "x": 2.0,
+      "y": 5.2,
+      "w": 84.6,
+      "h": 31.5,
       "label": "Data section"
     }
   },
@@ -435,12 +435,12 @@
       "The cell you clicked is selected straight away, and the table you are editing stays live while you scroll."
     ],
     "imageAlt": "A spreadsheet in the text of an experiment with the small bar above it for collapsing, fitting and copying",
-    "image": "spreadsheet-previews.jpg",
+    "image": "spreadsheet-previews.png",
     "highlight": {
-      "x": 3.9,
-      "y": 4.0,
-      "w": 20.0,
-      "h": 7.2,
+      "x": 12.1,
+      "y": 15.1,
+      "w": 29.5,
+      "h": 6.8,
       "label": "Sheet bar"
     }
   },
@@ -454,13 +454,13 @@
       "Works for bullet lists, numbered lists and several selected paragraphs.",
       "Nested lists move one level per press."
     ],
-    "image": "list-indent.jpg",
+    "image": "list-indent.png",
     "imageAlt": "Three numbered lines selected in the editor; pressing Tab indents all of them together",
     "highlight": {
-      "x": 2.1,
-      "y": 26.8,
-      "w": 70.0,
-      "h": 15.8,
+      "x": 3.8,
+      "y": 16.7,
+      "w": 53.8,
+      "h": 13.1,
       "label": "Select lines, press Tab"
     }
   },
@@ -489,13 +489,13 @@
       "Copy the whole table in one click, and auto-fit rows or columns to their content.",
       "Row heights now grow when a narrower column needs more wrapped lines."
     ],
-    "image": "spreadsheet-insert-and-view.jpg",
+    "image": "spreadsheet-insert-and-view.png",
     "imageAlt": "The Insert menu of the editor with Spreadsheet open: a grid where you point at the number of columns and rows",
     "highlight": {
-      "x": 42.0,
-      "y": 28.8,
-      "w": 49.4,
-      "h": 38.7,
+      "x": 40.8,
+      "y": 28.5,
+      "w": 56.8,
+      "h": 50.0,
       "label": "Pick the size"
     }
   },
@@ -548,8 +548,8 @@
       "A plate or spreadsheet shows its row and column labels (1, 2, 3 and A, B, C) before you click it, also for older ones that were saved without them, and rows keep their height when the preview becomes the grid.",
       "A table below the one you add rows to no longer jumps for a moment, and the editor no longer slides a wide plate out of view sideways."
     ],
-    "image": "spreadsheet-editing.jpg",
-    "imageAlt": "A spreadsheet in edit mode with its tool bar above the grid: undo, redo, add rows and columns, copy and delete",
+    "image": "spreadsheet-editing.png",
+    "imageAlt": "A spreadsheet in edit mode with its tool bar above the grid and the column and row labels",
     "screenshots": [
       {
         "image": "spreadsheet-editing-plate-13b3f11b.png",
@@ -876,13 +876,13 @@
     ],
     "news": "New: the Data section for network folders, and order, template and LabCollector links in these sections.",
     "shot": "An experiment page scrolled to the sections under the main text with the Data section open",
-    "image": "guide-experiment-sections.jpg",
+    "image": "guide-experiment-sections.png",
     "screenshots": [],
     "highlight": {
-      "x": 1.2,
-      "y": 6.2,
-      "w": 68.2,
-      "h": 6.2,
+      "x": 2.0,
+      "y": 5.4,
+      "w": 57.7,
+      "h": 5.2,
       "label": "Links section"
     }
   },
@@ -900,8 +900,8 @@
       "fa-bell::You and the other assignees are told when the step is completed, not the person who did it. Choose web or email in Settings > Notifications.",
       "The same @ list works in comments. The Open steps tile on the dashboard counts what you still have to do."
     ],
-    "image": "guide-steps.jpg",
-    "imageAlt": "The Steps and tasks section of an experiment: two steps with tick boxes and deadlines, then the Data, Links and Local files sections",
+    "image": "guide-steps.png",
+    "imageAlt": "The Steps and tasks section of an experiment: three steps with tick boxes and deadlines, then the Data, Links and Local files sections",
     "featured": false,
     "guide": true,
     "order": 82,
@@ -914,10 +914,10 @@
     "news": "New: assign a step with @, the person gets it as a to-do, and finishing it tells you.",
     "shot": "An experiment's Steps and tasks section with a step that mentions two people, next to one of their to-do lists showing it",
     "highlight": {
-      "x": 0.2,
-      "y": 6.4,
-      "w": 42.5,
-      "h": 25.0,
+      "x": 2.2,
+      "y": 3.8,
+      "w": 44.7,
+      "h": 26.3,
       "label": "Steps and tasks"
     }
   },
@@ -1088,7 +1088,7 @@
     ],
     "news": "New: one Insert menu (note, divider, tables, spreadsheets, well plates, links and templates), a Note options button that appears while a note is selected, Spreadsheet tools that appear while a spreadsheet is selected, checklists, and a format painter next to the colours.",
     "shot": "The editor toolbar with the Insert menu open",
-    "image": "guide-editor-toolbar.jpg",
+    "image": "guide-editor-toolbar.png",
     "screenshots": [
       {
         "image": "guide-editor-note-options-5bdcb685.png",
@@ -1104,10 +1104,10 @@
       }
     ],
     "highlight": {
-      "x": 1.4,
-      "y": 8.7,
-      "w": 96.0,
-      "h": 13.5,
+      "x": 4.6,
+      "y": 11.4,
+      "w": 90.7,
+      "h": 21.9,
       "label": "Editor toolbar"
     }
   },
@@ -1137,7 +1137,7 @@
     ],
     "news": "New: pick a colour and it applies as you choose it, the formula and formatting bars stay as you left them, and Undo and Redo cover typing, formatting, added rows and columns, and sizes.",
     "shot": "The Insert menu with the squares for picking a spreadsheet size",
-    "image": "guide-spreadsheets.jpg",
+    "image": "guide-spreadsheets.png",
     "screenshots": [
       {
         "image": "guide-editor-spreadsheet-tools-13a25130.png",
@@ -1153,10 +1153,10 @@
       }
     ],
     "highlight": {
-      "x": 2.5,
-      "y": 16.4,
-      "w": 62.5,
-      "h": 7.2,
+      "x": 3.8,
+      "y": 15.4,
+      "w": 50.0,
+      "h": 7.4,
       "label": "Sheet tools"
     }
   },
