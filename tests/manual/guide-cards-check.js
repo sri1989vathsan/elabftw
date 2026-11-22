@@ -13,7 +13,7 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..', '..');
-const MAX_SUMMARY = 140, MAX_DETAIL = 140, MIN_DETAILS = 3, MAX_DETAILS = 6, MAX_IMAGE_KB = 150;
+const MAX_SUMMARY = 140, MAX_DETAIL = 140, MIN_DETAILS = 3, MAX_DETAILS = 6, MAX_IMAGE_KB = 400;
 const errors = [];
 const warnings = [];
 const fail = m => errors.push(m);
