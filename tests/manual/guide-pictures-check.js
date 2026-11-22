@@ -7,7 +7,7 @@
  * Fails on:
  *  - an entry without a picture (except the ids in NO_PICTURE_OK below),
  *  - a missing picture file,
- *  - a picture file larger than 150 KB,
+ *  - a picture file larger than 400 KB,
  *  - a picture narrower than 400 px (JPEG and PNG headers are read, no image library needed),
  *  - one picture (same file name, or identical bytes) used by two entries that are not about the same feature (SAME_FEATURE below),
  *  - a picture file in web/assets/images/whats-new/ that no entry references (as image or as an extra screenshot).
@@ -19,7 +19,7 @@ const crypto = require('crypto');
 
 const root = path.resolve(__dirname, '..', '..');
 const imageDir = path.join(root, 'web/assets/images/whats-new');
-const MAX_KB = 150;
+const MAX_KB = 400;
 const MIN_WIDTH = 400;
 
 // Entries that are allowed to have no picture (nothing visible to show). Keep this list empty if possible.

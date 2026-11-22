@@ -512,8 +512,8 @@
       "Orders can move from requested to ordered when a procurement ID appears, and archive after a set time.",
       "Notes support bulleted and numbered lists, and long titles and file names wrap properly."
     ],
-    "image": "orders.jpg",
-    "imageAlt": "The Orders page with the request form on the left and the list of orders with their status on the right"
+    "image": "orders.png",
+    "imageAlt": "Two orders in the Orders list, one Collected and one Ordered, each with its attached quote PDF and the download and Add to new order buttons beside the file"
   },
   {
     "id": "spreadsheet-editing",
@@ -610,8 +610,8 @@
       "Reminders appear as one grouped, collapsible banner that stays as you move between pages, and they also arrive as notifications and email, following your existing step-deadline preference.",
       "Subscribe to your deadlines from Google Calendar or Apple Calendar with a private link from the Calendar tab. The link is read-only, and you can regenerate or revoke it at any time."
     ],
-    "image": "activity-calendar.jpg",
-    "imageAlt": "The Activity calendar panel with Day, Week and Month buttons, the November month grid with coloured dots for tasks and experiments, and a list of the dates",
+    "image": "activity-calendar.png",
+    "imageAlt": "The Activity calendar panel for November 2026: User and Team switch, Day, Week and Month buttons, the month grid with coloured count pills for tasks, experiments and overdue days, and the Today button",
     "featured": true
   },
   {
@@ -763,7 +763,7 @@
       "The User and Team buttons switch between your items and the team’s. Add a task with a date, time and reminder from the panel.",
       "fa-link::Subscribe from Google or Apple Calendar with the private, read-only link on the Calendar tab; you can regenerate or revoke it."
     ],
-    "imageAlt": "The Activity calendar panel with Day, Week and Month buttons, the November month grid with coloured dots for tasks and experiments, and a list of the dates",
+    "imageAlt": "The Activity calendar panel in Week view with the Open the calendar page button, the User and Team switch, the Day, Week and Month buttons and the start of the agenda",
     "featured": false,
     "guide": true,
     "order": 40,
@@ -775,7 +775,7 @@
     ],
     "news": "New: an activity calendar that combines tasks and experiment steps, with reminders and calendar subscriptions.",
     "shot": "The Activity calendar panel with the month grid, the Day/Week/Month buttons and the agenda below",
-    "image": "guide-calendar.jpg",
+    "image": "guide-calendar.png",
     "screenshots": []
   },
   {
@@ -821,7 +821,7 @@
       "fa-clipboard-check::Order Status lists each procurement with its orders and how many items were collected. Templates keep texts such as supplier emails.",
       "fa-thumbtack::Pin an order to keep it at the top. Pinned for all is shared with the team; Reference is only yours. Admins can turn auto-collect off."
     ],
-    "imageAlt": "The Orders page with the request form on the left and the list of orders with their status on the right",
+    "imageAlt": "The Orders page with the request form on the left and the list of orders on the right: status filters, the shop sheet drop area, search, and the first orders with their status",
     "featured": false,
     "guide": true,
     "order": 70,
@@ -833,7 +833,7 @@
     ],
     "news": "New: drop the signed collection sheets to mark orders Collected and notify the requesters, the Order Status tab with items collected per procurement, and a setting for the collected notification. Received is now called In storage.",
     "shot": "The Orders page with a few orders at different stages and one order open",
-    "image": "guide-orders.jpg",
+    "image": "guide-orders.png",
     "screenshots": []
   },
   {
