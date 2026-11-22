@@ -133,13 +133,13 @@
       "Exp, Res and All choose which entries the panel shows.",
       "The Create window has a Folder choice too, so a new entry can start in a folder."
     ],
-    "image": "folder-explorer.jpg",
-    "imageAlt": "The Folders panel in list view with the Favourites, Tree, List and Cards view buttons at the top",
+    "image": "folder-explorer.png",
+    "imageAlt": "The Folders panel in cards view: folders and entries as cards, with the Favourites, Tree, List and Cards view buttons at the top",
     "highlight": {
-      "x": 24.0,
-      "y": 1.2,
-      "w": 25.1,
-      "h": 7.6,
+      "x": 14.5,
+      "y": 11.4,
+      "w": 28.0,
+      "h": 6.1,
       "label": "Choose a view"
     }
   },
@@ -643,14 +643,14 @@
       "On experiment pages a table of contents tab lists the headings so you can jump around, and filter sections to print or copy.",
       "The rail stays put while you scroll, and the last panel you opened is remembered."
     ],
-    "image": "left-sidebar.jpg",
-    "imageAlt": "The left sidebar: a column of small buttons for Folders, Search, Quick search, To-do, Calendar and Contents, with the guide button at the bottom",
+    "image": "left-sidebar.png",
+    "imageAlt": "The left sidebar: a column of small buttons for Folders, Search, Quick search, To-do, Calendar and Contents, here with the Search panel opened",
     "featured": true,
     "highlight": {
-      "x": -0.8,
-      "y": -16.0,
-      "w": 8.0,
-      "h": 106.1,
+      "x": 0.0,
+      "y": 28.6,
+      "w": 10.4,
+      "h": 61.7,
       "label": "One click opens a panel"
     }
   },
@@ -668,7 +668,7 @@
       "fa-user-shield::Permissions (owner and admins): set Can see and Can edit as on an entry, tick Include subfolders, press Apply and confirm.",
       "fa-star::Star a folder to bookmark it. The Refresh button at the top of the panel loads the tree again."
     ],
-    "imageAlt": "The Folders panel with the folder tree of the team: Cell culture, Cloning with Plasmids and Screening, Protein work",
+    "imageAlt": "The Folders panel with the folder tree of the team: Cloning with Plasmids and Screening, and the Unfiled entry",
     "featured": false,
     "guide": true,
     "order": 10,
@@ -680,7 +680,7 @@
     ],
     "news": "Folders now hold resources as well as experiments, can be bookmarked, have READMEs, can be exported, and can remember permissions that apply to everything inside.",
     "shot": "The Folders tab with a project folder open and its README beside it, and the Folder permissions dialog with the Can see tab open",
-    "image": "guide-folders.jpg",
+    "image": "guide-folders.png",
     "screenshots": [
       {
         "image": "guide-folders-6ccb267c.png",
@@ -718,12 +718,12 @@
     "news": "New: List with a file preview and Cards views, an Exp / Res / All switch, a favourites list, drag to move with Undo, and a panel that can be slim.",
     "shot": "The Folders panel in the List view inside a folder, with a file picked and its details below",
     "screenshots": [],
-    "image": "guide-folder-views.jpg",
+    "image": "guide-folder-views.png",
     "highlight": {
-      "x": 24.0,
-      "y": 1.2,
-      "w": 25.1,
-      "h": 7.6,
+      "x": 14.5,
+      "y": 13.2,
+      "w": 28.0,
+      "h": 7.1,
       "label": "Choose a view"
     }
   },
@@ -741,7 +741,7 @@
       "fa-rotate::Every panel has Close and Refresh in the top corner, in the same place. Refresh reloads that panel without leaving the page.",
       "fa-bars::On a narrow window the row folds into one button left of the logo."
     ],
-    "imageAlt": "The left sidebar: a column of small buttons for Folders, Search, Quick search, To-do, Calendar and Contents, with the guide button at the bottom",
+    "imageAlt": "The left sidebar: a column of small buttons for Folders, Search, Quick search, To-do, Calendar and Contents, with the Folders panel opened beside it",
     "featured": false,
     "guide": true,
     "order": 30,
@@ -753,13 +753,13 @@
     ],
     "news": "One row of buttons with all of these tools on every page, and a keyboard-first quick search and command window.",
     "shot": "The left sidebar with the Folders panel open and the row of buttons outlined, and the quick search window open over a page",
-    "image": "guide-sidebar.jpg",
+    "image": "guide-sidebar.png",
     "screenshots": [],
     "highlight": {
-      "x": -0.8,
-      "y": -16.0,
-      "w": 8.0,
-      "h": 106.1,
+      "x": 0.0,
+      "y": 28.6,
+      "w": 10.4,
+      "h": 61.7,
       "label": "One click opens a panel"
     }
   },
@@ -991,7 +991,7 @@
       "For templates, the link button records the template and the second button inserts its content.",
       "With a board card open, results also have buttons to link them to the card or add them as a step."
     ],
-    "imageAlt": "The Search panel in the left sidebar with its search box, the Exp, Res and All buttons and the results grouped by experiments and resources",
+    "imageAlt": "The Search panel in the left sidebar with its search box, the All, Exp, Res, ETpl and RTpl buttons and the results grouped by experiments, resources and folders",
     "featured": false,
     "guide": true,
     "order": 130,
@@ -1003,7 +1003,7 @@
     ],
     "news": "New: filters you can favourite, shared by search across experiments, resources and templates, plus attach and paste-a-link buttons on every result.",
     "shot": "The Search panel next to an experiment being edited, with the attach and paste-a-link buttons on a result outlined",
-    "image": "guide-search-filters.jpg",
+    "image": "guide-search-filters.png",
     "screenshots": []
   },
   {
@@ -1209,7 +1209,7 @@
       "Click a title for notes, linked items, steps and comments. Archive, Duplicate and Delete are at the bottom of the details.",
       "fa-calendar::The Calendar tab shows a month and has Create private link for Google or Apple Calendar. Calendar settings are under the gear."
     ],
-    "imageAlt": "The To-do panel with the tabs Tasks and steps, the add-task field and overdue tasks and steps listed by date",
+    "imageAlt": "The To-do panel with the Tasks and By date tabs, the add-task field and overdue tasks and steps listed with their dates",
     "featured": false,
     "guide": true,
     "order": 35,
@@ -1221,7 +1221,7 @@
     ],
     "news": "New: one list for tasks and step deadlines with reminders, steps and comments on tasks, linked items, a completed and archived history, a calendar view, and a calendar subscription.",
     "shot": "The To-do panel open next to a page, with the add-task box and the groups Overdue, Today and Tomorrow",
-    "image": "guide-todo.jpg",
+    "image": "guide-todo.png",
     "screenshots": [
       {
         "image": "guide-todo-repeat.jpg",
