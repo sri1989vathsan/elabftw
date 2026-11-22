@@ -64,13 +64,13 @@
       "Click the chip to open the list. A task from a step links to it. Esc, the title or Collapse fold it again after a few seconds on its own; Dismiss all clears the list.",
       "The chip stays the way you left it for the rest of the session, so it does not open itself on every page."
     ],
-    "image": "reminder-chip.jpg",
-    "imageAlt": "The small round reminder chip at the top right of the page with the number of deadlines coming up, and the list it opens",
+    "image": "reminder-chip.png",
+    "imageAlt": "The reminder list opened from the round chip at the top right of the page: tasks due soon and overdue",
     "highlight": {
-      "x": 91.7,
-      "y": 5.5,
-      "w": 9.9,
-      "h": 9.8,
+      "x": 81.6,
+      "y": 3.0,
+      "w": 15.8,
+      "h": 10.9,
       "label": "Deadline chip"
     }
   },
@@ -157,13 +157,13 @@
       "Tabular is a table you can sort. Experiments and resources each keep their own choice.",
       "The choice is saved with your account, so it is the same in another browser."
     ],
-    "image": "list-layouts.jpg",
-    "imageAlt": "The row of layout buttons above the experiments list, next to the sort buttons, with the list below",
+    "image": "list-layouts.png",
+    "imageAlt": "The row of layout buttons above the experiments list, next to the sort buttons, with the first entry below",
     "highlight": {
-      "x": 62.7,
-      "y": 11.2,
-      "w": 22.9,
-      "h": 7.2,
+      "x": 61.1,
+      "y": 11.9,
+      "w": 22.0,
+      "h": 9.1,
       "label": "Pick a layout"
     }
   },
@@ -180,13 +180,13 @@
       "Experiments, Resources and (for admins) Announcements each have the same Create button at the right of the card title.",
       "The Scheduled bookings card is hidden."
     ],
-    "image": "dashboard-tiles.jpg",
-    "imageAlt": "The dashboard: tiles with the number of experiments and resources modified this week, open steps and open tasks, above the experiment, resource and announcement cards",
+    "image": "dashboard-tiles.png",
+    "imageAlt": "The dashboard tiles: experiments and resources modified this week, open steps and open tasks, above the experiments and resources cards",
     "highlight": {
-      "x": 1.5,
-      "y": 11.9,
-      "w": 97.8,
-      "h": 9.3,
+      "x": 2.9,
+      "y": 15.9,
+      "w": 97.1,
+      "h": 13.9,
       "label": "Tiles open the matching list"
     }
   },
@@ -203,8 +203,15 @@
       "The window starts on the folder you have open, or on the folder of the entry you created last. Starting from a template, the folder you choose wins.",
       "A new entry opens in edit mode, as before."
     ],
-    "image": "create-with-folder.jpg",
-    "imageAlt": "The Create dialog with the Experiment, Resource and template tabs, the title field and the Folder chooser"
+    "image": "create-with-folder.png",
+    "imageAlt": "The Folder chooser of the Create dialog: My folders, Bookmarked and All folders, with the New folder button",
+    "highlight": {
+      "x": 0.8,
+      "y": 32.4,
+      "w": 98.5,
+      "h": 18.1,
+      "label": "Choose a folder"
+    }
   },
   {
     "id": "entry-pages",
@@ -278,14 +285,14 @@
       "A task card follows its task: move the task to another project and the card goes with it. The map refreshes by itself, and the Refresh button reloads it. A card has a button to remove it from the map.",
       "A card's popup is only as tall as its content."
     ],
-    "image": "mind-map.jpg",
+    "image": "mind-map.png",
     "imageAlt": "The Boards page as a mind map: question, experiment and task cards joined by arrows inside the project frame",
     "highlight": {
-      "x": 84.0,
-      "y": 11.6,
-      "w": 3.9,
-      "h": 6.1,
-      "label": "Mind map button"
+      "x": 20.5,
+      "y": 41.9,
+      "w": 75.5,
+      "h": 48.5,
+      "label": "Mind map"
     }
   },
   {
@@ -390,8 +397,8 @@
       "Open Links in the top bar to reach LabCollector, OpenIRIS, MoorLab Wiki, ETHIS and MoorLab Zoom. They open in a new tab.",
       "A team admin can change any of these addresses with the pencil icon next to it, so the link always points to the right place."
     ],
-    "image": "quick-links.jpg",
-    "imageAlt": "The More menu in the top bar with Orders and other links"
+    "image": "quick-links.png",
+    "imageAlt": "The top of the More menu with Orders and the lab links below it"
   },
   {
     "id": "link-templates-and-versions",
@@ -504,7 +511,7 @@
       "Steps and comments can be collapsed, and deadlines show how urgent they are.",
       "Duplicate a card into another project, and open a card straight into edit mode."
     ],
-    "image": "boards.jpg",
+    "image": "boards.png",
     "imageAlt": "The Boards page with the Plasmid project tab, the card filters and the To do column with demo cards and deadlines",
     "featured": true
   },
@@ -567,8 +574,8 @@
       "A Links dropdown groups shortcuts.",
       "The LabCollector link keeps its URL editable from the Tools menu."
     ],
-    "image": "navigation.jpg",
-    "imageAlt": "The More menu in the top bar with Orders and other links"
+    "image": "navigation.png",
+    "imageAlt": "The More menu in the top bar with Orders, Links, Tools and Feedback"
   },
   {
     "id": "cards-linked-experiments",
@@ -583,8 +590,8 @@
       "A project's Linked items section and an All links summary list everything connected to that project, including subprojects.",
       "Click a linked item to open the experiment or resource itself."
     ],
-    "image": "cards-linked-experiments.jpg",
-    "imageAlt": "The Boards page with the Plasmid project tab, the card filters and the To do column with demo cards and deadlines",
+    "image": "cards-linked-experiments.png",
+    "imageAlt": "The mind map of the project: a question, an experiment and tasks joined by arrows",
     "featured": true
   },
   {
@@ -597,8 +604,8 @@
       "Notifications arrive when you gain read access to an experiment or resource, even if you had access before.",
       "The dashboard announcement feed is easier to read."
     ],
-    "image": "notifications-feedback.jpg",
-    "imageAlt": "The notification bell menu listing a step deadline and two to-do deadlines, with Clear all, Notification history and Notification settings below"
+    "image": "notifications-feedback.png",
+    "imageAlt": "The top of the notification bell menu with the newest deadline notifications"
   },
   {
     "id": "activity-calendar",
@@ -799,7 +806,7 @@
       "Drag a project tab to reorder it. A project can hold subprojects. Archive a finished project from its edit dialog.",
       "fa-floppy-disk::Columns or mind map, card size (compact or expanded) of each project and the last project tab are saved with your account."
     ],
-    "imageAlt": "The Boards page with the Plasmid project tab, the card filters and the To do column with demo cards and deadlines",
+    "imageAlt": "The Plasmid project board: card search, priority filter, the All, Assigned to me and Created by me buttons, Add card and the To do column",
     "featured": false,
     "guide": true,
     "order": 50,
@@ -811,7 +818,7 @@
     ],
     "news": "New: the mind map, and your Boards view is remembered.",
     "shot": "The Boards page with a project open and one card showing its steps and linked experiments, and the search panel used to link them",
-    "image": "guide-boards.jpg",
+    "image": "guide-boards.png",
     "screenshots": []
   },
   {
@@ -928,7 +935,7 @@
       "fa-code-compare::Tick two entries and press Compare revisions. Each version also has an Edit history you can restore from.",
       "fa-star::Star the templates you use most to find them quickly."
     ],
-    "imageAlt": "The Experiment templates page listing two templates, PCR reaction setup and Western blot",
+    "imageAlt": "The Experiment templates page listing the templates of the team",
     "featured": false,
     "guide": true,
     "order": 110,
@@ -940,7 +947,7 @@
     ],
     "news": "New: template versions with names and notes, version history, restoring a version or a single edit, and template links on experiments.",
     "shot": "The template version history with the list of versions and the Restore buttons",
-    "image": "guide-templates.jpg",
+    "image": "guide-templates.png",
     "screenshots": []
   },
   {
@@ -968,7 +975,7 @@
     ],
     "news": "New: a feedback board with votes, statuses and comments.",
     "shot": "The Feedback board sorted by votes, with one item open and its comments",
-    "image": "guide-feedback.jpg",
+    "image": "guide-feedback.png",
     "screenshots": []
   },
   {
@@ -1040,7 +1047,7 @@
       "fa-gear::Settings > Notifications: every kind has a Web switch (the bell) and an Email switch. The top row switches all kinds at once.",
       "fa-envelope::Turn Email off to get a kind only in the app, or Web off to get it only by email."
     ],
-    "imageAlt": "The notification bell menu listing a step deadline and two to-do deadlines, with Clear all, Notification history and Notification settings below",
+    "imageAlt": "The notification bell menu listing deadlines, with Clear all, Notification history and Notification settings below",
     "featured": false,
     "guide": true,
     "order": 160,
@@ -1052,7 +1059,7 @@
     ],
     "news": "New: notifications for assignments, mentions and access.",
     "shot": "The notifications dropdown open from the bell in the top bar",
-    "image": "guide-todo-notifications.jpg",
+    "image": "guide-todo-notifications.png",
     "screenshots": []
   },
   {
@@ -1166,7 +1173,7 @@
       "fa-comment::Every card has Comments. Type @ and a name to mention someone; they are notified. Cards show a comment count.",
       "The same comments work on tasks in the To-do list and on posts in Feedback. You can edit or delete your own."
     ],
-    "imageAlt": "The Boards page with the Plasmid project tab, the card filters and the To do column with demo cards and deadlines",
+    "imageAlt": "The To do column of the board with the card filters and, on each card, the initials of the people it is assigned to",
     "featured": false,
     "guide": true,
     "order": 55,
@@ -1178,8 +1185,15 @@
     ],
     "news": "New: project members, several people per card, comments with @mentions, and notifications when you are assigned or mentioned.",
     "shot": "A card open with the Assigned to field and the Comments section showing an @mention",
-    "image": "guide-collaboration.jpg",
-    "screenshots": []
+    "image": "guide-collaboration.png",
+    "screenshots": [],
+    "highlight": {
+      "x": 51.7,
+      "y": 9.6,
+      "w": 31.9,
+      "h": 7.5,
+      "label": "Assigned to me"
+    }
   },
   {
     "id": "guide-todo",
@@ -1240,7 +1254,7 @@
     ],
     "news": "New: an announcement feed on the dashboard with reactions, pinning, pictures and files.",
     "shot": "The dashboard with the Announcements feed on the right, showing a pinned announcement and its reactions",
-    "image": "guide-announcements.jpg",
+    "image": "guide-announcements.png",
     "screenshots": []
   },
   {
@@ -1269,7 +1283,7 @@
     ],
     "news": "Experiments can be organised in folders, linked to orders and resources, and read in a table of contents.",
     "shot": "The Experiments list with the search bar, a few experiments ticked, and the bulk-action bar open",
-    "image": "guide-experiments.jpg",
+    "image": "guide-experiments.png",
     "screenshots": []
   },
   {
@@ -1298,7 +1312,7 @@
     ],
     "news": "Resources can be organised in folders, linked to experiments and orders, and found from the left sidebar.",
     "shot": "The Resources list with a few resources, and one open with its toolbar",
-    "image": "guide-resources.jpg",
+    "image": "guide-resources.png",
     "screenshots": []
   },
   {
@@ -1314,7 +1328,7 @@
       "fa-thumbtack::Pinned entries come first in their own Pinned group in every layout.",
       "fa-floppy-disk::The layout is saved with your account, for experiments and resources separately."
     ],
-    "imageAlt": "The row of layout buttons above the experiments list, next to the sort buttons, with the list below",
+    "imageAlt": "The search box and filter row with the layout and sort buttons above the list of experiments, and the first entries of the list",
     "featured": false,
     "guide": true,
     "order": 9,
@@ -1326,7 +1340,7 @@
     ],
     "news": "New: five layouts for the lists, saved per user.",
     "shot": "",
-    "image": "guide-list-layouts.jpg",
+    "image": "guide-list-layouts.png",
     "screenshots": [],
     "highlight": {
       "x": 62.7,
@@ -1360,7 +1374,7 @@
     ],
     "news": "New: tiles, counts on the chips and one Create button on every card.",
     "shot": "",
-    "image": "guide-dashboard.jpg",
+    "image": "guide-dashboard.png",
     "screenshots": [],
     "highlight": {
       "x": 1.5,
@@ -1394,7 +1408,7 @@
     ],
     "news": "New: a Folder choice in the Create window on every page.",
     "shot": "",
-    "image": "guide-create-entry.jpg",
+    "image": "guide-create-entry.png",
     "screenshots": []
   },
   {
@@ -1511,14 +1525,14 @@
     "featured": false,
     "guide": true,
     "screenshots": [],
-    "image": "guide-pins.jpg",
+    "image": "guide-pins.png",
     "imageAlt": "The first experiment of the list with its pin icon filled in; pinned entries stay at the top of the list",
     "shot": "",
     "highlight": {
-      "x": 92.9,
-      "y": 13.0,
+      "x": 89.3,
+      "y": 21.2,
       "w": 4.7,
-      "h": 5.7,
+      "h": 7.7,
       "label": "Click the pin"
     }
   },
@@ -1546,7 +1560,7 @@
     "featured": false,
     "guide": true,
     "screenshots": [],
-    "image": "guide-admin-settings.jpg",
+    "image": "guide-admin-settings.png",
     "imageAlt": "The Admin panel Team tab with the Configure your team settings and their on/off switches",
     "shot": ""
   },
@@ -1607,8 +1621,8 @@
     "featured": false,
     "guide": true,
     "screenshots": [],
-    "image": "guide-reminders.jpg",
-    "imageAlt": "The small round reminder chip at the top right of the page with the number of deadlines coming up, and the list it opens",
+    "image": "guide-reminders.png",
+    "imageAlt": "The reminder chip with the number of deadlines coming up, and the list of deadlines it opens at the top right of the page",
     "shot": "",
     "highlight": {
       "x": 91.7,
