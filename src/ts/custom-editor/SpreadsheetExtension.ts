@@ -2742,7 +2742,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
 
   const enhanceAllTables = (): void => {
     removeOrphanSpacers();
-    Array.from(editor.getBody().querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet'))
+    Array.from(editor.getBody()?.querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet') ?? [])
       .forEach(table => {
         if (observedTables.has(table)) return;
         observedTables.add(table);
@@ -2793,7 +2793,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
   // (not 'NodeChange' too, unlike enhanceAllTables below) since this only
   // ever needs to run when content is first loaded, not on every keystroke.
   editor.on('SetContent', () => {
-    Array.from(editor.getBody().querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet'))
+    Array.from(editor.getBody()?.querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet') ?? [])
       .forEach(table => {
         // An indented table sits in a margin wrapper (see TableIndentation); the
         // paragraph after it goes below the wrapper, or it would be indented too
@@ -2896,7 +2896,7 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       if (reset) { checksMs = 0; checksCalls = 0; }
       return snapshot;
     },
-    snapshot: (withData = false) => Array.from(editor.getBody().querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet'))
+    snapshot: (withData = false) => Array.from(editor.getBody()?.querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet') ?? [])
       .map(table => {
         const uid = ensureSpreadsheetUid(table);
         const entry = spreadsheetOverlays.get(table);
@@ -2934,12 +2934,12 @@ export function registerSpreadsheetExtension(editor: Editor): void {
     },
     // For automated tests: add a scratch spreadsheet at the end of the text and remove it again.
     insertScratch: (rows: number, cols: number, options?: { plate?: number }): string | null => {
-      const known = new Set(Array.from(editor.getBody().querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet'))
+      const known = new Set(Array.from(editor.getBody()?.querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet') ?? [])
         .map(table => ensureSpreadsheetUid(table)));
       editor.selection.select(editor.getBody(), true);
       editor.selection.collapse(false);
       insertNewSpreadsheet(options?.plate ? createWellPlateSpreadsheetData(options.plate) : emptySpreadsheetData(cols, rows));
-      const added = Array.from(editor.getBody().querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet'))
+      const added = Array.from(editor.getBody()?.querySelectorAll<HTMLTableElement>('table.elabftw-spreadsheet') ?? [])
         .find(table => !known.has(ensureSpreadsheetUid(table)));
       return added ? ensureSpreadsheetUid(added) : null;
     },
