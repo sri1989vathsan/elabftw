@@ -12,13 +12,13 @@
       "Turn Create Database entries off and the New entry button is hidden for people who are not admins. Who can read or edit an entry does not change.",
       "The Database list itself is unchanged."
     ],
-    "image": "database-team-switches.jpg",
+    "image": "database-team-switches.png",
     "imageAlt": "Admin panel, Team tab: the Database card with the two switches Allow users to create Database entries and Allow users to create and edit Modules",
     "highlight": {
-      "x": 3.0,
-      "y": 15.1,
-      "w": 96.3,
-      "h": 20.3,
+      "x": 3.6,
+      "y": 8.6,
+      "w": 94.4,
+      "h": 20.0,
       "label": "Database switches"
     }
   },
@@ -35,13 +35,13 @@
       "The New entry window has an i that opens the Database guide in a new tab.",
       "On the personal module of a colleague that you only look at, the New entry button is no longer shown, since you cannot add to it."
     ],
-    "image": "database-guide.jpg",
+    "image": "database-guide.png",
     "imageAlt": "The top of the Database page with the module tabs and the small i beside the Database title, outlined",
     "highlight": {
-      "x": 19.8,
-      "y": 2.2,
-      "w": 4.8,
-      "h": 7.8,
+      "x": 16.2,
+      "y": 13.8,
+      "w": 3.1,
+      "h": 7.3,
       "label": "Small i"
     }
   },
@@ -74,16 +74,16 @@
     "shot": "The Database page with a module open, its tabs, the New entry button and the table",
     "screenshots": [
       {
-        "image": "guide-database-entry.jpg",
+        "image": "guide-database-entry.png",
         "caption": "An entry: the module and its own number, the Details fields and the Sequence section"
       }
     ],
-    "image": "guide-database.jpg",
+    "image": "guide-database.png",
     "highlight": {
-      "x": 82.0,
-      "y": 20.0,
-      "w": 17.4,
-      "h": 6.6,
+      "x": 79.3,
+      "y": 25.4,
+      "w": 16.2,
+      "h": 5.8,
       "label": "New entry"
     }
   },
@@ -101,7 +101,7 @@
       "fa-hand-pointer::Drag a tube to a free slot to move it. Cmd/Ctrl-click or Shift-click free slots to fill several at once.",
       "fa-user-shield::Anyone who can read an entry can add, move or remove its tubes. Only admins delete a place."
     ],
-    "imageAlt": "The Storage browser: the tree of places on the left and, for Freezer -80 A, its racks with filled boxes and free places outlined, and the count of racks and slots",
+    "imageAlt": "The Storage browser: the tree of places on the left and, for Freezer -80 A, its racks with two boxes filled and free places outlined, and the count of racks and slots",
     "featured": false,
     "guide": true,
     "order": 201,
@@ -116,16 +116,16 @@
     "shot": "A storage box with a grid of slots and tubes in blue",
     "screenshots": [
       {
-        "image": "guide-database-storage-box.jpg",
+        "image": "guide-database-storage-box.png",
         "caption": "A box opened in the Storage browser: every slot of the 9 by 9 grid, with a tube named after its entry in the filled ones"
       }
     ],
-    "image": "guide-database-storage.jpg",
+    "image": "guide-database-storage.png",
     "highlight": {
-      "x": 33.1,
-      "y": 34.8,
-      "w": 76.5,
-      "h": 51.8,
+      "x": 24.8,
+      "y": 43.0,
+      "w": 74.8,
+      "h": 55.2,
       "label": "Racks and boxes"
     }
   },
@@ -192,12 +192,12 @@
     "news": "New: parents, daughters and a family tree for the entries of the Database.",
     "shot": "The Lineage section with parents, daughters and the family tree",
     "screenshots": [],
-    "image": "guide-lineage.jpg",
+    "image": "guide-lineage.png",
     "highlight": {
-      "x": 1.2,
-      "y": 2.6,
+      "x": 2.4,
+      "y": 8.0,
       "w": 97.7,
-      "h": 21.8,
+      "h": 22.3,
       "label": "Lineage section"
     }
   },
@@ -228,6 +228,6 @@
     "news": "New: owners can let others edit, the Database has its own folders, and everyone can have modules of their own.",
     "shot": "The Who can edit window of an entry",
     "screenshots": [],
-    "image": "guide-database-sharing.jpg"
+    "image": "guide-database-sharing.png"
   }
 ]
