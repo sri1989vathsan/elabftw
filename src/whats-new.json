@@ -49,8 +49,8 @@
       "fa-link::“and N more” opens the full What’s new page.",
       "fa-toggle-off::“Don’t show these popups” turns it off. Settings > Appearance > What’s new has a switch to turn it back on."
     ],
-    "image": "whats-new-popup.jpg",
-    "imageAlt": "The What’s new popup after login: a short list of the newest features with a Got it button"
+    "image": "whats-new-popup.png",
+    "imageAlt": "The What’s new popup after login: a short list of the newest features with pictures and a Got it button"
   },
   {
     "id": "reminder-chip",
@@ -244,8 +244,8 @@
       "Fisher (37 x 15 mm) is the first format by default. An admin adds or changes formats and sets the printer in Admin panel, Labels: the address and port of the printer, its resolution and the web address for the QR code.",
       "Printing goes to the label printer of the lab over the network. It needs the printer address, which only an admin can set."
     ],
-    "image": "print-label.jpg",
-    "imageAlt": "The Print a label window with the label format, copies, the preview with dashed margins and the lines of text"
+    "image": "print-label.png",
+    "imageAlt": "The top of the Print a label window with the label format, text size, copies and the preview with dashed margins"
   },
   {
     "id": "google-calendar-tasks",
@@ -261,13 +261,13 @@
       "Your calendar view, hidden projects and Google choices are saved with your account and follow you to another browser. The Google sign-in itself stays in the browser.",
       "Google Tasks sync of the to-do list is optional and off by default. It runs in your browser and needs an admin to switch it on: set GOOGLE_SYNC_CSP=true in the server settings and restart, which lets the page use Google sign-in. This was only tested with a stand-in for Google, not a real account."
     ],
-    "image": "google-calendar-tasks.jpg",
-    "imageAlt": "The Calendar settings window opened from the gear in the To-do panel, with working hours, the Google section with Connect Google, calendars from a web address and the private link",
+    "image": "google-calendar-tasks.png",
+    "imageAlt": "The Google section of the Calendar settings window with Connect Google and the Add from URL button for calendars from a web address",
     "highlight": {
-      "x": 1.9,
-      "y": 27.7,
-      "w": 97.1,
-      "h": 33.1,
+      "x": 1.6,
+      "y": 4.8,
+      "w": 96.9,
+      "h": 57.6,
       "label": "Google settings"
     }
   },
@@ -310,14 +310,7 @@
       "A step with a deadline shows in the To-do panel and on that day in the Activity calendar."
     ],
     "image": "steps-and-tasks.png",
-    "imageAlt": "The Steps and tasks section of an experiment with three steps, their tick boxes and deadlines, and the main text above it",
-    "highlight": {
-      "x": 0.2,
-      "y": 6.4,
-      "w": 42.5,
-      "h": 25.0,
-      "label": "Steps and tasks"
-    }
+    "imageAlt": "The Steps and tasks section of an experiment with three steps, their tick boxes and deadlines, and the main text above it"
   },
   {
     "id": "folder-path-bar",
@@ -413,13 +406,13 @@
       "Associated templates are listed under Links, each with its version number and how many times it was inserted. Click one to open the template.",
       "Open a template to see its version history and restore an older version; the other versions are kept."
     ],
-    "image": "link-templates-and-versions.jpg",
+    "image": "link-templates-and-versions.png",
     "imageAlt": "The Search panel with Experiment templates selected: each template has a button to link it to the experiment and a button to add its text",
     "highlight": {
-      "x": 83.9,
-      "y": 39.2,
-      "w": 20.3,
-      "h": 7.2,
+      "x": 76.9,
+      "y": 60.6,
+      "w": 18.5,
+      "h": 9.1,
       "label": "Link or add to text"
     }
   },
@@ -475,8 +468,8 @@
       "Restoring a version makes it current and keeps the other versions.",
       "Each version has its own edit history that you can restore individually."
     ],
-    "image": "template-version-history.jpg",
-    "imageAlt": "The Version history window of a template listing its saved versions with who and when, and buttons to restore one"
+    "image": "template-version-history.png",
+    "imageAlt": "The Version history window of a template listing its saved versions with who and when, and the version name and notes fields"
   },
   {
     "id": "spreadsheet-insert-and-view",
@@ -555,14 +548,7 @@
         "image": "spreadsheet-editing-plate-13b3f11b.png",
         "caption": "A normal spreadsheet has the Add rows bar under it. A well plate keeps its size, so it has none, and both show their row and column labels"
       }
-    ],
-    "highlight": {
-      "x": 2.5,
-      "y": 16.4,
-      "w": 62.5,
-      "h": 7.2,
-      "label": "Sheet tools"
-    }
+    ]
   },
   {
     "id": "navigation",
@@ -1224,7 +1210,7 @@
     "image": "guide-todo.png",
     "screenshots": [
       {
-        "image": "guide-todo-repeat.jpg",
+        "image": "guide-todo-repeat.png",
         "caption": "Adding a task that repeats every week on Monday and Thursday: Repeat, with a Today button next to the date"
       }
     ]
@@ -1341,14 +1327,7 @@
     "news": "New: five layouts for the lists, saved per user.",
     "shot": "",
     "image": "guide-list-layouts.png",
-    "screenshots": [],
-    "highlight": {
-      "x": 62.7,
-      "y": 11.2,
-      "w": 22.9,
-      "h": 7.2,
-      "label": "Pick a layout"
-    }
+    "screenshots": []
   },
   {
     "id": "guide-dashboard",
@@ -1375,14 +1354,7 @@
     "news": "New: tiles, counts on the chips and one Create button on every card.",
     "shot": "",
     "image": "guide-dashboard.png",
-    "screenshots": [],
-    "highlight": {
-      "x": 1.5,
-      "y": 11.9,
-      "w": 97.8,
-      "h": 9.3,
-      "label": "Tiles open the matching list"
-    }
+    "screenshots": []
   },
   {
     "id": "guide-create-entry",
@@ -1424,7 +1396,7 @@
       "fa-table::To print many labels, paste cells from a spreadsheet and click the columns you want. Each row is one label.",
       "fa-gear::Admins set the printer address, port, resolution and formats in Admin panel, Labels. Without a printer address nothing prints."
     ],
-    "imageAlt": "The Print a label window: format, text size, copies, preview with margins, text lines and a box for pasted table cells",
+    "imageAlt": "The Print a label window: label format, text size, copies, preview with margins, text lines and a box for pasted table cells",
     "featured": false,
     "guide": true,
     "order": 125,
@@ -1436,7 +1408,7 @@
     ],
     "news": "New: Print a label in the plus menu, and the Labels tab for admins.",
     "shot": "",
-    "image": "guide-labels.jpg",
+    "image": "guide-labels.png",
     "screenshots": []
   },
   {
@@ -1464,15 +1436,8 @@
     ],
     "news": "New: link a project to a Google calendar, choose the calendar of each task, and keep the choices per user.",
     "shot": "",
-    "image": "guide-google-calendar.jpg",
-    "screenshots": [],
-    "highlight": {
-      "x": 1.9,
-      "y": 27.7,
-      "w": 97.1,
-      "h": 33.1,
-      "label": "Google settings"
-    }
+    "image": "guide-google-calendar.png",
+    "screenshots": []
   },
   {
     "id": "guide-print-pdf",
@@ -1587,14 +1552,14 @@
     "featured": false,
     "guide": true,
     "screenshots": [],
-    "image": "guide-whats-new-popup.jpg",
+    "image": "guide-whats-new-popup.png",
     "imageAlt": "Settings, Appearance tab: the switch “Show a popup with the new features after login” that turns the popup on or off",
     "shot": "",
     "highlight": {
-      "x": 1.4,
-      "y": 64.4,
-      "w": 125.8,
-      "h": 14.6,
+      "x": 3.6,
+      "y": 4.8,
+      "w": 70.0,
+      "h": 24.2,
       "label": "Popup on or off"
     }
   },
@@ -1623,13 +1588,6 @@
     "screenshots": [],
     "image": "guide-reminders.png",
     "imageAlt": "The reminder chip with the number of deadlines coming up, and the list of deadlines it opens at the top right of the page",
-    "shot": "",
-    "highlight": {
-      "x": 91.7,
-      "y": 5.5,
-      "w": 9.9,
-      "h": 9.8,
-      "label": "Deadline chip"
-    }
+    "shot": ""
   }
 ]
