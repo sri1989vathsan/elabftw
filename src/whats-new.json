@@ -11,13 +11,13 @@
       "The two buttons no longer move when you switch tabs, and the panel keeps the room for its scroll bar.",
       "In Contents, Print and PDF are in the header, and the select bar at the bottom keeps the count, Copy and Clear."
     ],
-    "image": "side-panel-refresh.jpg",
+    "image": "side-panel-refresh.png",
     "imageAlt": "The top of the Contents side panel with the Refresh and Close buttons in the top corner, where every side panel has them",
     "highlight": {
-      "x": 86.5,
-      "y": 2.7,
-      "w": 22.1,
-      "h": 16.0,
+      "x": 79.4,
+      "y": 1.5,
+      "w": 19.8,
+      "h": 10.9,
       "label": "Refresh and Close"
     }
   },
@@ -34,8 +34,8 @@
       "Empty rows and columns at the end of a sheet are not printed, and rows are only as high as their text. Hidden columns and rows, scrollbars and toolbars are left out too.",
       "Ctrl+P cannot ask: it uses your remembered choice, else fit to the page. Firefox cannot switch a single page to landscape when printing: there a wide table is fitted to the portrait width. The PDF file has landscape pages in every browser."
     ],
-    "image": "print-pdf-match-sheet.jpg",
-    "imageAlt": "The Contents panel in Select mode; Print and PDF in its header act on the ticked sections"
+    "image": "print-pdf-match-sheet.png",
+    "imageAlt": "The Wide tables question before printing: Fit to page width, Landscape page for wide tables, or Actual size split across pages, with Remember my choice and Print"
   },
   {
     "id": "whats-new-popup",
@@ -87,8 +87,15 @@
       "Spreadsheets print and export like the grid on screen: grid lines, grey row and column labels, fills and bold kept, rows never split over a page, empty filler columns and rows left out.",
       "Plain tables made in the text editor are not spreadsheets and stay ordinary tables."
     ],
-    "image": "print-pdf-selected-sections.jpg",
-    "imageAlt": "The Contents panel in Select mode with two headings ticked, Print and PDF in its header"
+    "image": "print-pdf-selected-sections.png",
+    "imageAlt": "The Contents panel in Select mode with two headings ticked; the Print and PDF buttons in its header are outlined",
+    "highlight": {
+      "x": 72.6,
+      "y": 13.7,
+      "w": 16.3,
+      "h": 9.6,
+      "label": "Print and PDF"
+    }
   },
   {
     "id": "sheet-frame-fits",
@@ -1006,7 +1013,7 @@
       "fa-copy::Copy, in the bar at the bottom, copies the ticked sections. Clear drops the selection.",
       "fa-rotate::Refresh and Close sit in the top corner of the panel, as on every side panel."
     ],
-    "imageAlt": "The Contents panel with the headings of the experiment, ticks for each section, and Print and PDF buttons in its header",
+    "imageAlt": "An experiment with the Contents panel open: three of the four headings are ticked in the list and the page shows only those three sections",
     "featured": false,
     "guide": true,
     "order": 150,
@@ -1018,7 +1025,7 @@
     ],
     "news": "New: Print, PDF and Copy for the sections you tick.",
     "shot": "An experiment with the Table of Contents panel open, three headings ticked in the list and only those sections shown",
-    "image": "guide-toc.jpg",
+    "image": "guide-toc.png",
     "screenshots": []
   },
   {
@@ -1477,8 +1484,8 @@
     "featured": false,
     "guide": true,
     "screenshots": [],
-    "image": "guide-print-pdf.jpg",
-    "imageAlt": "The Contents panel in Select mode with two sections ticked; Print and PDF sit in its header",
+    "image": "guide-print-pdf.png",
+    "imageAlt": "The Export as PDF window: a note that only the two sections selected in the Contents panel are exported, the Wide tables setting with its Change link, and the Include changelog and PDF/A switches",
     "shot": ""
   },
   {
