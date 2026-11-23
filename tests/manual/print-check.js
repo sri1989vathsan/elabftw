@@ -35,6 +35,7 @@ async function printCheckRun() {
   for (const sheet of document.styleSheets) { let list; try { list = sheet.cssRules; } catch { continue; } for (const rule of list) allCss += rule.cssText + '\n'; }
   check('print: a named landscape page "wide" exists and the wide sheet class uses it', /@page wide[^{]*\{[^}]*landscape/.test(allCss) && /print-wide-sheet[^{]*\{[^}]*page:\s*wide/.test(allCss), 'rule missing');
   check('wide tables: the Change wide table setting link is in the page (Export menu / PDF dialog)', !!document.querySelector('[data-action="sheets-mode-change"]'), 'no [data-action=sheets-mode-change]');
+  check('print rules keep a gap above and below the printed copy of a sheet (the copy replaces the sheet, whose margin is on the hidden original)', /\.print-sheet-copy[^{]*\{[^}]*margin:\s*(?!0[\s;])[^;}]*[1-9]/.test(printCss), 'no vertical margin on .print-sheet-copy in the print rules');
   check('print rules never split a row and repeat the header', /break-inside:\s*avoid/.test(printCss) && /table-header-group/.test(printCss), 'rules missing');
 
   const body = document.getElementById('body_view');
