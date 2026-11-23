@@ -2567,7 +2567,7 @@ async function spreadsheetSoak(options = {}) {
       else {
         const heights = cells.map(td => Math.round(td.getBoundingClientRect().height));
         if (heights.some(h => Math.abs(h - wanted) > 1)) dataLoss.push({ context, table: 'header look sheet', problem: `the column-letter row is not ${wanted} px high: ${heights.join(', ')}` });
-        const notCentred = cells.filter(td => getComputedStyle(td).textAlign !== 'center').map(td => td.textContent.trim());
+        const notCentred = cells.filter(td => getComputedStyle(td).textAlign !== 'center').map(td => `${td.textContent.trim()} (${getComputedStyle(td).textAlign}, style="${td.getAttribute('style') || ''}", class="${td.className}")`);
         if (notCentred.length) dataLoss.push({ context, table: 'header look sheet', problem: `column letters not centred: ${notCentred.join(', ')}` });
       }
       [...dialog.querySelectorAll('button')].find(b => /^Cancel/.test(b.textContent.trim()))?.click();
