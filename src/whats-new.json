@@ -62,6 +62,21 @@
     "imageAlt": "A project board with subproject chips, one toolbar row, three columns with colour bars and compact cards, and an empty Blocked column folded at the right"
   },
   {
+    "id": "project-linked-items",
+    "date": "2026-11-23",
+    "area": "Boards",
+    "featured": false,
+    "title": "Link items to a whole project",
+    "summary": "A project can have linked experiments, resources and web addresses, like a card.",
+    "details": [
+      "In Manage project (the pencil beside the project tabs), the Linked items section lists what is linked. Open Search to link opens the Search panel to find an experiment or resource.",
+      "Paste an https:// or smb:// address, with an optional label, to link a web page or a network folder.",
+      "Cards and their steps have the same section, also while you create them. See Link experiments and resources to your cards."
+    ],
+    "image": "whats-new-project-links.png",
+    "imageAlt": "The Manage project window with the Linked items section: two experiments, a resource and a web link, the Open Search to link button and the field for a web address"
+  },
+  {
     "id": "side-panel-refresh",
     "date": "2026-11-19",
     "area": "Organise",
