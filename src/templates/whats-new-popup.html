@@ -10,9 +10,13 @@
           <h5 class='modal-title' id='whatsNewPopupLabel'><i class='fas fa-star fa-fw mr-2' aria-hidden='true'></i>{{ 'What’s new'|trans }}</h5>
           <button type='button' class='close' data-dismiss='modal' aria-label='{{ 'Close'|trans }}'><span aria-hidden='true'>&times;</span></button>
         </div>
+        {% set hasRest = wn.compact or wn.more > 0 %}
+        {% set pageCount = wn.featured|length + (hasRest ? 1 : 0) %}
         <div class='modal-body'>
+          {# One page per featured entry (and one for the short list), side by side: swipe, scroll sideways, use the arrows or the dots. Behaviour: whats-new-popup.ts #}
+          <div class='whats-new-pages' data-whats-new-pages tabindex='-1'>
           {% for entry in wn.featured %}
-            <section class='whats-new-popup-featured'>
+            <section class='whats-new-popup-featured whats-new-page'>
               {% if entry.area %}<span class='badge badge-primary mb-1'>{{ entry.area }}</span>{% endif %}
               <h6 class='whats-new-popup-title'>{{ entry.title }}</h6>
               <p class='mb-2'>{{ entry.summary }}</p>
@@ -27,8 +31,9 @@
               {% endif %}
             </section>
           {% endfor %}
+          {% if hasRest %}<section class='whats-new-page whats-new-page-rest'>{% endif %}
           {% if wn.compact %}
-            {% if wn.featured %}<h6 class='text-uppercase text-muted small mt-3 mb-1'>{{ 'Also new'|trans }}</h6>{% endif %}
+            {% if wn.featured %}<h6 class='text-uppercase text-muted small mb-1'>{{ 'Also new'|trans }}</h6>{% endif %}
             <ul class='whats-new-popup-compact list-unstyled mb-0'>
               {% for entry in wn.compact %}
                 <li><strong>{{ entry.title }}</strong>{% if entry.summary %} <span class='text-muted'>– {{ entry.summary }}</span>{% endif %}</li>
@@ -38,7 +43,19 @@
           {% if wn.more > 0 %}
             <p class='mt-3 mb-0'><a href='whats-new.php?all=1' data-action='whats-new-popup-more'>{{ 'and %d more'|trans|format(wn.more) }}</a></p>
           {% endif %}
+          {% if hasRest %}</section>{% endif %}
+          </div>
         </div>
+        {% if pageCount > 1 %}
+          <div class='whats-new-nav' data-whats-new-nav>
+            <button type='button' class='btn btn-ghost btn-sm' data-whats-new-prev aria-label='{{ 'Previous'|trans }}'><i class='fas fa-chevron-left' aria-hidden='true'></i></button>
+            <span class='whats-new-dots' role='tablist'>
+              {% for i in 1..pageCount %}<button type='button' class='whats-new-dot' data-whats-new-dot-index='{{ i - 1 }}' aria-label='{{ 'Page %d'|trans|format(i) }}'></button>{% endfor %}
+            </span>
+            <span class='whats-new-counter small text-muted' data-whats-new-counter aria-live='polite'>1 / {{ pageCount }}</span>
+            <button type='button' class='btn btn-ghost btn-sm' data-whats-new-next aria-label='{{ 'Next'|trans }}'><i class='fas fa-chevron-right' aria-hidden='true'></i></button>
+          </div>
+        {% endif %}
         <div class='modal-footer'>
           <button type='button' class='btn btn-link btn-sm text-muted mr-auto px-0' data-action='whats-new-popup-off'>{{ 'Don’t show these popups'|trans }}</button>
           {% if whatsNewOnDemand is defined %}<a href='whats-new.php' class='btn btn-link btn-sm px-0 mr-3'>{{ 'Open the full guide'|trans }}</a>{% endif %}

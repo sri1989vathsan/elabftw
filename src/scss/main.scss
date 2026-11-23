@@ -13273,10 +13273,66 @@ button.wp-legend-item {
     font-size: var(--fx-popup-font, 0.92rem);
   }
 
-  .whats-new-popup-featured + .whats-new-popup-featured {
+  // the pages sit side by side and snap into place; a finger or the trackpad swipes between them
+  .modal-body {
+    overflow-x: hidden;
+  }
+
+  .whats-new-pages {
+    align-items: flex-start;
+    display: flex;
+    outline: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .whats-new-page {
+    box-sizing: border-box;
+    flex: 0 0 100%;
+    min-width: 0;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  .whats-new-nav {
+    align-items: center;
     border-top: 1px solid var(--fx-line, rgba(128, 128, 128, 0.3));
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    padding: 0.4rem 1rem;
+  }
+
+  .whats-new-dots {
+    align-items: center;
+    display: inline-flex;
+    gap: 0.4rem;
+  }
+
+  .whats-new-dot {
+    background: var(--fx-line, rgba(128, 128, 128, 0.45));
+    border: 0;
+    border-radius: 50%;
+    cursor: pointer;
+    height: 0.6rem;
+    padding: 0;
+    width: 0.6rem;
+
+    &.active {
+      background: var(--primary);
+      transform: scale(1.25);
+    }
+  }
+
+  .whats-new-counter {
+    min-width: 3rem;
+    text-align: center;
   }
 
   .whats-new-popup-title {
