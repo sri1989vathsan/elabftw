@@ -16,6 +16,21 @@
     "imageAlt": "The Order Status tab with a procurement opened: its three Collected orders, the items recognised on the signed sheet (two of three collected) and the sheet itself"
   },
   {
+    "id": "announcements-feed",
+    "date": "2026-11-23",
+    "area": "Collaboration",
+    "featured": false,
+    "title": "Announcements with photos and reactions",
+    "summary": "Team announcements show on the dashboard with a photo, links and emoji reactions, and older ones are on a history page.",
+    "details": [
+      "The Announcements card on the dashboard shows the latest announcements, pinned ones first. Web addresses in the text are clickable and an announcement can have a photo.",
+      "Anyone in the team can react with an emoji. See previous announcements opens the history page.",
+      "Admins publish and edit announcements in the Announcements tab of the Admin panel, or press Create on the dashboard card. Pin to top is a choice when you publish."
+    ],
+    "image": "whats-new-announcements.png",
+    "imageAlt": "The Announcements card of the dashboard with a pinned announcement that has a link, a photo and emoji reactions, and the Create button at the top right"
+  },
+  {
     "id": "side-panel-refresh",
     "date": "2026-11-19",
     "area": "Organise",
