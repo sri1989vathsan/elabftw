@@ -7858,6 +7858,11 @@ body.html-tool-workspace-open:not(.html-tool-workspace-is-maximized) .inline-spr
   min-height: var(--spreadsheet-column-index-height) !important;
 }
 
+// The column letters (A, B, C ...) are centred over their column, in the grid, the popup and the read-only view.
+.jss_worksheet > thead > tr > td[data-x] {
+  text-align: center;
+}
+
 .inline-spreadsheet-container .jss_worksheet > colgroup > col:first-child {
   max-width: var(--spreadsheet-row-index-width) !important;
   min-width: var(--spreadsheet-row-index-width) !important;

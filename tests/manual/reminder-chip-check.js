@@ -37,7 +37,9 @@ window.reminderChipCheck = async function reminderChipCheck() {
   const others = (self) => [...document.querySelectorAll('body *')].filter(el => {
     if (el === self || self.contains(el) || el.contains(self)) return false;
     const cs = getComputedStyle(el);
-    if (cs.position !== 'fixed' && cs.position !== 'sticky' && !el.matches('.nav-tabs, [role="tablist"]')) return false;
+    // only notices (the toasts) and the narrow column of buttons at the right edge are avoided; a sticky toolbar or tab bar is not (the chip stays top right)
+    const bx = el.getBoundingClientRect();
+    if (!el.closest('#overlay-container') && !(cs.position === 'fixed' && bx.width <= 120 && bx.left > innerWidth / 2)) return false;
     if (cs.visibility === 'hidden' || cs.display === 'none' || parseFloat(cs.opacity) === 0) return false;
     const b = el.getBoundingClientRect();
     if (b.width < 2 || b.height < 2) return false;
@@ -74,8 +76,8 @@ window.reminderChipCheck = async function reminderChipCheck() {
       const bg = getComputedStyle(chip).backgroundColor.match(/\d+/g).map(Number);
       check('the chip is warm (amber) tinted', bg[0] > bg[2] + 20, getComputedStyle(chip).backgroundColor);
       check('the chip touches nothing else on the page', clash(chip).length === 0, clash(chip).join(' | '));
-      const tabs = document.querySelector('.nav-tabs, [role="tablist"]');
-      if (tabs) check('the chip is off the tab bar', !touches(b, box(tabs)), 'over the tab bar');
+      // it stays top right even where a sticky tab bar or toolbar is, never dropping into the middle of the page
+      check('the chip stays at the top right (just under the navbar), not lower down', b.t <= 80, `chip top ${b.t}`);
       chip.click();
       await sleep(500);
       const panel = document.querySelector('.reminder-banner');
