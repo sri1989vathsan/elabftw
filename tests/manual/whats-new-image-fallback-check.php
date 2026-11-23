@@ -1,6 +1,6 @@
 <?php
 // A stored What's new entry that still names a picture the code now ships as a PNG must still find it.
-// Run inside the web container:  docker exec <web> php /elabftw/tests/manual/whats-new-image-fallback-check.php
+// Run inside the web container:  docker exec -i <web> php < tests/manual/whats-new-image-fallback-check.php
 require '/elabftw/vendor/autoload.php';
 
 $store = new Elabftw\Services\WhatsNewStore();
