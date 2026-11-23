@@ -2217,6 +2217,12 @@ export function registerSpreadsheetExtension(editor: Editor): void {
       enhanceTable(table);
       return;
     }
+    // A table whose formula and format bars were open is mounted as a live grid straight away: a preview of it can only
+    // keep the bars' room as an empty band above the grid (and would stay that way until a click).
+    if (tableOptionsOpen.has(table) && table.dataset.spreadsheetStyle !== 'notebook') {
+      enhanceTable(table);
+      if (spreadsheetOverlays.has(table)) return;
+    }
     const mountStartedAt = profiler.start();
     // Built from the grid's own markup and classes so it looks identical.
     // Notebook-style tables aren't mirrored there; they get a plain cloned
