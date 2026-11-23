@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-menu-race', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'popup-header-look', 'header-not-tall-when-all-rows-wrap', 'text-column-fits', 'text-not-clipped', 'paste-keeps-formatting', 'cell-alignment-consistent', 'alignment-preserved', 'toolbar-not-cut', 'row-height-fits-text', 'editor-height-after-removal', 'undo-typing-over-text', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'viewport-equals-table-width', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-menu-race', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'popup-header-look', 'header-not-tall-when-all-rows-wrap', 'text-column-fits', 'text-not-clipped', 'paste-keeps-formatting', 'cell-alignment-consistent', 'alignment-preserved', 'toolbar-not-cut', 'row-height-fits-text', 'editor-height-after-removal', 'undo-typing-over-text', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'viewport-equals-table-width', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'bars-after-scroll-back', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -3420,6 +3420,44 @@ async function spreadsheetSoak(options = {}) {
       }
       note('padding-fit');
       await verify('padding-fit: final', true);
+    },
+    // A sheet whose formula and format bars are open, scrolled out of reach (so another sheet is the active one) and back, shows no
+    // blank band where those bars were: its bars are there (a live grid), or there is no gap above the grid at all.
+    async 'bars-after-scroll-back'() {
+      const a = await createTable('bars table A', { rows: 8, cols: 3 });
+      const b = await createTable('bars table B', { rows: 8, cols: 3 });
+      if (!a || !b) return;
+      const rootA = await live(a);
+      openFormatBar(rootA);
+      await sleep(500);
+      // the band: from the bottom of the bars (or the toolbar) down to the column letters
+      const band = root => {
+        const head = root.querySelector('.jss_worksheet thead');
+        if (!head) return null;
+        const bottoms = ['.elabftw-spreadsheet-readonly-toggle', '.elabftw-spreadsheet-format-bar', '.elabftw-spreadsheet-formula-bar']
+          .map(sel => root.querySelector(sel)).filter(el => el && el.offsetParent).map(el => el.getBoundingClientRect().bottom);
+        const top = root.getBoundingClientRect().top;
+        return Math.round(head.getBoundingClientRect().top - Math.max(top, ...bottoms));
+      };
+      const expanded = band(rootA);
+      // make B the active sheet (a press on one of its cells), then take A far out of view and bring it back
+      const rootB = await live(b);
+      const cellB = rootB.querySelector('.jss_worksheet tbody td[data-x="0"][data-y="0"]');
+      if (cellB) { const r = cellB.getBoundingClientRect(); for (const type of ['pointerdown', 'mousedown', 'mouseup', 'click']) cellB.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX: r.left + 5, clientY: r.top + 5, button: 0 })); }
+      await sleep(500);
+      for (let round = 0; round < 2; round++) {
+        window.scrollTo(0, document.documentElement.scrollHeight); await sleep(900);
+        tableEl(b).scrollIntoView({ block: 'end' }); await sleep(900);
+        tableEl(a).scrollIntoView({ block: 'center' }); await sleep(1800);
+        const overlay = api.overlayElement(a);
+        if (!overlay) { fail('bars-after-scroll-back: the sheet has no grid or preview after scrolling back'); continue; }
+        const preview = overlay.classList.contains('elabftw-spreadsheet-preview');
+        note(preview ? 'bars-back-as-preview' : 'bars-back-as-grid');
+        const gap = band(overlay);
+        if (gap !== null && gap > Math.max(12, (expanded ?? 0) + 8)) dataLoss.push({ context, table: 'bars table A', problem: `after scrolling away and back a blank band of ${gap} px sits above the grid (the ${preview ? 'preview' : 'grid'} keeps the room of the formula and format bars without showing them; gap with the bars open: ${expanded} px)` });
+      }
+      note('bars-after-scroll-back');
+      await verify('bars-after-scroll-back: final', true);
     },
     // Formulas and row/column changes: a spreadsheet rewrites the references of a formula when cells move (=A1+1
     // becomes =B1+1 after a column is inserted before A), so the text may change, but a formula cell must never lose
