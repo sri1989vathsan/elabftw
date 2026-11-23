@@ -77,6 +77,20 @@
     "imageAlt": "The Manage project window with the Linked items section: two experiments, a resource and a web link, the Open Search to link button and the field for a web address"
   },
   {
+    "id": "todo-begin-end",
+    "date": "2026-11-23",
+    "area": "Tasks and calendar",
+    "featured": false,
+    "title": "Begin and end time for tasks",
+    "summary": "A task has a begin time and an end time instead of a length.",
+    "details": [
+      "The Add task form of the To-do panel and the task editor have Begin time and End time. An end time after midnight is marked as next day.",
+      "The Calendar page shows a task from its begin to its end, and the Google Calendar sync uses the same times."
+    ],
+    "image": "whats-new-todo-times.png",
+    "imageAlt": "The To-do panel with the Add task form open: a title, the date, Begin time 14:00 and End time 15:30"
+  },
+  {
     "id": "side-panel-refresh",
     "date": "2026-11-19",
     "area": "Organise",
