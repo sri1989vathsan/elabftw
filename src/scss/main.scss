@@ -7826,9 +7826,10 @@ body.html-tool-workspace-open:not(.html-tool-workspace-is-maximized) .inline-spr
   min-height: var(--spreadsheet-column-index-height) !important;
 }
 
-// The column letters (A, B, C ...) are centred over their column, in the grid, the popup and the read-only view.
+// The column letters (A, B, C ...) are centred over their column, in the grid, the popup and the read-only view. Every column is created
+// with align:left (for its data cells), which the grid copies into the letter cell's own style: this wins over it, for the letters only.
 .jss_worksheet > thead > tr > td[data-x] {
-  text-align: center;
+  text-align: center !important; /* stylelint-disable-line declaration-no-important */
 }
 
 .inline-spreadsheet-container .jss_worksheet > colgroup > col:first-child {
