@@ -203,9 +203,16 @@ final class WhatsNewStore
         if (!$this->isSafeFileName($name)) {
             return null;
         }
-        foreach (array(self::DATA_DIR . '/images', self::SHIPPED_IMAGES) as $dir) {
-            if (is_file($dir . '/' . $name)) {
-                return $dir . '/' . $name;
+        // a stored entry may still name a picture that the code now ships as a PNG (the old .jpg was replaced): use the PNG
+        $names = array($name);
+        if (preg_match('/^(.+)\.jpe?g$/i', $name, $m) === 1) {
+            $names[] = $m[1] . '.png';
+        }
+        foreach ($names as $candidate) {
+            foreach (array(self::DATA_DIR . '/images', self::SHIPPED_IMAGES) as $dir) {
+                if (is_file($dir . '/' . $candidate)) {
+                    return $dir . '/' . $candidate;
+                }
             }
         }
 
