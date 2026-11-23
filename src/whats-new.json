@@ -31,6 +31,21 @@
     "imageAlt": "The Announcements card of the dashboard with a pinned announcement that has a link, a photo and emoji reactions, and the Create button at the top right"
   },
   {
+    "id": "feedback-edit-mentions",
+    "date": "2026-11-23",
+    "area": "Collaboration",
+    "featured": false,
+    "title": "Edit your feedback and mention colleagues",
+    "summary": "You can edit your own feedback items, mention colleagues in comments, and sort the board by votes or date.",
+    "details": [
+      "The pencil on an item edits its title, text and type. The author and team admins can use it.",
+      "Type @ in a comment and pick a name. The colleague you mention is notified.",
+      "Most votes and Newest, above the list, sort the board."
+    ],
+    "image": "whats-new-feedback.png",
+    "imageAlt": "The Feedback board with the filter and sort buttons, a feature item, and a second item opened to show two comments that mention colleagues"
+  },
+  {
     "id": "side-panel-refresh",
     "date": "2026-11-19",
     "area": "Organise",
