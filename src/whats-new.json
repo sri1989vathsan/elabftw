@@ -107,6 +107,23 @@
     "imageAlt": "The Calendar page in week view: tasks on several days, a strip of all-day events above the grid, and the Day, Week, Month and Calendars buttons"
   },
   {
+    "id": "flat-look",
+    "date": "2026-11-23",
+    "area": "Navigation",
+    "featured": false,
+    "title": "One flat look across the app",
+    "summary": "Side panels, Search results, the command palette and the settings pages share one flat style.",
+    "details": [
+      "The side panels (To-do, Search, Contents, Calendar and Folders) use the same grid and sizes. Drag the edge of a panel to change its width.",
+      "Search results are grouped in a box for each type and look like the agenda.",
+      "Press Ctrl/Cmd + K for the command palette: New experiment, New resource, Go to Dashboard, Go to Boards and Keyboard shortcuts. Press ? outside a text field to list the shortcuts.",
+      "The revision history shows a readable text diff: removed text is struck through and added text is underlined.",
+      "The login, account and settings pages have flat section titles and compact tabs and rows. The entry pages are described in Calmer entry pages."
+    ],
+    "image": "whats-new-flat-look.png",
+    "imageAlt": "An experiment page with the Search panel open at the left: results grouped in boxes for experiments and resources, next to the flat toolbar and details of the entry"
+  },
+  {
     "id": "side-panel-refresh",
     "date": "2026-11-19",
     "area": "Organise",
