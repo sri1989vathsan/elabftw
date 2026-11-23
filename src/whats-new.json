@@ -134,7 +134,7 @@
       "The Create window has a Folder choice too, so a new entry can start in a folder."
     ],
     "image": "folder-explorer.png",
-    "imageAlt": "The Folders panel in cards view: folders and entries as cards, with the Favourites, Tree, List and Cards view buttons at the top",
+    "imageAlt": "The Folders panel in cards view: folders and entries as cards, with the Favourites, Tree, List and Cards view buttons and the Show in main view button at the top",
     "highlight": {
       "x": 14.5,
       "y": 11.4,
@@ -687,11 +687,12 @@
     "details": [
       "fa-table-list::The buttons at the top of the Folders panel switch between Tree, List and Cards. Your choice is remembered.",
       "fa-layer-group::List and Cards open one folder at a time: click a folder to go in, use the “..” row or the path bar to go back up.",
+      "fa-arrow-up-right-from-square::“Show in main view” at the top shows the folder you are in on the page (at the top level, the whole list).",
       "fa-flask::Exp, Res and All choose which entries the panel shows; Unfiled lists entries that are in no folder.",
       "fa-up-down-left-right::Drag a file or folder onto a folder, the “..” row, All (folders only) or Unfiled (files only). A message with Undo appears.",
       "fa-ellipsis::The three dots at the top switch Favourites, Files and Counts on or off. Drag the panel’s right edge to make it narrower."
     ],
-    "imageAlt": "The Folders panel in list view with the Favourites, Tree, List and Cards view buttons at the top",
+    "imageAlt": "The Folders panel in list view with the Favourites, Tree, List and Cards view buttons and the Show in main view button at the top",
     "featured": false,
     "guide": true,
     "order": 11,
@@ -707,9 +708,9 @@
     "image": "guide-folder-views.png",
     "highlight": {
       "x": 14.5,
-      "y": 13.2,
+      "y": 14.5,
       "w": 28.0,
-      "h": 7.1,
+      "h": 7.6,
       "label": "Choose a view"
     }
   },
