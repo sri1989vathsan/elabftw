@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-menu-race', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'popup-header-look', 'header-not-tall-when-all-rows-wrap', 'text-column-fits', 'text-not-clipped', 'paste-keeps-formatting', 'cell-alignment-consistent', 'alignment-preserved', 'toolbar-not-cut', 'row-height-fits-text', 'editor-height-after-removal', 'undo-typing-over-text', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'viewport-equals-table-width', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'bars-after-scroll-back', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-menu-race', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'popup-own-scrollbar-y', 'popup-scrollbar-after-resize', 'popup-header-look', 'header-not-tall-when-all-rows-wrap', 'text-column-fits', 'text-not-clipped', 'paste-keeps-formatting', 'cell-alignment-consistent', 'alignment-preserved', 'toolbar-not-cut', 'row-height-fits-text', 'editor-height-after-removal', 'undo-typing-over-text', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'viewport-equals-table-width', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'bars-after-scroll-back', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -2489,6 +2489,14 @@ async function spreadsheetSoak(options = {}) {
             fire('pointerdown', tb.top + 4); fire('pointermove', tb.top + 4 + track.height); fire('pointerup', tb.top + 4 + track.height);
             await sleep(200);
             if (!(scroller.scrollTop > before + 50)) dataLoss.push({ context, table: 'tall popup sheet (own bar)', problem: `dragging the vertical thumb did not scroll the grid (scrollTop ${before} -> ${scroller.scrollTop})` });
+            // The grid, not the clipped host, is what scrolls: the grid fits inside the host.
+            // (A real wheel over the grid only works when .jss_content is the scroller; a synthetic wheel event does not scroll, so the
+            // check is on what the wheel needs: a bounded, scrollable .jss_content that fits inside the host.)
+            const hostBox = container.getBoundingClientRect(); const scrBox = scroller.getBoundingClientRect();
+            if (scrBox.height > hostBox.height + 1) dataLoss.push({ context, table: 'tall popup sheet (own bar)', problem: `the grid (${Math.round(scrBox.height)} px) is taller than the popup's grid area (${Math.round(hostBox.height)} px): it is clipped, not scrolled` });
+            scroller.scrollTop = scroller.scrollHeight; await sleep(200);
+            const lastRow = dialog.querySelector('.jss_worksheet tbody tr:last-child'); const lr = lastRow && lastRow.getBoundingClientRect(); const sb = scroller.getBoundingClientRect();
+            if (!lastRow || lr.bottom > sb.bottom + 2 || lr.top < sb.top - 1) dataLoss.push({ context, table: 'tall popup sheet (own bar)', problem: 'after scrolling to the end the last row is not visible in the popup' });
           }
         }
         [...dialog.querySelectorAll('button')].find(b => /^Cancel/.test(b.textContent.trim()))?.click();
@@ -2503,7 +2511,7 @@ async function spreadsheetSoak(options = {}) {
     async 'popup-scrollbar-after-resize'() {
       window.__forceOverlayScrollbars = true;
       try {
-        const uid = await createTable('resize bar sheet', { rows: 6, cols: 5 });
+        const uid = await createTable('resize bar sheet', { rows: 6, cols: 8 });
         if (!uid) return;
         const dialog = await openPopupFor(uid);
         const container = dialog.querySelector('.inline-spreadsheet-container');
@@ -2517,14 +2525,32 @@ async function spreadsheetSoak(options = {}) {
             const track = bar.getBoundingClientRect();
             return { over, shown: getComputedStyle(bar).visibility === 'visible' && thumb.width > 0 && thumb.width < track.width };
           };
+          // Drag the right edge of a column header of the POPUP's grid (the inline grid behind the dialog is not the one under test).
+          const dragHeader = async (c, dx) => {
+            const header = dialog.querySelector(`.jss_worksheet thead td[data-x="${c}"]`);
+            if (!header) { fail(`popup column header ${c} not found`); return false; }
+            const rect = header.getBoundingClientRect(); const x = rect.right - 2; const y = rect.top + rect.height / 2;
+            const init = { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y, button: 0, buttons: 1 };
+            header.dispatchEvent(new PointerEvent('pointerdown', init)); header.dispatchEvent(new MouseEvent('mousedown', init));
+            for (let i = 1; i <= 5; i++) { header.dispatchEvent(new MouseEvent('mousemove', { ...init, clientX: x + (dx * i) / 5 })); await sleep(15); }
+            header.dispatchEvent(new MouseEvent('mouseup', { ...init, clientX: x + dx, buttons: 0 }));
+            await sleep(450);
+            return true;
+          };
           let appeared = false;
           for (let i = 0; i < 12 && !appeared; i++) {
-            await resizeColumn(uid, i % 3); await sleep(350);
+            await dragHeader(i % 4, 220);
             const st = state();
             if (st.over && !st.shown) { dataLoss.push({ context, table: 'resize bar sheet', problem: `after widening columns in the open popup the grid overflows (${scroller.scrollWidth}>${scroller.clientWidth}) but the own scroll bar is not shown` }); break; }
             appeared = st.over && st.shown;
           }
           if (!appeared && !dataLoss.some(d => d.table === 'resize bar sheet')) fail('popup-scrollbar-after-resize: the grid never overflowed after 12 widenings');
+          if (appeared) {
+            // and back: narrow the columns again until the grid fits, then the bar must be gone
+            for (let i = 0; i < 12 && state().over; i++) await dragHeader(i % 4, -220);
+            const st = state();
+            if (!st.over && st.shown) dataLoss.push({ context, table: 'resize bar sheet', problem: 'the grid fits again after narrowing the columns but the own scroll bar is still shown' });
+          }
         }
         [...dialog.querySelectorAll('button')].find(b => /^Cancel/.test(b.textContent.trim()))?.click();
         await waitPopupGone();
