@@ -815,10 +815,10 @@
     "title": "Orders",
     "summary": "Request what the lab needs and follow each order from request to delivery.",
     "details": [
-      "fa-cart-shopping::Open Orders from the top bar (under More) and press New order. Add supplier, link or catalogue number, notes and attachments.",
+      "fa-cart-shopping::Open Orders under More in the top bar. Fill in the request form at the left (what, notes, files) and press Request order.",
       "fa-clone::Copy an order to fill the request form again; use the arrow beside a file (Add to new order) to reuse an attachment.",
       "Status: Requested, Ordered, Collected, In storage, Backlogged or Cancelled. Use the coloured dropdown, or tick several and Move to status.",
-      "fa-file-pdf::Drop the signed shop sheet (PDF) on the dashed area at the top: it is attached to the matching orders, and an Ordered one becomes Collected.",
+      "fa-file-pdf::Drop the signed collection sheets (PDF) on the Orders page: each is attached to its orders, and an Ordered one becomes Collected.",
       "fa-clipboard-check::Order Status lists each procurement with its orders and how many items were collected. Templates keep texts such as supplier emails.",
       "fa-thumbtack::Pin an order to keep it at the top. Pinned for all is shared with the team; Reference is only yours. Admins can turn auto-collect off."
     ],
