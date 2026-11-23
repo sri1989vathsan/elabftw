@@ -7695,7 +7695,9 @@ body.html-tool-workspace-open:not(.html-tool-workspace-is-maximized) .inline-spr
 
   position: relative;
 
-  > .jss_container {
+  // The library nests this box two levels down (.jss_spreadsheet > .jtabs-content > .jss_container), so a direct-child selector
+  // never matched it.
+  .jss_container {
     height: calc(100% - var(--own-bar)) !important;
     width: calc(100% - var(--own-bar)) !important;
   }
@@ -7801,7 +7803,12 @@ body.html-tool-workspace-open:not(.html-tool-workspace-is-maximized) .inline-spr
 /* The library's own scroll viewport must follow the user-resizable host rather
  * than retaining the fixed dimensions supplied when the sheet was mounted. */
 /* stylelint-disable selector-class-pattern */
-.inline-spreadsheet-container > .jss_container,
+/* The library wraps the grid as .jss_spreadsheet > .jtabs-content > .jss_container > .jss_content. Every level needs a definite
+ * height, or the percentage below resolves to auto, the grid grows past the host (which clips it) and a tall sheet cannot be
+ * scrolled. */
+.inline-spreadsheet-container > .jss_spreadsheet,
+.inline-spreadsheet-container .jtabs-content,
+.inline-spreadsheet-container .jss_container,
 .inline-spreadsheet-container .jss_content {
   height: 100% !important;
   max-height: none !important;
