@@ -1,5 +1,21 @@
 [
   {
+    "id": "order-collection-sheets",
+    "date": "2026-11-23",
+    "area": "Orders",
+    "featured": false,
+    "title": "Collection sheets mark orders as collected",
+    "summary": "Drop a signed collection sheet (PDF) on the Orders page and its orders are attached and marked Collected.",
+    "details": [
+      "Drop the PDF on the Orders page, or save it in the watched folder that the server checks every five minutes. The procurement number is read from the sheet.",
+      "The sheet is attached to the orders of that procurement. An Ordered order becomes Collected and its requester is notified. An admin can turn the move off in Admin > Team > Orders.",
+      "The Received status is now called In storage.",
+      "The Order Status tab lists each procurement with its orders, requesters, items collected and signed sheets. Switch between My orders and Everyone; the list refreshes itself."
+    ],
+    "image": "whats-new-collection-sheets.png",
+    "imageAlt": "The Order Status tab with a procurement opened: its three Collected orders, the items recognised on the signed sheet (two of three collected) and the sheet itself"
+  },
+  {
     "id": "side-panel-refresh",
     "date": "2026-11-19",
     "area": "Organise",
