@@ -138,6 +138,20 @@
     "imageAlt": "The Appearance tab of Settings with the theme buttons and the Size setting, Comfortable chosen"
   },
   {
+    "id": "contents-spreadsheets-pictures",
+    "date": "2026-11-23",
+    "area": "Experiments",
+    "featured": false,
+    "title": "Show or hide spreadsheets and pictures in Contents",
+    "summary": "The Contents panel has a separate switch for spreadsheets and for pictures, and picture captions sit above the picture.",
+    "details": [
+      "In the filter row of Contents, the table icon shows or hides the spreadsheets under each heading, and the picture icon does the same for pictures.",
+      "A picture caption is shown above the picture, in the editor and in view mode."
+    ],
+    "image": "whats-new-toc-toggles.png",
+    "imageAlt": "An experiment with the Contents panel open: headings with a picture and a spreadsheet listed under them, the two switches in the filter row, and a picture whose caption is above it"
+  },
+  {
     "id": "side-panel-refresh",
     "date": "2026-11-19",
     "area": "Organise",
