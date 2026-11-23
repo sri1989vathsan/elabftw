@@ -93,6 +93,73 @@ window.foldersExplorerCheck = async function () {
     await wait(500);
     check('E12 cards view shows the file as a card', Array.prototype.some.call(document.querySelectorAll('#experimentsFoldersFlat .folder-file-card'), function (c) { return /XPL file/.test(c.textContent); }), 'no card');
 
+    // "Show in main view": a labelled button in the explorer bar (List and Cards, top level and inside a folder), icon only when the bar is narrow
+    var root = document.documentElement;
+    var savedWidth = root.style.getPropertyValue('--side-panel-width');
+    var showBtn = function () { return $('#foldersPanel .folder-explorer-bar #folderShowMain'); };
+    var barOneRow = function () {
+      // every visible child (not the empty spacer, not the pop-ups) sits at the same height: no second line
+      var kids = Array.prototype.filter.call($('#foldersPanel .folder-explorer-bar').children, function (k) { return visible(k) && !k.classList.contains('folder-bar-spacer') && getComputedStyle(k).position !== 'absolute'; });
+      var first = kids[0].getBoundingClientRect();
+      return kids.every(function (k) { var r = k.getBoundingClientRect(); return r.top < first.bottom && r.bottom > first.top; });
+    };
+    var hrefOf = function () { var b = showBtn(); return b ? new URL(b.href).pathname + new URL(b.href).search : ''; };
+    for (var viewName of ['list', 'cards']) {
+      click('[data-action="select-folder-view"][data-view="' + viewName + '"]');
+      await wait(500);
+      var rc = $('.folder-level-bar button.folder-path-crumb');
+      if (rc) { rc.click(); await wait(500); }
+      check('S1 ' + viewName + ' view, top level: the Show in main view button is shown with its label', visible(showBtn()) && /Show in main view/.test(showBtn().textContent), 'missing');
+      check('S2 ' + viewName + ' view, top level: it opens the whole listing', /^\/experiments\.php(\?.*)?$/.test(hrefOf()) && !/folder=/.test(hrefOf()), hrefOf());
+      var inOne = Array.prototype.find.call(document.querySelectorAll('#experimentsFoldersFlat [data-action="open-folder-level"]'), function (a) { return /XPL one/.test(a.textContent); });
+      if (inOne) inOne.click();
+      await wait(1500);
+      check('S3 ' + viewName + ' view, inside XPL one: the button is shown and opens that folder', visible(showBtn()) && hrefOf().indexOf('folder=' + one + '&') !== -1, hrefOf() + ' (expected folder ' + one + ')');
+      check('S4 ' + viewName + ' view: the old small arrow icon is gone from the up row', !$('#experimentsFoldersFlat .folder-up-row .folder-action-btn'), 'still there');
+    }
+    // Res and All switch the target (inside XPL one: the folder row link follows the choice)
+    click('[data-action="select-folder-type"][data-type="items"]');
+    await wait(900);
+    rc = $('.folder-level-bar button.folder-path-crumb');
+    if (rc) { rc.click(); await wait(500); }
+    check('S5 Res: the button at the top level opens the resources listing', /^\/database\.php/.test(hrefOf()), hrefOf());
+    click('[data-action="select-folder-type"][data-type="experiments"]');
+    await wait(900);
+    check('S6 Exp: the button at the top level opens the experiments listing', /^\/experiments\.php/.test(hrefOf()), hrefOf());
+    inOne = Array.prototype.find.call(document.querySelectorAll('#experimentsFoldersFlat [data-action="open-folder-level"]'), function (a) { return /XPL one/.test(a.textContent); });
+    if (inOne) inOne.click();
+    await wait(1500);
+    // a click that nothing intercepted would follow the link: see it at the document (last in line), then stop it so the check goes on
+    var intercepted = null;
+    var lastInLine = function (ev) { intercepted = ev.defaultPrevented; ev.preventDefault(); };
+    document.addEventListener('click', lastInLine);
+    showBtn().dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    document.removeEventListener('click', lastInLine);
+    check('S7 a click on the button is a plain link to the folder (not intercepted)', intercepted === false, 'intercepted: ' + intercepted);
+    // widths: text at the normal width (the panel's default, 330 px), icon only when narrow, the bar on one row at a bar width of 210 and 150 px
+    // (and at the narrowest panel the page allows, 210 px). The bar is narrower than the panel by the rail and the padding: measure that gap first.
+    var barEl = $('#foldersPanel .folder-explorer-bar');
+    root.style.setProperty('--side-panel-width', '330px');
+    await wait(400);
+    var gap = 330 - barEl.getBoundingClientRect().width;
+    var cases = [['panel 330 px (normal)', 330], ['panel 210 px (narrowest allowed)', 210], ['bar 210 px', 210 + gap], ['bar 150 px', 150 + gap]];
+    for (var cs of cases) {
+      root.style.setProperty('--side-panel-width', cs[1] + 'px');
+      await wait(400);
+      var text = showBtn().querySelector('.folder-show-main-text');
+      var textShown = visible(text) && text.getBoundingClientRect().width > 0;
+      var barRect = barEl.getBoundingClientRect();
+      if (cs[1] === 330) check('S8 at the normal width (' + cs[0] + ') the button has its text', textShown, 'no text');
+      else check('S9 at ' + cs[0] + ' the button is icon only, with tooltip and aria-label', !textShown && showBtn().title === 'Show in main view' && showBtn().getAttribute('aria-label') === 'Show in main view' && showBtn().getBoundingClientRect().width > 12, 'text shown or label missing');
+      check('S10 at ' + cs[0] + ' the explorer bar stays on one row, inside its width', barOneRow() && showBtn().getBoundingClientRect().right <= barRect.right + 1, 'wrapped or overflowing (bar ' + Math.round(barRect.width) + ' px)');
+    }
+    if (savedWidth) root.style.setProperty('--side-panel-width', savedWidth); else root.style.removeProperty('--side-panel-width');
+    click('[data-action="select-folder-view"][data-view="tree"]');
+    await wait(400);
+    check('S11 tree view: no Show in main view button', !visible(showBtn()), 'shown in tree view');
+    click('[data-action="select-folder-view"][data-view="cards"]');
+    await wait(500);
+
     // option switches
     click('[data-popover="folderOptionsMenu"]');
     check('E13 the options list opens', visible($('#folderOptionsMenu')), 'not open');

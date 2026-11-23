@@ -473,7 +473,7 @@ function levelButton(className: string, folderId: string, label: string, title: 
   return button;
 }
 
-/** "..": back to the folder that holds the current level (or the top), and a link that lists this folder in the page. */
+/** "..": back to the folder that holds the current level (or the top). The labelled "Show in main view" button lives in the explorer bar. */
 function upRow(all: FolderRow[]): HTMLElement {
   const chain = ancestorChain(all, level);
   const parent = chain.length > 1 ? chain[chain.length - 2] : null;
@@ -483,16 +483,40 @@ function upRow(all: FolderRow[]): HTMLElement {
   const button = levelButton('btn btn-link btn-sm p-0 folder-up-button color-medium', parent ? parent.id : '', '', i18next.t('Up one level'));
   button.replaceChildren(element('i', 'fas fa-level-up-alt fa-fw mr-1'), document.createTextNode(`.. ${parent ? parent.name : i18next.t('All folders')}`));
   row.append(button);
+  return row;
+}
+
+/**
+ * The labelled "Show in main view" button of the explorer bar (List and Cards views): it opens in the page what the panel is
+ * showing, the folder we are in or, at the top level, the whole listing (the same target as the x of the breadcrumb).
+ * Tree view hides it: a click on a folder row there already opens the page.
+ */
+function syncShowInMain(all: FolderRow[] | null): void {
+  const bar = document.querySelector<HTMLElement>('#foldersPanel .folder-explorer-bar');
+  if (!bar) return;
+  let link = document.getElementById('folderShowMain') as HTMLAnchorElement | null;
+  if (!link) {
+    link = element('a', 'folder-bar-btn folder-show-main text-decoration-none') as HTMLAnchorElement;
+    link.id = 'folderShowMain';
+    const label = i18next.t('Show in main view');
+    link.title = label;
+    link.setAttribute('aria-label', label);
+    link.append(element('i', 'fas fa-arrow-up-right-from-square fa-fw'), element('span', 'folder-show-main-text', label));
+    bar.querySelector('.folder-bar-spacer')?.after(link);
+  }
+  if (!all) {
+    link.hidden = true;
+    return;
+  }
+  const chain = ancestorChain(all, level);
   const current = chain[chain.length - 1];
   if (current) {
-    const show = element('a', 'folder-action-btn hl-hover-gray rounded ml-auto color-medium');
-    show.href = current.href;
-    show.title = i18next.t('Show this folder in the page');
-    show.setAttribute('aria-label', show.title);
-    show.append(element('i', 'fas fa-arrow-up-right-from-square fa-xs'));
-    row.append(show);
+    link.href = current.href;
+  } else {
+    const option = document.querySelector<HTMLOptionElement>('#folderQuickLinkSelect option[value="all"]');
+    link.href = (currentEntityType() === 'items' ? option?.dataset.itemsHref : option?.dataset.experimentsHref) ?? 'experiments.php';
   }
-  return row;
+  link.hidden = false;
 }
 
 /** Where the flat views are in the folder structure, as a path; each part moves there (the last is where we are). */
@@ -627,6 +651,7 @@ export function syncFolderView(): void {
   const existingFlat = document.getElementById('experimentsFoldersFlat');
   if (view === 'tree') {
     if (existingFlat) existingFlat.hidden = true;
+    syncShowInMain(null);
     return;
   }
   const flat = ensureFlatContainer(tree);
@@ -647,6 +672,7 @@ export function syncFolderView(): void {
   const pool = searching ? filterFolderRows(all, filterText) : rowsAtLevel(all, level);
   const rows = sortFolderRows(pool, 'name', 1);
   flat.querySelector<HTMLElement>('.folder-level-bar-holder')?.replaceChildren(levelPathBar(all));
+  syncShowInMain(all);
   const parts: HTMLElement[] = [];
   if (level !== '' && !searching) parts.push(upRow(all));
   // the cards view draws folders as cards too, in the same stack as the file cards
