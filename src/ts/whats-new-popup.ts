@@ -33,7 +33,45 @@ const hideDot = (): void => {
   document.querySelectorAll<HTMLElement>('[data-whats-new-dot]').forEach(dot => { dot.hidden = true; });
 };
 
+/** Pages side by side: swipe or scroll sideways (scroll snapping does the rest), or use the arrows, the dots or the left/right keys. */
+function wirePager(popup: HTMLElement): void {
+  const track = popup.querySelector<HTMLElement>('[data-whats-new-pages]');
+  const nav = popup.querySelector<HTMLElement>('[data-whats-new-nav]');
+  if (!track || !nav) return;
+  const pages = Array.from(track.children) as HTMLElement[];
+  const dots = Array.from(nav.querySelectorAll<HTMLElement>('[data-whats-new-dot-index]'));
+  const prev = nav.querySelector<HTMLButtonElement>('[data-whats-new-prev]');
+  const next = nav.querySelector<HTMLButtonElement>('[data-whats-new-next]');
+  const counter = nav.querySelector<HTMLElement>('[data-whats-new-counter]');
+  const current = (): number => Math.max(0, Math.min(pages.length - 1, Math.round(track.scrollLeft / Math.max(1, track.clientWidth))));
+  const update = (): void => {
+    const index = current();
+    dots.forEach((dot, i) => { dot.classList.toggle('active', i === index); dot.setAttribute('aria-current', i === index ? 'true' : 'false'); });
+    if (prev) prev.disabled = index === 0;
+    if (next) next.disabled = index === pages.length - 1;
+    if (counter) counter.textContent = `${index + 1} / ${pages.length}`;
+    pages.forEach((page, i) => { page.toggleAttribute('inert', i !== index); });
+  };
+  const goTo = (index: number): void => {
+    const target = Math.max(0, Math.min(pages.length - 1, index));
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    track.scrollTo({ left: target * track.clientWidth, behavior: calm ? 'auto' : 'smooth' });
+  };
+  track.addEventListener('scroll', () => { window.requestAnimationFrame(update); }, { passive: true });
+  prev?.addEventListener('click', () => { goTo(current() - 1); });
+  next?.addEventListener('click', () => { goTo(current() + 1); });
+  dots.forEach((dot, i) => dot.addEventListener('click', () => { goTo(i); }));
+  popup.addEventListener('keydown', (event: KeyboardEvent) => {
+    const target = event.target as HTMLElement;
+    if (event.altKey || event.ctrlKey || event.metaKey || target.closest('input, textarea, select')) return;
+    if (event.key === 'ArrowRight') { event.preventDefault(); goTo(current() + 1); }
+    if (event.key === 'ArrowLeft') { event.preventDefault(); goTo(current() - 1); }
+  });
+  update();
+}
+
 function wirePopup(popup: HTMLElement): void {
+  wirePager(popup);
   const onDemand = popup.dataset.onDemand === '1';
   let stored = false;
   const markSeen = (): Promise<unknown> => {
