@@ -124,6 +124,20 @@
     "imageAlt": "An experiment page with the Search panel open at the left: results grouped in boxes for experiments and resources, next to the flat toolbar and details of the entry"
   },
   {
+    "id": "interface-size",
+    "date": "2026-11-23",
+    "area": "Settings",
+    "featured": false,
+    "title": "Compact or Comfortable interface size",
+    "summary": "Choose Compact or Comfortable in your settings; Comfortable is one step larger.",
+    "details": [
+      "Open Settings > Appearance > Size. Compact is the default.",
+      "The choice is saved with your account and applied before the page is drawn, so it does not flash on load."
+    ],
+    "image": "whats-new-ui-size.png",
+    "imageAlt": "The Appearance tab of Settings with the theme buttons and the Size setting, Comfortable chosen"
+  },
+  {
     "id": "side-panel-refresh",
     "date": "2026-11-19",
     "area": "Organise",
