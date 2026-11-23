@@ -1605,7 +1605,12 @@
     "news": "New: link a project to a Google calendar, choose the calendar of each task, and keep the choices per user.",
     "shot": "",
     "image": "guide-google-calendar.png",
-    "screenshots": []
+    "screenshots": [
+      {
+        "image": "whats-new-calendar-google.png",
+        "caption": "The Calendars menu of the calendar page: choose the Google calendar of each project, and which Google calendars show beside your tasks"
+      }
+    ]
   },
   {
     "id": "guide-print-pdf",
