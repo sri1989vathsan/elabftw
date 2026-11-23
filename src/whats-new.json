@@ -513,14 +513,15 @@
     "date": "2026-10-06",
     "area": "Orders",
     "title": "Smoother ordering",
-    "summary": "Attachments can be reused, orders can advance and archive themselves, and notes support lists.",
+    "summary": "Reuse attachments, let orders move and archive themselves, pin shared references, and keep texts for suppliers in Templates.",
     "details": [
-      "Reuse an attachment across orders, and download it with its own button.",
-      "Orders can move from requested to ordered when a procurement ID appears, and archive after a set time.",
-      "Notes support bulleted and numbered lists, and long titles and file names wrap properly."
+      "Reuse an attachment on a new order with the arrow beside the file. Each attachment has its own download button.",
+      "Notes support bulleted and numbered lists, and long titles and file names wrap properly.",
+      "Team settings (Admin > Team > Orders): move an order from Requested to Ordered when a procurement ID appears, archive orders after a number of days in a status you choose, and show attachments expanded or collapsed.",
+      "Pinned for all keeps an order on top for the team; Reference is only visible to you. The Templates tab keeps shared texts such as supplier emails, with lists and files."
     ],
     "image": "orders.png",
-    "imageAlt": "Two orders in the Orders list, one Collected and one Ordered, each with its attached quote PDF and the download and Add to new order buttons beside the file"
+    "imageAlt": "Two orders in the Orders list: a Requested one with bulleted notes and an attached quote, and an Ordered one with its procurement ID and confirmation, each file with download, reuse and delete buttons"
   },
   {
     "id": "spreadsheet-editing",
