@@ -2776,6 +2776,11 @@ body:has(.side-panel:not([hidden])) .elabftw-back-button {
     right: calc(var(--panel-corner-right) + var(--panel-corner-size) + var(--panel-corner-gap));
   }
 
+  // the "i" of a panel without a title row (Folders): left of Refresh
+  > .panel-info {
+    right: calc(var(--panel-corner-right) + 2 * (var(--panel-corner-size) + var(--panel-corner-gap)));
+  }
+
   // the content starts under that row of buttons in every panel
   > .p-3,
   > div > .p-3,
@@ -3075,17 +3080,6 @@ body:has(.side-panel:not([hidden])) .elabftw-back-button {
     gap: 0.05rem;
     margin-bottom: 0.5rem;
     position: relative;
-
-    // the "i" of the Folders card: a bar button in size, centred by the row itself (no lift)
-    .guide-info-btn.btn {
-      font-size: 1rem;
-      margin: 0 0.1rem;
-      top: 0;
-
-      > i {
-        font-size: 1rem;
-      }
-    }
   }
 
   .folder-bar-btn {

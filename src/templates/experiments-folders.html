@@ -10,6 +10,8 @@
   {# Close and Refresh: the same size and place in every side panel (see .panel-corner-btn in main.scss) #}
   <button type='button' data-action='toggle-sidepanel' data-target='folders' data-purpose='hide' aria-label='{{ 'Close'|trans }}' title='{{ 'Close'|trans }}' class='btn panel-corner-btn panel-close'><i class='fas fa-xmark fa-fw' aria-hidden='true'></i></button>
   <button type='button' data-action='refresh-folders' class='btn panel-corner-btn panel-refresh' title='{{ 'Refresh'|trans }}' aria-label='{{ 'Refresh'|trans }}'><i class='fas fa-rotate fa-fw' aria-hidden='true'></i></button>
+  {# the guide card of the Folders panel: an "i" in the same row as Refresh and Close (this panel has no title row) #}
+  <button type='button' class='btn panel-corner-btn panel-info' data-action='open-guide-card' data-card='guide-folders' title='{{ 'About %name% in the guide'|trans|replace({'%name%': 'Folders'}) }}' aria-label='{{ 'About %name% in the guide'|trans|replace({'%name%': 'Folders'}) }}'><i class='fas fa-circle-info fa-fw' aria-hidden='true'></i></button>
   <div
     id='experimentsFoldersSidebar'
     class='py-3 pr-2'
@@ -29,8 +31,6 @@
       </div>
       </div>
       <span class='folder-bar-spacer'></span>
-      {# the guide card of the Folders panel, always in view (the same "i" as in the headings of the other panels) #}
-      {{ guide.info('guide-folders', 'Folders') }}
       <button type='button' class='folder-bar-btn' data-action='toggle-folder-popover' data-popover='folderOptionsMenu' aria-haspopup='true' aria-expanded='false' title='{{ 'Options'|trans }}' aria-label='{{ 'Options'|trans }}'><i class='fas fa-ellipsis fa-fw' aria-hidden='true'></i></button>
       {# Filled with the bookmarked folders when opened. #}
       <div id='folderFavoritesMenu' class='folder-popover' role='menu' aria-label='{{ 'Favourites'|trans }}' hidden></div>
