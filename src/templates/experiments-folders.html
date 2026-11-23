@@ -29,6 +29,8 @@
       </div>
       </div>
       <span class='folder-bar-spacer'></span>
+      {# the guide card of the Folders panel, always in view (the same "i" as in the headings of the other panels) #}
+      {{ guide.info('guide-folders', 'Folders') }}
       <button type='button' class='folder-bar-btn' data-action='toggle-folder-popover' data-popover='folderOptionsMenu' aria-haspopup='true' aria-expanded='false' title='{{ 'Options'|trans }}' aria-label='{{ 'Options'|trans }}'><i class='fas fa-ellipsis fa-fw' aria-hidden='true'></i></button>
       {# Filled with the bookmarked folders when opened. #}
       <div id='folderFavoritesMenu' class='folder-popover' role='menu' aria-label='{{ 'Favourites'|trans }}' hidden></div>

@@ -3043,6 +3043,17 @@ body:has(.side-panel:not([hidden])) .elabftw-back-button {
     gap: 0.05rem;
     margin-bottom: 0.5rem;
     position: relative;
+
+    // the "i" of the Folders card: a bar button in size, centred by the row itself (no lift)
+    .guide-info-btn.btn {
+      font-size: 1rem;
+      margin: 0 0.1rem;
+      top: 0;
+
+      > i {
+        font-size: 1rem;
+      }
+    }
   }
 
   .folder-bar-btn {
@@ -11867,13 +11878,22 @@ div > .sticky-navbar {
 }
 
 // The small "i" next to a feature's header that opens its guide card.
-.guide-info-btn {
+.guide-info-btn.btn {
+  align-items: center;
   color: var(--primary);
-  // follows the heading it sits in, but never smaller than a normal icon, so it is easy to spot
-  font-size: max(0.7em, 1.25rem);
+  display: inline-flex;
+  // the button takes the size of the heading it sits in (so its em is the heading's); the icon inside is never smaller than a normal
+  // icon, so it is easy to spot. "middle" puts it a little low next to capital letters: lifted by 0.125 em of the heading, on every page.
+  font-size: 1em;
   line-height: 1;
   opacity: 0.9;
+  position: relative;
+  top: -0.125em;
   vertical-align: middle;
+
+  > i {
+    font-size: max(0.7em, 1.25rem);
+  }
 
   &:hover,
   &:focus {
@@ -12698,6 +12718,7 @@ button.wp-legend-item {
 
     .pm-manage-btn,
     .guide-info-btn {
+      top: 0;
       align-items: center;
       display: inline-flex;
       height: var(--fx-ctl, 1.4rem);
