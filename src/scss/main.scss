@@ -9099,7 +9099,10 @@ the form-control fails to do that so we do the border ourselves */
 }
 
 @media print {
+  /* the printed copy replaces the sheet (its table has margin 0 and the on-screen margin sits on the hidden original), so it carries the gap itself:
+     without it the table touches the text and the next table; the margins collapse with the neighbours' */
   .print-sheet-copy {
+    margin: 1rem 0;
     overflow: visible !important;
   }
 
