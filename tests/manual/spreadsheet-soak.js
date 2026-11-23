@@ -38,7 +38,7 @@
 async function spreadsheetSoak(options = {}) {
   const config = {
     seed: 1, sessions: 2, randomRounds: 30, settleMs: 900, quick: false, keepTables: false,
-    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-menu-race', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'text-column-fits', 'text-not-clipped', 'paste-keeps-formatting', 'cell-alignment-consistent', 'alignment-preserved', 'toolbar-not-cut', 'row-height-fits-text', 'editor-height-after-removal', 'undo-typing-over-text', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'viewport-equals-table-width', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
+    scenarios: ['plate-day', 'back-to-back', 'spaced-out', 'copy-paste', 'wide-plate', 'format-and-popup', 'enter-last-row', 'multi-delete', 'date-then-header', 'type-then-resize', 'enter-semantics', 'tab-then-type', 'sink-text', 'format-after-typing', 'filler-click', 'filler-revert', 'filler-then-insert-column', 'filler-then-menu-race', 'filler-then-popup', 'autosave-in-grid', 'popup-direct-typing', 'paste-external', 'paste-outside-widths', 'paste-copy-widths', 'paste-copy-widths-rich', 'undo-redo', 'undo-everything', 'copy-table-format', 'paste-range-format', 'default-border-apply', 'colour-live', 'find-in-grid', 'popup-wide-scroll', 'popup-own-scrollbar', 'popup-own-scrollbar-y', 'popup-scrollbar-after-resize', 'popup-header-look', 'header-not-tall-when-all-rows-wrap', 'text-column-fits', 'text-not-clipped', 'paste-keeps-formatting', 'cell-alignment-consistent', 'alignment-preserved', 'toolbar-not-cut', 'row-height-fits-text', 'editor-height-after-removal', 'undo-typing-over-text', 'preview-equals-live', 'no-stray-column-row', 'toast-inside-viewport', 'inline-scrollbar-thin', 'viewport-equals-table-width', 'drag-select', 'formulas-and-structure', 'cut-undo', 'padding-fit', 'mixed'],
     ...options,
   };
   if (config.quick) { config.randomRounds = Math.min(config.randomRounds, 10); config.settleMs = 600; }
@@ -2460,6 +2460,118 @@ async function spreadsheetSoak(options = {}) {
       } finally {
         window.__forceOverlayScrollbars = false;
       }
+    },
+
+    // A sheet taller than the popup (overlay scroll bars, as on macOS) must show its own vertical bar next to the grid: always visible,
+    // a thumb smaller than the track, dragging it scrolls the grid down, the last row can be reached, the bar sits inside the dialog.
+    async 'popup-own-scrollbar-y'() {
+      window.__forceOverlayScrollbars = true;
+      try {
+        const uid = await createTable('tall popup sheet (own bar)', { rows: 40, cols: 5 });
+        if (!uid) return;
+        const dialog = await openPopupFor(uid);
+        const container = dialog.querySelector('.inline-spreadsheet-container');
+        const bar = container && container.querySelector('.elabftw-own-scrollbar-y');
+        const scroller = container && container.querySelector('.jss_content');
+        if (!bar || !scroller) { dataLoss.push({ context, table: 'tall popup sheet (own bar)', problem: 'the popup has no own vertical scroll bar in overlay mode' }); }
+        else {
+          await sleep(300);
+          const thumb = bar.querySelector('.elabftw-own-scrollbar-thumb');
+          const track = bar.getBoundingClientRect(); const tb = thumb.getBoundingClientRect();
+          if (scroller.scrollHeight <= scroller.clientHeight + 1) { fail('popup-own-scrollbar-y: a 40-row sheet does not overflow the popup'); }
+          else if (getComputedStyle(bar).visibility !== 'visible' || !(tb.height > 0 && tb.height < track.height) || track.width < 3) {
+            dataLoss.push({ context, table: 'tall popup sheet (own bar)', problem: `own vertical bar missing, hidden or zero width (visibility ${getComputedStyle(bar).visibility}, thumb ${Math.round(tb.height)} of ${Math.round(track.height)}, width ${Math.round(track.width)})` });
+          } else {
+            const dbox = dialog.getBoundingClientRect();
+            if (track.bottom > dbox.bottom + 1 || track.right > dbox.right + 1) dataLoss.push({ context, table: 'tall popup sheet (own bar)', problem: 'the own vertical bar is outside the dialog' });
+            const before = scroller.scrollTop;
+            const fire = (type, y) => thumb.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 8, clientX: tb.left + 2, clientY: y }));
+            fire('pointerdown', tb.top + 4); fire('pointermove', tb.top + 4 + track.height); fire('pointerup', tb.top + 4 + track.height);
+            await sleep(200);
+            if (!(scroller.scrollTop > before + 50)) dataLoss.push({ context, table: 'tall popup sheet (own bar)', problem: `dragging the vertical thumb did not scroll the grid (scrollTop ${before} -> ${scroller.scrollTop})` });
+          }
+        }
+        [...dialog.querySelectorAll('button')].find(b => /^Cancel/.test(b.textContent.trim()))?.click();
+        await waitPopupGone();
+      } finally {
+        window.__forceOverlayScrollbars = false;
+      }
+    },
+
+    // Widening columns while the popup is open (overlay scroll bars): as soon as the grid overflows, the own bar must appear and be
+    // the right size, and it must go again when the columns are made narrow. It used to stay hidden until the popup was reopened.
+    async 'popup-scrollbar-after-resize'() {
+      window.__forceOverlayScrollbars = true;
+      try {
+        const uid = await createTable('resize bar sheet', { rows: 6, cols: 5 });
+        if (!uid) return;
+        const dialog = await openPopupFor(uid);
+        const container = dialog.querySelector('.inline-spreadsheet-container');
+        const scroller = container && container.querySelector('.jss_content');
+        const bar = container && container.querySelector('.elabftw-own-scrollbar-x');
+        if (!scroller || !bar) { dataLoss.push({ context, table: 'resize bar sheet', problem: 'the popup has no own scroll bar element in overlay mode' }); }
+        else {
+          const state = () => {
+            const over = scroller.scrollWidth > scroller.clientWidth + 1;
+            const thumb = bar.querySelector('.elabftw-own-scrollbar-thumb').getBoundingClientRect();
+            const track = bar.getBoundingClientRect();
+            return { over, shown: getComputedStyle(bar).visibility === 'visible' && thumb.width > 0 && thumb.width < track.width };
+          };
+          let appeared = false;
+          for (let i = 0; i < 12 && !appeared; i++) {
+            await resizeColumn(uid, i % 3); await sleep(350);
+            const st = state();
+            if (st.over && !st.shown) { dataLoss.push({ context, table: 'resize bar sheet', problem: `after widening columns in the open popup the grid overflows (${scroller.scrollWidth}>${scroller.clientWidth}) but the own scroll bar is not shown` }); break; }
+            appeared = st.over && st.shown;
+          }
+          if (!appeared && !dataLoss.some(d => d.table === 'resize bar sheet')) fail('popup-scrollbar-after-resize: the grid never overflowed after 12 widenings');
+        }
+        [...dialog.querySelectorAll('button')].find(b => /^Cancel/.test(b.textContent.trim()))?.click();
+        await waitPopupGone();
+      } finally {
+        window.__forceOverlayScrollbars = false;
+      }
+    },
+
+    // A table whose every row holds wrapped text: the column-letter row of the grid in the text must still be one line high (it used to
+    // follow the lowest row, which is tall when no row is a single line).
+    async 'header-not-tall-when-all-rows-wrap'() {
+      const uid = await createTable('all rows wrap sheet', { rows: 5, cols: 3 });
+      if (!uid) return;
+      const long = 'A long text that wraps over several lines in a narrow column to make this row tall';
+      for (let r = 0; r < 5; r++) await typeInto(uid, r, 0, long + ' ' + r);
+      await sleep(600);
+      const root = await live(uid);
+      const cells = [...root.querySelectorAll('.jss_worksheet > thead > tr > td[data-x]')];
+      const rows = [...root.querySelectorAll('.jss_worksheet > tbody > tr')].map(tr => Math.round(tr.getBoundingClientRect().height));
+      const fs = parseFloat(getComputedStyle(cells[0] || root).fontSize) || 16;
+      const limit = Math.max(33, Math.round(fs * 2.06)) + 2;
+      const tall = cells.map(td => Math.round(td.getBoundingClientRect().height)).filter(h => h > limit);
+      if (!cells.length) fail('header-not-tall: no column letters');
+      else if (Math.min(...rows) <= limit) fail(`header-not-tall: the rows are not tall enough to test (${rows.join(', ')})`);
+      else if (tall.length) dataLoss.push({ context, table: 'all rows wrap sheet', problem: `the column-letter row is ${tall[0]} px high, more than one line (${limit} px) while the rows are ${rows.join(', ')}` });
+    },
+
+    // The column-letter row of the popup grid: always as high as the set value (--spreadsheet-column-index-height, 30 px), whatever the
+    // rows below hold (long text, wrapped cells, many rows), the same height for every letter, and the letters centred.
+    async 'popup-header-look'() {
+      const uid = await createTable('header look sheet', { rows: 12, cols: 5 });
+      if (!uid) return;
+      await typeInto(uid, 2, 1, 'A long text that wraps over several lines in a narrow column to make the row tall');
+      const dialog = await openPopupFor(uid);
+      await sleep(300);
+      const container = dialog.querySelector('.inline-spreadsheet-container');
+      const wanted = parseFloat(getComputedStyle(container || dialog).getPropertyValue('--spreadsheet-column-index-height')) || 30;
+      const cells = [...dialog.querySelectorAll('.jss_worksheet > thead > tr > td[data-x]')];
+      if (cells.length === 0) { fail('popup-header-look: no column letters'); }
+      else {
+        const heights = cells.map(td => Math.round(td.getBoundingClientRect().height));
+        if (heights.some(h => Math.abs(h - wanted) > 1)) dataLoss.push({ context, table: 'header look sheet', problem: `the column-letter row is not ${wanted} px high: ${heights.join(', ')}` });
+        const notCentred = cells.filter(td => getComputedStyle(td).textAlign !== 'center').map(td => td.textContent.trim());
+        if (notCentred.length) dataLoss.push({ context, table: 'header look sheet', problem: `column letters not centred: ${notCentred.join(', ')}` });
+      }
+      [...dialog.querySelectorAll('button')].find(b => /^Cancel/.test(b.textContent.trim()))?.click();
+      await waitPopupGone();
     },
 
     // A column of long text must fit (or, at the widest, be cut at the left edge): never centred and cut off on both sides.

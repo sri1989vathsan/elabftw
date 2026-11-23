@@ -1141,8 +1141,8 @@
     else collapseReminderBanner();
   }
 
-  // Top right, where the old toast was. When something else is already there (a "Saved" notice, the tab bar of the admin page, a toolbar),
-  // the chip or the opened reminder sits just below it instead, never on top of it.
+  // Top right, where the old toast was, and it stays there. When a notice is already there (a "Saved" or "2 issues" toast) or the column of
+  // buttons at the right edge, the chip or the opened reminder sits just below / beside it instead, never on top of it.
   const REMINDER_TOP = 66;
   function placeReminder(node: HTMLElement): { destroy(): void } {
     let frame = 0;
@@ -1163,8 +1163,12 @@
     const avoidables = (): HTMLElement[] => Array.from(document.querySelectorAll<HTMLElement>('body *')).filter(el => {
       if (el === node || node.contains(el) || el.contains(node)) return false;
       const cs = getComputedStyle(el);
-      const inTabBar = el.matches('.nav-tabs, [role="tablist"]');
-      if (cs.position !== 'fixed' && cs.position !== 'sticky' && !inTabBar) return false;
+      // Only things that really sit where the chip does: notices (the toasts, "2 issues") and the narrow column of buttons at the right edge.
+      // A sticky toolbar or tab bar is not one of them: the chip stays top right, over the page, rather than dropping into the middle of it.
+      const isNotice = el.closest('#overlay-container') !== null;
+      const box0 = el.getBoundingClientRect();
+      const isEdgeColumn = cs.position === 'fixed' && box0.width <= 120 && box0.left > window.innerWidth / 2;
+      if (!isNotice && !isEdgeColumn) return false;
       if (cs.visibility === 'hidden' || cs.display === 'none' || Number.parseFloat(cs.opacity) === 0) return false;
       const box = el.getBoundingClientRect();
       if (box.width < 2 || box.height < 2) return false;

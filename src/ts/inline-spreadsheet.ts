@@ -540,12 +540,35 @@ function installOverlayScrollbars(host: HTMLElement): () => void {
     }
     updateAll();
   };
-  const mutation = new MutationObserver(() => { bind(); updateAll(); });
-  mutation.observe(host, { childList: true, subtree: true });
+  // The grid changes size without the scroller or the table being replaced (a column is dragged wider, a row grows): coalesce
+  // every change of the content into one update per frame, and watch whichever table is current.
+  let observedTable: Element | null = null;
+  let frame = 0;
+  const later = (): void => {
+    if (frame !== 0) return;
+    frame = window.requestAnimationFrame(() => {
+      frame = 0;
+      const table = scroller?.querySelector('.jss_worksheet') ?? null;
+      if (table !== observedTable) {
+        if (observedTable) resize?.unobserve(observedTable);
+        if (table) resize?.observe(table);
+        observedTable = table;
+      }
+      updateAll();
+    });
+  };
+  const mutation = new MutationObserver(records => {
+    // our own bars change their style on every update: those records must not start another one
+    if (records.every(record => bars.some(bar => bar.el.contains(record.target)))) return;
+    bind();
+    later();
+  });
+  mutation.observe(host, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'width'] });
   window.addEventListener('resize', updateAll);
   bind();
   return () => {
     mutation.disconnect();
+    if (frame !== 0) window.cancelAnimationFrame(frame);
     resize?.disconnect();
     scroller?.removeEventListener('scroll', updateAll);
     window.removeEventListener('resize', updateAll);
@@ -3114,9 +3137,12 @@ function matchHeaderRowToDataRows(container: HTMLElement, appearance: Spreadshee
   const headerRow = container.querySelector<HTMLElement>('.jss_worksheet > thead > tr');
   if (dataRows.length === 0 || !headerRow) return;
   // the height of a one-line row: the lowest of the rows (a row with wrapped text is taller than the others)
+  // ... but never taller than one line of text: when every row has wrapped text the lowest row is tall, and the letters must not follow it
+  const headerFontSize = parseFloat(getComputedStyle(headerRow.firstElementChild ?? headerRow).fontSize) || 16;
+  const oneLine = Math.max(ONE_LINE_ROW_HEIGHT, Math.round(headerFontSize * 2.06));
   const wanted = appearance.columnIndexHeight !== DEFAULT_APPEARANCE.columnIndexHeight
     ? appearance.columnIndexHeight
-    : Math.round(Math.min(...dataRows.map(row => row.getBoundingClientRect().height).filter(height => height > 0), 9999));
+    : Math.min(oneLine, Math.round(Math.min(...dataRows.map(row => row.getBoundingClientRect().height).filter(height => height > 0), 9999)));
   if (!(wanted > 0) || wanted >= 9999) return;
   // the stylesheet fixes the header cells to this variable (with !important): follow the data rows through it
   container.closest<HTMLElement>('.elabftw-spreadsheet-readonly-view')?.style.setProperty('--spreadsheet-column-index-height', `${wanted}px`);
