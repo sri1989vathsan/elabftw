@@ -152,6 +152,20 @@
     "imageAlt": "An experiment with the Contents panel open: headings with a picture and a spreadsheet listed under them, the two switches in the filter row, and a picture whose caption is above it"
   },
   {
+    "id": "useful-links",
+    "date": "2026-11-23",
+    "area": "Navigation",
+    "featured": false,
+    "title": "Useful links for the team",
+    "summary": "A shared table of links that anybody in the team can add to.",
+    "details": [
+      "Open More > Links > Useful links. The table shows each link with its description and who added it.",
+      "Fill in Add a link at the bottom (title, web address, description) to add one."
+    ],
+    "image": "whats-new-useful-links.png",
+    "imageAlt": "The Useful links page: a table of four links with description and author, and the Add a link form below it"
+  },
+  {
     "id": "side-panel-refresh",
     "date": "2026-11-19",
     "area": "Organise",
