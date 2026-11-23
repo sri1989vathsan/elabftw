@@ -427,15 +427,9 @@
       "Your calendar view, hidden projects and Google choices are saved with your account and follow you to another browser. The Google sign-in itself stays in the browser.",
       "Google Tasks sync of the to-do list is optional and off by default. It runs in your browser and needs an admin to switch it on: set GOOGLE_SYNC_CSP=true in the server settings and restart, which lets the page use Google sign-in. This was only tested with a stand-in for Google, not a real account."
     ],
-    "image": "google-calendar-tasks.png",
-    "imageAlt": "The Google section of the Calendar settings window with Connect Google and the Add from URL button for calendars from a web address",
-    "highlight": {
-      "x": 1.6,
-      "y": 4.8,
-      "w": 96.9,
-      "h": 57.6,
-      "label": "Google settings"
-    }
+    "image": "whats-new-calendar-google.png",
+    "imageAlt": "The Calendars menu of the calendar page: the Google calendar of each project (Work, Work, Alice) and the Google calendars shown beside the tasks"
+
   },
   {
     "id": "mind-map",
