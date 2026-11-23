@@ -94,7 +94,7 @@
     "id": "calendar-page",
     "date": "2026-11-23",
     "area": "Tasks and calendar",
-    "featured": false,
+    "featured": true,
     "title": "A calendar page for your tasks",
     "summary": "The Calendar page shows your to-dos by day, week or month, with calendars you add from a web address.",
     "details": [
