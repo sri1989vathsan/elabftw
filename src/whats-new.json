@@ -91,6 +91,22 @@
     "imageAlt": "The To-do panel with the Add task form open: a title, the date, Begin time 14:00 and End time 15:30"
   },
   {
+    "id": "calendar-page",
+    "date": "2026-11-23",
+    "area": "Tasks and calendar",
+    "featured": false,
+    "title": "A calendar page for your tasks",
+    "summary": "The Calendar page shows your to-dos by day, week or month, with calendars you add from a web address.",
+    "details": [
+      "Choose Day, Week or Month. Click the dates in the title to jump to any month or year.",
+      "Drag over empty cells of the grid to add a task for that time. Drag a task to move it; its outline stays where it was and the block shows where it will land.",
+      "Calendars from a web address (.ics) are added in Calendars > Settings and are kept in this browser. The server must allow contacting the address. Their all-day events show in a strip above the grid.",
+      "The Calendars menu chooses which projects and calendars are shown."
+    ],
+    "image": "whats-new-calendar-page.png",
+    "imageAlt": "The Calendar page in week view: tasks on several days, a strip of all-day events above the grid, and the Day, Week, Month and Calendars buttons"
+  },
+  {
     "id": "side-panel-refresh",
     "date": "2026-11-19",
     "area": "Organise",
