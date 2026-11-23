@@ -3568,6 +3568,48 @@ body:has(.side-panel:not([hidden])) .elabftw-back-button {
       }
     }
 
+    // "Show in main view": icon and label in the explorer bar. The label goes (icon, tooltip and aria-label stay) when the
+    // bar is too narrow for it, and below 10rem the six icon buttons close up so the bar still fits one row.
+    .folder-explorer-bar {
+      container-type: inline-size;
+    }
+
+    .folder-bar-btn.folder-show-main {
+      color: var(--fx-fg);
+      flex: 0 0 auto;
+      font-size: 0.72rem;
+      gap: 0.25rem;
+      padding: 0 0.35rem;
+      white-space: nowrap;
+      width: auto;
+
+      &[hidden] {
+        display: none;
+      }
+
+      .fas {
+        flex: 0 0 auto;
+      }
+    }
+
+    @container (max-width: 15.5rem) {
+      .folder-bar-btn.folder-show-main {
+        padding: 0;
+        width: var(--fx-ctl);
+      }
+
+      .folder-show-main-text {
+        display: none;
+      }
+    }
+
+    @container (max-width: 10rem) {
+      .folder-bar-btn,
+      .folder-bar-btn.folder-show-main {
+        width: calc(var(--fx-ctl) - 0.3rem);
+      }
+    }
+
     .folder-bar-btn:hover,
     .folder-bar-btn:focus-visible,
     .folder-quick-row:hover,
