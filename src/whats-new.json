@@ -46,6 +46,22 @@
     "imageAlt": "The Feedback board with the filter and sort buttons, a feature item, and a second item opened to show two comments that mention colleagues"
   },
   {
+    "id": "boards-redesign",
+    "date": "2026-11-23",
+    "area": "Boards",
+    "featured": false,
+    "title": "A lighter Boards page",
+    "summary": "Cards are compact, the toolbar is one row, and Boards remembers how you left each project.",
+    "details": [
+      "A card is one row with a priority dot. Its actions appear when you hover over it or focus it. Search, priority, scope and Add card share one toolbar row.",
+      "Columns are lighter, with a colour bar on top. An empty column folds into a narrow strip.",
+      "Subprojects are chips under the project name. The description folds to one line with a progress chip; open it with Goals / description.",
+      "Your view is saved with your account: board or mind map, the card size of each project and the last project tab."
+    ],
+    "image": "whats-new-boards-redesign.png",
+    "imageAlt": "A project board with subproject chips, one toolbar row, three columns with colour bars and compact cards, and an empty Blocked column folded at the right"
+  },
+  {
     "id": "side-panel-refresh",
     "date": "2026-11-19",
     "area": "Organise",
