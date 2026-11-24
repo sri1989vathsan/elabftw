@@ -126,6 +126,16 @@ async function printCheckRun() {
         const zoom = parseFloat(table.style.zoom) || 1;
         if (original) check(`print-matches-live: sheet ${i + 1} fits the page (scaled when wider than 700 px)`, width * zoom <= 701, `${width} px at zoom ${zoom}`);
       });
+      // print-captions-and-headers: what the entry shows above its tables and pictures, and the header rows, are on the paper too
+      const norm = t => (t || '').replace(/\s+/g, ' ').trim();
+      const wholeText = norm(whole.textContent);
+      const captions = [...(body ? body.querySelectorAll('caption, figcaption') : [])].map(c => norm(c.textContent)).filter(Boolean);
+      check('print-captions: every table caption and picture caption of the entry is in the printed copy', captions.every(c => wholeText.includes(c)), `missing: ${captions.filter(c => !wholeText.includes(c)).join(', ')}`);
+      const sourceHeads = body ? body.querySelectorAll('table:not(.elabftw-spreadsheet) th').length : 0;
+      check('print-table-header: the header cells of plain tables are in the printed copy', whole.querySelectorAll('table:not(.elabftw-spreadsheet) th').length >= sourceHeads, 'header cells lost');
+      const titleText = norm(document.getElementById('documentTitle')?.textContent);
+      check('print-entry-header: the title and the details line (date, category, tags) head the printed copy', !titleText || (norm(whole.querySelector('.toc-print-title')?.textContent) === titleText && !!whole.querySelector('.toc-print-context')), 'title or details missing');
+      check('print rules show a picture caption and a table caption (not hidden)', !/(figcaption|caption)[^{]*\{[^}]*display:\s*none/.test(printCss), 'a print rule hides captions');
     } else check('print-matches-live: the whole text can be printed', false, 'window.print never ran');
   } finally {
     window.print = realPrint;
