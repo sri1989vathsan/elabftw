@@ -1776,7 +1776,7 @@
     opacity: 1;
   }
 
-  // the "i" of the guide card, left of the close button
+  /* the "i" of the guide card, left of the close button */
   .reminder-banner-header :global(.guide-info-btn.btn) {
     height: 1.4rem;
     justify-content: center;
