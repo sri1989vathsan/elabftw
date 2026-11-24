@@ -977,14 +977,14 @@
     "title": "Orders",
     "summary": "Request what the lab needs and follow each order from request to delivery.",
     "details": [
-      "fa-cart-shopping::Open Orders under More in the top bar. Fill in the request form at the left (what, notes, files) and press Request order.",
-      "fa-clone::Copy an order to fill the request form again; use the arrow beside a file (Add to new order) to reuse an attachment.",
+      "fa-cart-shopping::Open Orders under More in the top bar. Fill in the request form at the left (a title is enough) and press Request order.",
+      "fa-pen::Add notes (quantity, supplier, link), say who it is for, link a resource and attach files. Common marks everyday supplies.",
+      "fa-clone::Copy into the request form above repeats an order; the arrow beside a file (Add to new order) reuses its attachment.",
       "Status: Requested, Ordered, Collected, In storage, Backlogged or Cancelled. Use the coloured dropdown, or tick several and Move to status.",
-      "fa-file-pdf::Drop the signed collection sheets (PDF) on the Orders page: each is attached to its orders, and an Ordered one becomes Collected.",
-      "fa-clipboard-check::Order Status lists each procurement with its orders and how many items were collected. Templates keep texts such as supplier emails.",
-      "fa-thumbtack::Pin an order to keep it at the top. Pinned for all is shared with the team; Reference is only yours. Admins can turn auto-collect off."
+      "fa-file-pdf::Drop the signed collection sheets (PDF) on the page: orders become Collected. Order Status lists each procurement.",
+      "fa-thumbtack::Pinned for all is shared with the team, Reference is only yours. The ⋮ menu pins, sets a reminder or deletes an order."
     ],
-    "imageAlt": "The Orders page with the request form on the left and the list of orders on the right: status filters, the shop sheet drop area, search, and the first orders with their status",
+    "imageAlt": "The Orders page with the request form on the left and the list of orders on the right: status filters, the collection sheets drop area, search and filters, and the first orders with their status",
     "featured": false,
     "guide": true,
     "order": 70,
@@ -992,9 +992,9 @@
     "purpose": "One place to request what the lab needs and to see where each order is, instead of emails and sticky notes.",
     "uses": [
       "Request a reagent with the supplier quote attached.",
-      "Drop the signed shop sheet and see the order become Collected."
+      "Drop the signed collection sheet and see the order become Collected."
     ],
-    "news": "New: drop the signed collection sheets to mark orders Collected and notify the requesters, the Order Status tab with items collected per procurement, and a setting for the collected notification. Received is now called In storage.",
+    "news": "New: drop the signed collection sheets to mark orders Collected and notify the requesters, the Order Status tab with items collected per procurement, and a reminder you can set on any order. Received is now called In storage.",
     "shot": "The Orders page with a few orders at different stages and one order open",
     "image": "guide-orders.png",
     "screenshots": []
