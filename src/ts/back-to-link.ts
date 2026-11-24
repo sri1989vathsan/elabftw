@@ -1,7 +1,8 @@
 /**
  * A "Back" button for internal links: after following a link in the text of an entry (to another entry, or to
- * another place in the same one, e.g. through the table of contents), a button at the bottom left returns to the
- * place the link was clicked, with the page scrolled to where it was.
+ * another place in the same one, e.g. through the table of contents), a button in the top bar, right after the logo
+ * and the home icon, returns to the place the link was clicked, with the page scrolled to where it was. It is part
+ * of the bar (not floating), so it never covers the page; the row of menu links makes room for it.
  *
  * The places are kept in sessionStorage (this tab only). A place is shown as the button only while the page is the
  * one the link led to; as soon as the user goes anywhere else the places are dropped, so the button never offers
@@ -120,48 +121,6 @@ function restoreScrollIfRequested(): void {
   attempt();
 }
 
-/**
- * Keeps the "Back to ..." pill clear of the open side panel (and the rail of tab icons beside it): its left edge is taken from where the
- * panel really ends (measured, not guessed) and follows the panel when it opens, closes or changes size, and the window when it is resized.
- * With no room left beside the panel (a narrow window) it sits at the top of the page instead of the bottom. It never covers the panel.
- */
-function keepClearOfSidePanels(bar: HTMLElement): void {
-  const GAP = 16;
-  const place = (): void => {
-    if (!bar.isConnected) {
-      observer.disconnect();
-      resizeObserver?.disconnect();
-      window.removeEventListener('resize', place);
-      return;
-    }
-    const panels = Array.from(document.querySelectorAll<HTMLElement>('.side-panel')).filter(panel => !panel.hidden && panel.offsetWidth > 0);
-    const rail = document.getElementById('sidepanel-buttons');
-    const railRight = rail && rail.offsetWidth > 0 ? rail.getBoundingClientRect().right : 0;
-    const panelRight = panels.reduce((right, panel) => Math.max(right, panel.getBoundingClientRect().right), 0);
-    const defaultLeft = 3.5 * Number.parseFloat(getComputedStyle(document.documentElement).fontSize || '16');
-    const left = Math.max(defaultLeft, railRight + GAP, panelRight > 0 ? panelRight + GAP : 0);
-    bar.style.left = `${Math.round(left)}px`;
-    bar.style.maxWidth = `${Math.max(120, window.innerWidth - left - GAP)}px`;
-    // the pill has to fit beside the panel: with less room than 220 px it moves to the top of the page, under the navbar; with less than
-    // 150 px (a panel across the whole window) it is not shown until the panel is closed, since it could only lie over the panel
-    const room = window.innerWidth - left - GAP;
-    bar.style.display = panelRight > 0 && room < 150 ? 'none' : '';
-    if (panelRight > 0 && room < 220) {
-      bar.style.bottom = 'auto';
-      bar.style.top = '66px';
-    } else {
-      bar.style.bottom = '';
-      bar.style.top = '';
-    }
-  };
-  const observer = new MutationObserver(place);
-  observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });
-  const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(place) : null;
-  document.querySelectorAll('.side-panel, #sidepanel-buttons').forEach(element => resizeObserver?.observe(element));
-  window.addEventListener('resize', place);
-  place();
-}
-
 function render(): void {
   document.getElementById('elabftwBackButton')?.remove();
   const here = window.location.href;
@@ -172,14 +131,25 @@ function render(): void {
   }
   writeStack(places);
   const place = places[places.length - 1];
+  // the top bar's left end: after the logo and the home icon, before the menu links. Pages without that bar (login) offer nothing.
+  const anchor = document.getElementById('main-nav');
+  if (!anchor?.parentElement) return;
   const bar = document.createElement('div');
   bar.id = 'elabftwBackButton';
-  bar.className = 'elabftw-back-button';
+  bar.className = 'elabftw-back-button navbar-left-group';
   const back = document.createElement('button');
   back.type = 'button';
   back.className = 'elabftw-back-button-go';
-  back.title = i18next.t('Back to the place you clicked the link');
-  back.textContent = `← ${i18next.t('Back to {{name}}', { name: place.label })}`;
+  const text = i18next.t('Back to {{name}}', { name: place.label });
+  back.title = text;
+  back.setAttribute('aria-label', text);
+  const arrow = document.createElement('i');
+  arrow.className = 'fas fa-arrow-left';
+  arrow.setAttribute('aria-hidden', 'true');
+  const label = document.createElement('span');
+  label.className = 'elabftw-back-button-label';
+  label.textContent = text;
+  back.append(arrow, label);
   back.addEventListener('click', () => {
     const rest = readStack().slice(0, -1);
     writeStack(rest);
@@ -207,8 +177,7 @@ function render(): void {
     bar.remove();
   });
   bar.append(back, close);
-  document.body.appendChild(bar);
-  keepClearOfSidePanels(bar);
+  anchor.parentElement.insertBefore(bar, anchor);
 }
 
 export function initBackToLink(): void {
