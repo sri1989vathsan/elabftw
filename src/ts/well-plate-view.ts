@@ -19,19 +19,22 @@ import {
   WELL_PLATE_PRESETS,
 } from './inline-spreadsheet';
 import { RICH_SELECTION_ATTRIBUTE } from './ClipboardContent';
+import {
+  BUILTIN_TEMPLATES,
+  colorForIndex,
+  deleteUserTemplate,
+  distinctColor,
+  loadUserTemplates,
+  PALETTE,
+  recolorGroups,
+  saveUserTemplate,
+} from './well-plate-colors';
 
 export interface PlateGroup {
   name: string;
   color: string;
 }
 
-// 24 swatches. The first 17 are the colours plates have always used (so existing plates and by-column groups look the same);
-// the rest add Okabe-Ito style hues for colour-blind readers. All keep 3:1 contrast against white, so a well never looks washed out.
-const PALETTE = [
-  '#e5484d', '#f76b15', '#e5a50a', '#30a46c', '#12a594', '#2a6df4', '#8e4ec6', '#d6409f', '#7d8499',
-  '#0b7285', '#a61e4d', '#5f3dc4', '#868e96', '#2b8a3e', '#c2255c', '#1864ab', '#e67700',
-  '#cc79a7', '#8c564b', '#8a8d00', '#3d3d3d', '#4a90a4', '#b35900', '#7a5195', '#5c7cfa',
-];
 
 // Well names run A, B, C down the plate and 1, 2, 3 across it, which is the reverse of spreadsheet coordinates.
 const wellName = (row: number, col: number): string => `${colLabel(row)}${col + 1}`;
@@ -97,20 +100,6 @@ function groupNameFor(data: SpreadsheetData, color: string | null): string | nul
 function wellValue(data: SpreadsheetData, row: number, col: number): string {
   const shown = data.displayData?.[row]?.[col] ?? data.data[row]?.[col] ?? '';
   return String(shown);
-}
-
-// More colours than the palette offers, so a column with many values still gets distinct groups.
-const GROUP_COLORS = PALETTE;
-
-function colorForIndex(index: number): string {
-  if (index < GROUP_COLORS.length) return GROUP_COLORS[index];
-  const hue = (index * 47) % 360;
-  const channel = (n: number): string => {
-    const k = (n + hue / 30) % 12;
-    const value = 0.5 - 0.35 * Math.max(-1, Math.min(k - 3, 9 - k, 1));
-    return Math.round(value * 255).toString(16).padStart(2, '0');
-  };
-  return `#${channel(0)}${channel(8)}${channel(4)}`;
 }
 
 /** Colours the wells by a column of the plate's table (a dynamic group): one group per distinct value. */
@@ -723,11 +712,17 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
       </section>
       <section class="wp-box wp-box-groups"><h6>Groups</h6><div class="wp-group-list"></div>
         <p class="wp-hint">With wells selected, press Assign to put them in a group.</p>
+        <div class="wp-row wp-template-row"><select class="form-control form-control-sm wp-template" aria-label="Colour template"></select>
+          <button type="button" class="btn btn-sm btn-secondary wp-template-apply" title="Recolour the groups in order; wells keep their group">Apply colours</button>
+          <button type="button" class="btn btn-sm btn-secondary wp-template-delete" title="Delete this saved template">Delete</button></div>
+        <div class="wp-row wp-template-row"><input class="form-control form-control-sm wp-template-name" placeholder="Template name" aria-label="Template name" maxlength="40">
+          <button type="button" class="btn btn-sm btn-secondary wp-template-save" title="Save this plate's group colours as a template you can use on other plates">Save colours</button></div>
       </section>
       <section class="wp-box wp-box-new"><h6>Create a new group</h6>
         <input class="form-control form-control-sm wp-new-name" placeholder="Group name" aria-label="New group name" maxlength="60">
         <div class="wp-palette" role="group" aria-label="Group colour"></div>
-        <div class="wp-row"><button type="button" class="btn btn-sm btn-primary wp-add-group">Create group</button></div>
+        <div class="wp-row"><button type="button" class="btn btn-sm btn-primary wp-add-group">Create group</button>
+          <button type="button" class="btn btn-sm btn-secondary wp-add-random" title="Add a group with a new colour that no group here uses" aria-label="Add group with a new colour">+</button></div>
         <p class="wp-hint">Only creates the group. Assign wells from the list above.</p>
       </section>`;
     body.append(left, side);
@@ -1069,6 +1064,72 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
     };
     document.addEventListener('mouseup', endDrag);
 
+    const templateSelect = side.querySelector<HTMLSelectElement>('.wp-template');
+    const templateName = side.querySelector<HTMLInputElement>('.wp-template-name');
+    const deleteButton = side.querySelector<HTMLButtonElement>('.wp-template-delete');
+    const paintTemplates = (selectedName?: string): void => {
+      if (!templateSelect) return;
+      const mine = loadUserTemplates();
+      templateSelect.replaceChildren();
+      const add = (label: string, items: Array<{ name: string }>): void => {
+        if (items.length === 0) return;
+        const group = document.createElement('optgroup');
+        group.label = label;
+        items.forEach(item => group.appendChild(new Option(item.name, item.name)));
+        templateSelect.appendChild(group);
+      };
+      add('Built in', BUILTIN_TEMPLATES);
+      add('My templates', mine);
+      if (selectedName) templateSelect.value = selectedName;
+      if (deleteButton) deleteButton.disabled = !mine.some(template => template.name === templateSelect.value);
+    };
+    paintTemplates();
+    templateSelect?.addEventListener('change', () => paintTemplates(templateSelect.value));
+    side.querySelector('.wp-template-apply')?.addEventListener('click', () => {
+      const template = [...BUILTIN_TEMPLATES, ...loadUserTemplates()].find(entry => entry.name === templateSelect?.value);
+      if (!template) return;
+      const groups = groupsWithCounts(working);
+      const next = recolorGroups(groups, template.colors);
+      // old colour -> new colour, applied to every well in one pass so a swap (A takes B's colour) cannot chain
+      const mapping = new Map(groups.map((group, i) => [group.color, next[i]]));
+      for (let r = 0; r < working.rows; r++) {
+        for (let c = 0; c < working.cols; c++) {
+          const current = wellColor(working, r, c);
+          const target = current ? mapping.get(current) : undefined;
+          if (target) setWellColor(working, r, c, target);
+        }
+      }
+      working.plateGroups = groups.map((group, i) => ({ name: group.name, color: next[i] }));
+      paint();
+      paintPalette();
+    });
+    side.querySelector('.wp-template-save')?.addEventListener('click', () => {
+      const name = templateName?.value.trim() ?? '';
+      const colors = groupsWithCounts(working).map(group => group.color);
+      if (!name || colors.length === 0 || !saveUserTemplate(name, colors)) {
+        templateName?.focus();
+        return;
+      }
+      if (templateName) templateName.value = '';
+      paintTemplates(name);
+    });
+    deleteButton?.addEventListener('click', () => {
+      if (!templateSelect) return;
+      deleteUserTemplate(templateSelect.value);
+      paintTemplates();
+    });
+    side.querySelector('.wp-add-random')?.addEventListener('click', () => {
+      const groups = groupsWithCounts(working);
+      const color = distinctColor(groups.map(group => group.color));
+      let n = groups.length + 1;
+      while (groups.some(group => group.name === `Group ${n}`)) n++;
+      const name = newName.value.trim() || `Group ${n}`;
+      working.plateGroups = [...groups.map(({ name: gn, color: gc }) => ({ name: gn, color: gc })), { name, color }];
+      activeColor = color;
+      newName.value = '';
+      paint();
+      paintPalette();
+    });
     side.querySelector('.wp-add-group')?.addEventListener('click', () => {
       const name = newName.value.trim();
       if (!name) {
