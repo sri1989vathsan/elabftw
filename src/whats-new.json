@@ -4,14 +4,14 @@
     "date": "2026-11-24",
     "area": "Navigation",
     "featured": false,
-    "title": "Back to Dashboard now sits in the top bar",
-    "summary": "The Back to … button that appears after you follow a link has moved from the page into the top bar, next to the logo.",
+    "title": "Back to … is now an arrow left of the logo",
+    "summary": "After you follow a link, an arrow appears in the top bar, left of the logo. Hover it to see where it goes back to.",
     "details": [
-      "It no longer floats over the page, so it never covers the folders, the side panels or your text.",
-      "It still shows only after you follow an internal link, takes you back to where you clicked, and × dismisses it. On narrow windows it shows only the arrow; hover for the full name."
+      "It used to be a pill floating over the page. It is now a small arrow in the top bar, so it never covers the folders, the side panels or your text, and the logo does not move.",
+      "It still appears only after you follow an internal link, and takes you back to where you clicked. Hover it for \"Back to <where you were>\". It goes away when you move on to another page."
     ],
     "image": "guide-dashboard-back-topbar.png",
-    "imageAlt": "The top bar with the eLabFTW logo, the home icon and, next to them, the Back to Dashboard button with its × to dismiss it"
+    "imageAlt": "The top bar with the eLabFTW logo and, left of it, the round arrow button that goes back to where a link was followed"
   },
   {
     "id": "order-collection-sheets",
@@ -828,7 +828,7 @@
       "fa-file-lines::Press the page icon on a folder to open its README. The owner and admins edit it; everyone who can see the folder reads it.",
       "fa-ellipsis-vertical::The three dots on a folder give Export, Edit (rename, move, description), Permissions and Delete. Deleting moves its items to Unfiled.",
       "fa-user-shield::Permissions (owner and admins): set Can see and Can edit as on an entry, tick Include subfolders, press Apply and confirm.",
-      "fa-star::Star a folder to bookmark it. The Refresh button at the top of the panel loads the tree again."
+      "fa-star::Star a folder to bookmark it. Bookmarked folders are listed at the top of the panel as shortcuts; press one to open that folder and see where it sits in the tree. All folders below lists every folder, starred ones included. The Refresh button at the top of the panel loads the tree again."
     ],
     "imageAlt": "The Folders panel with the folder tree of the team: Cloning with Plasmids and Screening, and the Unfiled entry",
     "featured": false,
@@ -1517,7 +1517,7 @@
       "fa-tags::The category and status chips show how many entries each has. Press one to list them; empty ones are dimmed.",
       "fa-plus::Each card has a Create button. For Announcements it is for admins and opens the Announcements tab of the Admin panel.",
       "fa-magnifying-glass::The search box on a card searches experiments or resources.",
-      "fa-arrow-left::After you follow a link inside an entry, Back to … sits next to the logo. It returns you to where you clicked; × dismisses it."
+      "fa-arrow-left::After you follow a link inside an entry, an arrow appears left of the logo. Hover it for Back to …; press it to return."
     ],
     "imageAlt": "The dashboard with four tiles of your own activity, then cards for experiments, resources and announcements",
     "featured": false,
@@ -1535,7 +1535,7 @@
     "screenshots": [
       {
         "image": "guide-dashboard-back-topbar.png",
-        "caption": "The top bar after following a link from the dashboard: Back to Dashboard sits next to the logo and the home icon; × dismisses it"
+        "caption": "The top bar after following a link from the dashboard: the arrow left of the logo returns to the dashboard; hovering it shows Back to Dashboard"
       }
     ]
   },
