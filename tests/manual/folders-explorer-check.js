@@ -142,14 +142,22 @@ window.foldersExplorerCheck = async function () {
     root.style.setProperty('--side-panel-width', '330px');
     await wait(400);
     var gap = 330 - barEl.getBoundingClientRect().width;
-    var cases = [['panel 330 px (normal)', 330], ['panel 210 px (narrowest allowed)', 210], ['bar 210 px', 210 + gap], ['bar 150 px', 150 + gap]];
+    // The label goes when the bar is narrower than 15.5rem (a container query), and the rem is the root size of the interface size: 16 px compact,
+    // 18 px comfortable. The bar's gap to the panel and the narrowest panel the page allows (SidePanel: 210, 250 at the comfortable size) depend on
+    // the size too, so the expectations are measured at the current size: the label shows at the normal width exactly when the bar is 15.5rem wide.
+    var remPx = parseFloat(getComputedStyle(root).fontSize) || 16;
+    var narrowestPanel = root.dataset.uiSize === 'comfortable' ? 250 : 210;
+    var cases = [['panel 330 px (normal)', 330], ['panel ' + narrowestPanel + ' px (narrowest allowed)', narrowestPanel], ['bar 210 px', 210 + gap], ['bar 150 px', 150 + gap]];
     for (var cs of cases) {
       root.style.setProperty('--side-panel-width', cs[1] + 'px');
       await wait(400);
       var text = showBtn().querySelector('.folder-show-main-text');
       var textShown = visible(text) && text.getBoundingClientRect().width > 0;
       var barRect = barEl.getBoundingClientRect();
-      if (cs[1] === 330) check('S8 at the normal width (' + cs[0] + ') the button has its text', textShown, 'no text');
+      if (cs[1] === 330) {
+        var labelRoom = barRect.width >= 15.5 * remPx;
+        check('S8 at the normal width (' + cs[0] + ', bar ' + Math.round(barRect.width) + ' px, 15.5rem = ' + Math.round(15.5 * remPx) + ' px) the button has its text when the bar is 15.5rem wide, else icon only', textShown === labelRoom, (labelRoom ? 'no text' : 'text shown') + ' (bar ' + Math.round(barRect.width) + ' px, rem ' + remPx + ' px)');
+      }
       else check('S9 at ' + cs[0] + ' the button is icon only, with tooltip and aria-label', !textShown && showBtn().title === 'Show in main view' && showBtn().getAttribute('aria-label') === 'Show in main view' && showBtn().getBoundingClientRect().width > 12, 'text shown or label missing');
       check('S10 at ' + cs[0] + ' the explorer bar stays on one row, inside its width', barOneRow() && showBtn().getBoundingClientRect().right <= barRect.right + 1, 'wrapped or overflowing (bar ' + Math.round(barRect.width) + ' px)');
     }
