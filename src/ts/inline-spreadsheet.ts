@@ -4025,6 +4025,17 @@ function createOverlay(initial: SpreadsheetData, isEditing: boolean, offerPlateB
   const title = document.createElement('h5');
   title.textContent = isEditing ? 'Edit spreadsheet' : 'Insert spreadsheet';
   title.className = 'mb-2';
+  // small "i" like the other windows: this window sits above the guide popup, so it opens the card on the What's new page in a new tab
+  const guideLink = document.createElement('a');
+  guideLink.className = 'btn btn-link guide-info-btn p-0 ml-1';
+  const guideCard = 'guide-spreadsheets';
+  guideLink.href = `whats-new.php#whats-new-${guideCard}`;
+  guideLink.target = '_blank';
+  guideLink.rel = 'noopener';
+  guideLink.title = 'About spreadsheets in the guide';
+  guideLink.setAttribute('aria-label', 'About spreadsheets in the guide');
+  guideLink.innerHTML = '<i class="fas fa-circle-info" aria-hidden="true"></i>';
+  title.appendChild(guideLink);
   dialog.appendChild(title);
 
   const settings = document.createElement('div');
