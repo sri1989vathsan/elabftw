@@ -1001,8 +1001,10 @@ async function spreadsheetSoak(options = {}) {
   const isBold = td => /bold|700/.test(td.style.fontWeight || getComputedStyle(td).fontWeight);
   const isItalic = td => /italic/.test(td.style.fontStyle || getComputedStyle(td).fontStyle);
   const alignOf = td => td.style.textAlign || getComputedStyle(td).textAlign;
+  // The popup has a second "Align center" (and Align left/right/Justify) in its collapsed "Appearance" panel: that one sets the DEFAULT for new
+  // cells, not the selected cell. The buttons of the selected cells are the ones outside that panel.
   const findButton = (root, labels) => [...root.querySelectorAll('button, [title], [aria-label]')]
-    .find(b => labels.includes(b.title) || labels.includes(b.getAttribute('aria-label')));
+    .find(b => !b.closest('.inline-spreadsheet-appearance') && (labels.includes(b.title) || labels.includes(b.getAttribute('aria-label'))));
   const openFormatBar = root => {
     const toggle = root.querySelector('.elabftw-spreadsheet-options-toggle');
     if (toggle && !root.querySelector('.elabftw-spreadsheet-format-bar')?.offsetParent) toggle.click();
