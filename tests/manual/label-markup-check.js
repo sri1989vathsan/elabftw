@@ -113,7 +113,7 @@ window.labelMarkupCheck = async function labelMarkupCheck() {
       text.setSelectionRange(0, 3); press('A+');
       ok('A+ puts [big] around the selection', text.value === '[big]one[/big] two *three*', text.value);
       text.setSelectionRange(0, 0); text.value = 'Plasmid {name} ok'; text.dispatchEvent(new Event('input', { bubbles: true }));
-      text.setSelectionRange(9, 15); press('B');
+      text.setSelectionRange(8, 14); press('B');
       ok('the buttons work on a {field}', text.value === 'Plasmid **{name}** ok', text.value);
       await sleep(900);
       const input = [...document.querySelectorAll('.planned-dialog table input')][0];
