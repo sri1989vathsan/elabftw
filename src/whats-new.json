@@ -401,9 +401,9 @@
     "area": "Others",
     "featured": true,
     "title": "Print a label",
-    "summary": "Print a label from the plus menu: your own text, one label per row of a pasted table, on the label sizes your admins set up.",
+    "summary": "Print a label from the Tools menu: your own text, one label per row of a pasted table, on the label sizes your admins set up.",
     "details": [
-      "Open the plus in the top bar and choose Print a label. Pick a format, type up to eight lines of text and press Print. A preview shows the label with dashed lines for the margins.",
+      "Open Tools in the top bar and choose Print label. Pick a format, type up to eight lines of text and press Print. A preview shows the label with dashed lines for the margins.",
       "Write a name in curly brackets, for example {sample}, where a value changes: it becomes a box you fill in.",
       "Format each line: size, bold, italic and left, centre or right.",
       "To print many labels, paste cells from a spreadsheet and click the columns you want. Each row is one label.",
@@ -1552,7 +1552,7 @@
     "title": "Print a label",
     "summary": "Print labels for tubes and boxes on the lab’s label printer, one per row of a pasted table if you like.",
     "details": [
-      "fa-print::Open the plus in the top bar and choose Print a label. Pick a format, type up to eight lines and press Print.",
+      "fa-print::Open Tools in the top bar and choose Print label. Pick a format, type up to eight lines and press Print.",
       "fa-brackets-curly::Write a name in curly brackets, for example {sample}, where a value changes: it becomes a box you fill in.",
       "fa-bold::Format each line: size, bold, italic, left, centre or right. The preview shows dashed lines for the margins.",
       "fa-table::To print many labels, paste cells from a spreadsheet and click the columns you want. Each row is one label.",
@@ -1568,7 +1568,7 @@
       "Print a row of tube labels from a table.",
       "Ask an admin to add a format for a new label size."
     ],
-    "news": "New: Print a label in the plus menu, and the Labels tab for admins.",
+    "news": "New: Print label in the Tools menu, and the Labels tab for admins.",
     "shot": "",
     "image": "guide-labels.png",
     "screenshots": [
