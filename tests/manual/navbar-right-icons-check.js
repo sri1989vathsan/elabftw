@@ -4,7 +4,7 @@
  *   await new Promise(r => { const s = document.createElement('script'); s.src = '/__tests/navbar-right-icons-check.js'; s.onload = r; document.head.appendChild(s); });
  *   await navbarRightIconsCheck();      // {pass, results, boxes}
  * Items: create (+), notification bell, What's new gift, guide "i", help "?", user initials. Checks: every box is the same size and square; the
- * centres share one y (within 1 px) and lie on the middle of the bar's icon row; the gaps between the boxes are equal (within 1 px); every glyph is
+ * centres share one y (within 1 px), on the middle of the icon row and on the centre line of the nav links (EXPERIMENTS...); the gaps between the boxes are equal (within 1 px); every glyph is
  * centred in its box (within 1 px) and the glyphs have one size; the bell's box does not change with the unread count (0, 1, 12); the boxes stay
  * inside the window. Only classes and the count attribute of the bell are touched, and restored. Nothing is sent anywhere.
  */
@@ -27,8 +27,11 @@ window.navbarRightIconsCheck = async function navbarRightIconsCheck() {
   check('the boxes are inside the window', !document.documentElement.clientWidth || boxes.every(b => b.l >= 0 && b.r <= document.documentElement.clientWidth + 0.5), JSON.stringify(boxes.map(b => [b.id, r1(b.l), r1(b.r)])));
   const glyphs = items.map(e => { const g = e.querySelector('i, .initials'); return g ? { ...box(g), id: e.id } : null; }).filter(Boolean);
   check('every glyph is centred in its box (within 1 px)', glyphs.every(g => { const b = boxes.find(x => x.id === g.id); return Math.abs(g.cx - b.cx) <= 1 && Math.abs(g.cy - b.cy) <= 1; }), JSON.stringify(glyphs.map(g => { const b = boxes.find(x => x.id === g.id); return [g.id, r1(g.cx - b.cx), r1(g.cy - b.cy)]; })));
-  const icons = glyphs.filter(g => g.id !== 'navbarDropdown');
+  // the thin plus is drawn smaller on purpose (it fills its whole em box), the initials are text
+  const icons = glyphs.filter(g => !['navbarDropdown', 'createNewDropdown'].includes(g.id));
   check('the icon glyphs have one size (within 1 px)', spread(icons.map(g => g.w)) <= 1 && spread(icons.map(g => g.h)) <= 1, JSON.stringify(icons.map(g => [g.id, r1(g.w), r1(g.h)])));
+  const navText = document.querySelector('#navbar-primary-nav .nav-link');
+  if (navText) { const nb = box(navText); check('the row is on the same centre line as the nav links (within 1 px)', Math.abs(boxes[0].cy - nb.cy) <= 1, `${r1(boxes[0].cy)} vs ${r1(nb.cy)}`); }
   const row = document.getElementById('navbar-secondary-nav');
   if (row) { const rb = row.getBoundingClientRect(); check('they sit on the middle of the icon row', Math.abs(boxes[0].cy - (rb.top + rb.height / 2)) <= 1, `${r1(boxes[0].cy)} vs ${r1(rb.top + rb.height / 2)}`); }
 
