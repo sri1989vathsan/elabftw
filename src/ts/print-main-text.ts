@@ -78,12 +78,10 @@ function detailsLine(): string {
   if (category && !/^add category$/i.test(category)) parts.push(category);
   const status = document.querySelector('.catstat-btn[data-target="status"]')?.textContent?.trim();
   if (status && !/^add status$/i.test(status)) parts.push(status);
-  // owner and team: the view page shows them in its meta grid (label, then value)
-  document.querySelectorAll('.entity-meta-label').forEach(label => {
-    const name = label.textContent?.trim() ?? '';
-    const value = label.nextElementSibling?.textContent?.replace(/\s+/g, ' ').trim();
-    if (value && /^(owner|team)$/i.test(name)) parts.push(`${name}: ${value}`);
-  });
+  // owner and team: one hidden element in the view page and in the edit page (the edit page has no meta grid)
+  const meta = document.getElementById('printEntryMeta');
+  if (meta?.dataset.owner) parts.push(`Owner: ${meta.dataset.owner}`);
+  if (meta?.dataset.team) parts.push(`Team: ${meta.dataset.team}`);
   const tags = document.querySelector('[id^="tags_div_currenttags_"]')?.textContent?.replace(/\s+/g, ' ').trim();
   if (tags) parts.push(`Tags: ${tags}`);
   return parts.join('  |  ');

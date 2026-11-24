@@ -154,12 +154,16 @@ async function printCheckRun() {
   // buttons, never the screen: the copy exists during the print, the page is hidden behind it, everything is put back afterwards
   const hasEntryText = !!(document.getElementById('body_view') || window.tinymce?.activeEditor?.getBody?.());
   if (hasEntryText) {
+    // print-details-same-in-edit-mode: the details line has the owner and the team on the view page and on the edit page alike
+    const metaEl = document.getElementById('printEntryMeta');
+    check('print-details-same-in-edit-mode: the page carries #printEntryMeta (owner and team) in view and edit mode', !!metaEl && !!metaEl.dataset.owner, 'no #printEntryMeta with data-owner');
     window.dispatchEvent(new Event('beforeprint'));
     const implicit = document.getElementById('tocPrintSelectionDocument');
     const titleNow = (document.getElementById('documentTitle')?.textContent || '').trim();
     check('print-only-view: Ctrl+P builds the print-only copy (title, details, main text) and hides the page behind it', !!implicit && document.body.classList.contains('toc-print-selection-active') && (!titleNow || (implicit.querySelector('.toc-print-title')?.textContent || '').includes(titleNow)), 'no copy at beforeprint');
     check('print-only-view: the Ctrl+P copy has no editing parts (toolbars, editors, inputs, buttons, contenteditable)', !!implicit && !implicit.querySelector('.tox, .mce-content-body, .jss_toolbar, .elabftw-spreadsheet-readonly-toggle, .elabftw-own-scrollbar, [contenteditable="true"], input, textarea, select, button'), 'editing parts in the copy');
     const heads = [...(document.getElementById('body_view')?.querySelectorAll('h1,h2,h3,h4,h5,h6') || [])].map(h => h.textContent.trim()).filter(Boolean);
+    check('print-details-same-in-edit-mode: the Ctrl+P copy names the owner and the team', !!implicit && !!metaEl && (!metaEl.dataset.owner || ((implicit.textContent || '').includes(metaEl.dataset.owner) && (!metaEl.dataset.team || (implicit.textContent || '').includes(metaEl.dataset.team)))), 'owner/team missing in the copy');
     check('print-only-view: the Ctrl+P copy holds the whole text (every heading)', !!implicit && heads.every(t => (implicit.textContent || '').includes(t)), 'headings missing');
     window.dispatchEvent(new Event('beforeprint'));
     check('print-only-view: a second beforeprint (the Print buttons print their own copy first) does not make a second copy', document.querySelectorAll('#tocPrintSelectionDocument').length === 1, 'two copies');

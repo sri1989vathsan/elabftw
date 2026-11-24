@@ -89,6 +89,9 @@
 
 <section id='main_section' aria-label='main section'>
 
+  {# owner and team for the print copy, the same element in view and edit mode #}
+  <span id='printEntryMeta' hidden data-owner='{{ Entity.entityData.fullname }}' data-team='{{ Entity.entityData.team_name }}'></span>
+
   {# DATE #}
   <div class='d-flex mb-2 justify-content-between '>
     {% if Entity.entityType.value != 'experiments_templates' and Entity.entityType.value != 'items_types' %}
