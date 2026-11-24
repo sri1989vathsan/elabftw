@@ -1,6 +1,6 @@
 /**
  * Alignment check of the Folders panel in tree view: every row type shares the caret, icon and label columns of its level,
- * counts and stars end on the same right-hand edges, nothing moves when a row's buttons appear, and "Other folders" is a quiet
+ * counts and stars end on the same right-hand edges, nothing moves when a row's buttons appear, and "All folders" is a quiet
  * toggle (no grey fill after a click, caret in the caret column).
  *
  * On http://localhost:8973/experiments.php (or http://inventory.localhost:8975), logged in (see TEST-ACCOUNTS.md), run:
@@ -10,7 +10,7 @@
  * only changes the numbers, not the verdict.
  *
  * It creates "ALN root" (bookmarked) and "ALN other" (not), each with a child, and an experiment in three of them (so counts show), and removes
- * all of it afterwards. The view and the "Other folders" state are put back.
+ * all of it afterwards. The view and the "All folders" state are put back.
  */
 window.foldersAlignmentCheck = async function () {
   var results = [];
@@ -35,7 +35,7 @@ window.foldersAlignmentCheck = async function () {
     await wait(2500);
     var root = Number((await api('POST', 'experiments_folders', { name: 'ALN root', parent_id: null })).loc.split('/').pop());
     var child = Number((await api('POST', 'experiments_folders', { name: 'ALN child', parent_id: root })).loc.split('/').pop());
-    // an unbookmarked top-level folder with a child, so "Other folders" always has something to show
+    // an unbookmarked top-level folder with a child, so "All folders" always has something to show
     var otherRoot = Number((await api('POST', 'experiments_folders', { name: 'ALN other', parent_id: null })).loc.split('/').pop());
     var otherChild = Number((await api('POST', 'experiments_folders', { name: 'ALN other child', parent_id: otherRoot })).loc.split('/').pop());
     made.folders.push(otherChild, otherRoot, child, root);
@@ -64,14 +64,15 @@ window.foldersAlignmentCheck = async function () {
     }
     function cols(r) { return { caret: left(r.querySelector('.folder-toggle, :scope > span:first-child')), icon: left(r.querySelector('.folder-icon')), label: left(r.querySelector('.folder-name')) }; }
     var d0 = rowsAt(0), d1 = rowsAt(1);
-    var bm0 = d0.filter(function (r) { return r.closest('.bookmarked-folders-section'); });
+    // the Bookmarked section holds shortcut rows (same layout as a folder row); the tree below lists every folder
+    var bm0 = Array.prototype.filter.call(document.querySelectorAll('.bookmarked-folders-section .folder-shortcut'), function (r) { return visible(r); });
     var other0 = d0.filter(function (r) { return r.closest('.other-folders-wrapper'); });
     check('A0 the page has bookmarked and other top-level rows and a child row', bm0.length > 0 && other0.length > 0 && d1.length > 0, bm0.length + ' / ' + other0.length + ' / ' + d1.length);
 
     // columns of one level
-    var c0 = d0.map(cols);
+    var c0 = d0.concat(bm0).map(cols);
     check('A1 top-level rows (bookmarked and other) share the icon and label columns', same(c0.map(function (c) { return c.icon; })) && same(c0.map(function (c) { return c.label; })), JSON.stringify(c0));
-    check('A2 top-level rows that have a caret share the caret column', same(d0.filter(function (r) { return r.querySelector('.folder-toggle'); }).map(function (r) { return cols(r).caret; })), JSON.stringify(c0));
+    check('A2 top-level rows that have a caret share the caret column', same(d0.concat(bm0).filter(function (r) { return r.querySelector('.folder-toggle') || bm0.indexOf(r) >= 0; }).map(function (r) { return cols(r).caret; })), JSON.stringify(c0));
     var c1 = d1.map(cols);
     check('A3 child rows share the icon and label columns', same(c1.map(function (c) { return c.icon; })) && same(c1.map(function (c) { return c.label; })), JSON.stringify(c1));
     check('A4 a child is indented from its parent by the same step in both sections', c1.length < 1 || same(d1.map(function (r) { return cols(r).icon - cols(r.closest('.folder-node').parentElement.closest('.folder-node').querySelector(':scope > .folder-row')).icon; })), JSON.stringify(c1));
@@ -87,15 +88,15 @@ window.foldersAlignmentCheck = async function () {
     var hd = $('.other-folders-header');
     var withCaret = d0.filter(function (r) { return r.querySelector('.folder-toggle'); })[0];
     var hc = [left(hd.children[0]), left(hd.children[1]), left(hd.children[2])];
-    check('A8 Other folders: caret, folder icon and label in the same columns as a folder row with children', !!withCaret && Math.abs(hc[0] - cols(withCaret).caret) <= TOL && Math.abs(hc[1] - iconCol) <= TOL && Math.abs(hc[2] - labelCol) <= TOL, JSON.stringify(hc) + ' vs ' + JSON.stringify(withCaret && cols(withCaret)));
+    check('A8 All folders: caret, folder icon and label in the same columns as a folder row with children', !!withCaret && Math.abs(hc[0] - cols(withCaret).caret) <= TOL && Math.abs(hc[1] - iconCol) <= TOL && Math.abs(hc[2] - labelCol) <= TOL, JSON.stringify(hc) + ' vs ' + JSON.stringify(withCaret && cols(withCaret)));
     // quiet toggle: no fill after a click (focus left on it)
     hd.focus({ focusVisible: false });
     var bg = getComputedStyle(hd).backgroundColor;
-    check('A9 Other folders has no fill when merely focused', /rgba\(0, 0, 0, 0\)|transparent/.test(bg), bg);
+    check('A9 All folders has no fill when merely focused', /rgba\(0, 0, 0, 0\)|transparent/.test(bg), bg);
     hd.blur();
 
     // right-hand columns
-    var all = rowsAt(0).concat(rowsAt(1), rowsAt(2));
+    var all = rowsAt(0).concat(rowsAt(1), rowsAt(2), bm0);
     var counts = all.map(function (r) { var c = $('.folder-entity-count', r); return c && !c.hidden && visible(c) ? right(c) : null; });
     var rowR = all.map(right);
     check('A10 counts end on the same right edge in every row (any depth, any star state)', same(counts), JSON.stringify(counts));

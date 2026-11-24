@@ -130,17 +130,10 @@ document.addEventListener('DOMContentLoaded', () => {
   let activeFolderEntityType: FolderEntityType = window.location.pathname === '/registry.php' ? 'inventory' : (storedFolderEntityType === 'items' ? 'items' : 'experiments');
   let activeReadme: FolderReadme | null = null;
 
-  function readFavoriteFolderIds(element: HTMLElement): string[] {
-    return (element.dataset.favoriteFolderIds ?? '').split(',').filter(folderId => folderId !== '');
-  }
-
-  // Read the server-provided set of bookmarked folder ids.
-  let favoriteFolderIds = readFavoriteFolderIds(sidebar);
   document.addEventListener('elabftw:folders-panel-loaded', () => {
     const loadedSidebar = document.getElementById('experimentsFoldersSidebar');
     if (!loadedSidebar) return;
     sidebar = loadedSidebar;
-    favoriteFolderIds = readFavoriteFolderIds(sidebar);
     initializeFolderTreeState();
   });
   const currentFolderId = new URLSearchParams(window.location.search).get('folder')
@@ -201,13 +194,51 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  /**
+   * The Bookmarked section: one shortcut row per starred folder, built from the tree below (which lists every folder once,
+   * stars included). Following a shortcut opens the folder and reveals it in the tree.
+   */
+  function renderBookmarkShortcuts(): void {
+    const content = document.querySelector<HTMLElement>('.bookmarked-folders-content');
+    if (!content) return;
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>('#experimentsFoldersTree .other-folders-content .folder-node'))
+      .filter(node => node.querySelector(':scope > .folder-row .favorite-folder-star .fa-star.fas') !== null)
+      .sort((a, b) => (a.dataset.folderFullPath ?? '').localeCompare(b.dataset.folderFullPath ?? ''));
+    content.replaceChildren(...nodes.map(node => {
+      const row = document.createElement('div');
+      row.className = 'd-flex align-items-center folder-row folder-shortcut mb-1';
+      // the empty caret column of a folder row, so the icon and name line up with the tree's
+      const spacer = document.createElement('span');
+      spacer.className = 'mr-1';
+      spacer.style.cssText = 'width:16px;display:inline-block';
+      row.append(spacer);
+      row.dataset.folderShortcut = node.dataset.folderId ?? '';
+      row.dataset.folderOwnerId = node.dataset.folderOwnerId ?? '';
+      const link = node.querySelector<HTMLAnchorElement>(':scope > .folder-row a[data-folder-entity-link]');
+      const star = node.querySelector<HTMLElement>(':scope > .folder-row .favorite-folder-star');
+      const copy = link?.cloneNode(true) as HTMLAnchorElement | undefined;
+      if (copy) {
+        copy.classList.remove('font-weight-bold');
+        copy.querySelector('.folder-icon')?.classList.replace('fa-folder-open', 'fa-folder');
+        row.append(copy);
+      }
+      if (star) {
+        const actions = document.createElement('span');
+        actions.className = 'folder-actions ml-auto';
+        actions.append(star.cloneNode(true));
+        row.append(actions);
+      }
+      return row;
+    }));
+  }
+
   function updateFolderSections(): void {
     const bookmarkedSection = document.querySelector('.bookmarked-folders-section') as HTMLElement | null;
-    const bookmarkedRoots = bookmarkedSection
-      ? Array.from(bookmarkedSection.querySelectorAll('.folder-node[data-folder-depth="0"]')) as HTMLElement[]
-      : [];
     if (bookmarkedSection) {
-      bookmarkedSection.hidden = !bookmarkedRoots.some(node => !node.hidden);
+      const shortcuts = Array.from(bookmarkedSection.querySelectorAll<HTMLElement>('.folder-shortcut'));
+      // the My folders scope lists only the user's own folders, shortcuts included
+      shortcuts.forEach(row => { row.hidden = activeFolderScope === 'mine' && row.dataset.folderOwnerId !== currentUserId; });
+      bookmarkedSection.hidden = !shortcuts.some(row => !row.hidden);
     }
 
     const wrapper = document.querySelector('.other-folders-wrapper') as HTMLElement | null;
@@ -442,8 +473,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function initializeFolderTreeState(): void {
+    renderBookmarkShortcuts();
     // On first use, every parent folder is collapsed. Only the ancestor paths to
-    // the active and bookmarked folders are opened so their location is visible.
+    // the active folder is opened so its location is visible.
     const hasStoredCollapseState = localStorage.getItem(COLLAPSED_KEY) !== null;
     const collapsed = getCollapsedSet();
     if (!hasStoredCollapseState) {
@@ -451,7 +483,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (toggle.dataset.folderId) collapsed.add(toggle.dataset.folderId);
       });
     }
-    [...favoriteFolderIds, currentFolderId].forEach(folderId => {
+    [currentFolderId].forEach(folderId => {
       if (!folderId || folderId === '0') return;
       getAncestorIds(folderId).forEach(ancestorId => collapsed.delete(ancestorId));
     });
@@ -467,7 +499,8 @@ document.addEventListener('DOMContentLoaded', () => {
       ? document.querySelector(`.folder-node[data-folder-id="${currentFolderId}"]`)
       : null;
     const activeFolderIsOther = Boolean(currentNode?.closest('.other-folders-wrapper'));
-    setOtherFoldersOpen(activeFolderIsOther || localStorage.getItem(OTHER_FOLDERS_KEY) === 'open');
+    // All folders is open unless the user closed it (it is opened anyway for the folder the page lists)
+    setOtherFoldersOpen(activeFolderIsOther || localStorage.getItem(OTHER_FOLDERS_KEY) !== 'collapsed');
     revealCurrentFolder(currentNode);
     applyFolderEntityType(activeFolderEntityType);
     // An open entry filed in somebody else's folder: show all folders once, so its folder is there to be shown. The saved
@@ -551,7 +584,6 @@ document.addEventListener('DOMContentLoaded', () => {
       throw new Error('Could not initialize the refreshed folder sidebar.');
     }
     sidebar = refreshedSidebar;
-    favoriteFolderIds = readFavoriteFolderIds(sidebar);
     freshPanel.scrollTop = panelScrollTop;
     initializeFolderTreeState();
     // the panel was replaced: show the chosen folder view again (and the new bookmarks in it)

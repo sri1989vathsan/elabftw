@@ -2,15 +2,14 @@
 /**
  * Clicking a favourite (bookmarked) folder in the Folders panel opens that folder in the panel: the panel is open on the next
  * page, the tree is expanded down to the folder, its row is marked as the current one and sits inside the panel's visible box,
- * and the "Other folders" section opens when the folder is inside it. Ctrl/cmd-click leaves the sidebar's state alone.
+ * and it is found once, in the "All folders" tree, which is open. Ctrl/cmd-click leaves the sidebar's state alone.
  *
  *   node tests/manual/folder-favourite-reveal-check.js http://localhost:8973 EMAIL PASSWORD [shot.png]
  *
  * Headless Chrome by DevTools protocol (cdp-lib.js). Makes "FAV top" > "FAV mid" > "FAV deep" (the first and the third
  * bookmarked, so the third is a bookmarked folder at depth 2 whose parent is not bookmarked, but sits under a bookmarked root),
- * and "FAV other" > "FAV other child" (only the child bookmarked, opened from the star list). A bookmarked folder's whole root branch is drawn
- * in the Bookmarked section, so nothing bookmarked sits in "Other folders"; the check still requires that section open if it were.
- * Deletes them at the end.
+ * and "FAV other" > "FAV other child" (only the child bookmarked, opened from the star list). The Bookmarked section holds shortcut rows
+ * to the starred folders; the tree under "All folders" lists every folder, starred ones too. Deletes them at the end.
  * Pages with ?folder= are loaded fresh for each case, and again (reload) after the click.
  */
 const { startChrome, sleep } = require('./cdp-lib');
@@ -35,7 +34,7 @@ if (!email || !password) { console.error('usage: folder-favourite-reveal-check.j
     await fav(top); await fav(deep); await fav(otherChild);
     const uid = await c.js(`await new Promise(r => setTimeout(r, 0)); return document.querySelector('[data-current-user-id]')?.dataset.currentUserId ?? ''`);
 
-    // a clean start: panel closed, everything collapsed, Other folders closed, tree view
+    // a clean start: panel closed, everything collapsed, All folders open, tree view
     const reset = ids => c.js(`localStorage.removeItem('opened-sidepanel'); localStorage.setItem('collapsed-experiment-folders-v2-${uid}', JSON.stringify(${JSON.stringify(ids.map(String))})); localStorage.removeItem('other-folders-collapsed-v2-${uid}'); localStorage.setItem('elabftw-folders-view-${uid}', 'tree'); sessionStorage.clear(); return 0`);
     const state = id => c.js(`
       const panel = document.getElementById('foldersPanel');
@@ -47,7 +46,8 @@ if (!email || !password) { console.error('usage: folder-favourite-reveal-check.j
       const other = document.querySelector('.other-folders-content');
       return {open: vis(panel), stored: localStorage.getItem('opened-sidepanel'), url: location.search, found: !!node, current: !!row?.classList.contains('is-current-folder'),
         others: [...document.querySelectorAll('#foldersPanel .is-current-folder')].length, ancestors: anc, rowVisible: vis(row) && r.top >= p.top - 1 && r.bottom <= p.bottom + 1,
-        inOther: !!node?.closest('.other-folders-content'), otherOpen: other ? other.style.display !== 'none' : null}`);
+        inOther: !!node?.closest('.other-folders-content'), otherOpen: other ? other.style.display !== 'none' : null,
+        copies: document.querySelectorAll('#foldersPanel .folder-node[data-folder-id="${id}"]').length}`);
     const waitPanel = async id => { for (let i = 0; i < 40; i++) { if (await c.js(`return !!document.querySelector('#foldersPanel .folder-node[data-folder-id="${id}"]') && !document.getElementById('foldersPanel').hidden`)) break; await sleep(250); } await sleep(600); };
 
     const cases = [
@@ -55,6 +55,18 @@ if (!email || !password) { console.error('usage: folder-favourite-reveal-check.j
       { label: 'depth 3 under a bookmarked root (Bookmarked section)', id: deep, anc: [top, mid], via: 'section', inOther: false },
       { label: 'depth 2 (star list)', id: otherChild, anc: [other], via: 'popover', inOther: false },
     ];
+    // the Bookmarked section lists the starred folders as shortcuts; All folders holds every folder, the starred ones too
+    await c.nav(`${base}/experiments.php`);
+    await reset([]);
+    await c.nav(`${base}/experiments.php`);
+    await c.js(`document.querySelector('[data-action="toggle-sidepanel"][data-target="folders"]:not([data-purpose="hide"])').click(); return 0`);
+    await waitPanel(top);
+    const lists = await c.js(`const sc = [...document.querySelectorAll('#foldersPanel .bookmarked-folders-section .folder-shortcut')].map(r => r.dataset.folderShortcut);
+      const stars = [...document.querySelectorAll('#foldersPanel .other-folders-content .folder-node')].filter(n => n.querySelector(':scope > .folder-row .favorite-folder-star .fa-star.fas')).map(n => n.dataset.folderId);
+      return {sc, stars, header: document.querySelector('.other-folders-header').textContent.trim(), open: document.querySelector('.other-folders-header').getAttribute('aria-expanded'), sectionVisible: !document.querySelector('.bookmarked-folders-section').hidden}`);
+    const want = [top, deep, otherChild].map(String);
+    check('Bookmarked lists the starred folders as shortcuts and All folders still holds them, starred', want.every(x => lists.sc.includes(x) && lists.stars.includes(x)) && lists.sectionVisible, lists);
+    check('the collapsible is called All folders and is open by default', lists.header === 'All folders' && lists.open === 'true', lists);
     for (const k of cases) {
       const allParents = [top, mid, other];
       await c.nav(`${base}/experiments.php`);
@@ -63,13 +75,11 @@ if (!email || !password) { console.error('usage: folder-favourite-reveal-check.j
       // open the panel as a user does (the opener in the rail) and bring the hidden branch into view for the click
       await c.js(`document.querySelector('[data-action="toggle-sidepanel"][data-target="folders"]:not([data-purpose="hide"])').click(); return 0`);
       await waitPanel(k.id === otherChild ? other : top);
-      if (k.via === 'section') {
-        await c.js(`${JSON.stringify(k.anc)}.forEach(a => { const t = document.querySelector('#foldersPanel [data-action="toggle-folder-children"][data-folder-id="' + a + '"]'); if (t && document.querySelector('#foldersPanel .folder-node[data-folder-id="' + a + '"] > .folder-children').style.display === 'none') t.click(); }); return 0`);
-      } else {
+      if (k.via === 'popover') {
         await c.js(`document.querySelector('#foldersPanel [data-popover="folderFavoritesMenu"]').click(); return 0`);
       }
       // ctrl-click first: it must not touch the sidebar (the page does not leave, the stored panel state stays what it was)
-      const sel = k.via === 'section' ? `#foldersPanel .bookmarked-folders-section .folder-node[data-folder-id="${k.id}"] > .folder-row a[data-folder-entity-link]` : `#folderFavoritesMenu a[data-folder-id="${k.id}"]`;
+      const sel = k.via === 'section' ? `#foldersPanel .bookmarked-folders-section .folder-shortcut[data-folder-shortcut="${k.id}"] a[data-folder-entity-link]` : `#folderFavoritesMenu a[data-folder-id="${k.id}"]`;
       await c.js(`localStorage.setItem('opened-sidepanel', 'favorites'); const a = document.querySelector('${sel}'); a.addEventListener('click', e => e.preventDefault(), {once: true}); a.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, ctrlKey: true, button: 0})); return 0`);
       check(`${k.label}: ctrl-click leaves the sidebar state alone`, await c.js(`return localStorage.getItem('opened-sidepanel') === 'favorites' && location.search === ''`), await state(k.id));
       await c.js(`localStorage.removeItem('opened-sidepanel'); return 0`);
@@ -81,8 +91,8 @@ if (!email || !password) { console.error('usage: folder-favourite-reveal-check.j
       for (const phase of ['after the click', 'after a reload']) {
         if (phase === 'after a reload') { await reset(allParents); await c.js(`localStorage.setItem('opened-sidepanel', 'folders'); return 0`); await c.nav(`${base}/experiments.php?folder=${k.id}`); await waitPanel(k.id); }
         const s = await state(k.id);
-        const good = s.open && s.url.includes(`folder=${k.id}`) && s.found && s.current && s.others === 1 && s.ancestors.every(Boolean) && s.rowVisible && (!s.inOther || s.otherOpen === true);
-        check(`${k.label}: ${phase}: panel open, ancestors expanded, row current and visible${' (and Other folders open if it is in there)'}`, good, s);
+        const good = s.open && s.url.includes(`folder=${k.id}`) && s.found && s.current && s.others === 1 && s.ancestors.every(Boolean) && s.rowVisible && s.inOther && s.otherOpen === true && s.copies === 1;
+        check(`${k.label}: ${phase}: panel open, ancestors expanded, row current and visible${' (in All folders, which is open, once)'}`, good, s);
       }
       if (shotFile && k === cases[1]) await c.shot(shotFile);
     }
