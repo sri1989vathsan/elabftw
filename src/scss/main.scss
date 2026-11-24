@@ -12208,6 +12208,22 @@ button.wp-legend-item {
   }
 }
 
+.wp-swatch-picker {
+  appearance: none;
+  background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red);
+  overflow: hidden;
+
+  &::-webkit-color-swatch-wrapper,
+  &::-webkit-color-swatch {
+    opacity: 0;
+    padding: 0;
+  }
+
+  &::-moz-color-swatch {
+    opacity: 0;
+  }
+}
+
 .wp-hint {
   font-size: 12px;
   margin: 6px 0 0;
