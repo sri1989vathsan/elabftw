@@ -963,10 +963,20 @@ async function spreadsheetSoak(options = {}) {
       if (!dialog) throw new Error('popup did not open');
       await sleep(400);
       const staged = [];
-      for (let i = 0; i < edits; i++) {
-        const r = int(0, model.grid.length - 1); const c = int(0, model.grid[0].length - 1); const value = `p${int(100, 999)}`;
-        await editCell(dialog, r, c, value);
-        staged.push([r, c, value]);
+      try {
+        for (let i = 0; i < edits; i++) {
+          // inside the popup's own grid (it can be smaller than the record, which still holds the empty grey filler the app took off)
+          const popupCols = dialog.querySelectorAll('.jss_worksheet thead td[data-x]').length || model.grid[0].length;
+          const popupRows = dialog.querySelectorAll('.jss_worksheet tbody tr').length || model.grid.length;
+          const r = int(0, Math.min(model.grid.length, popupRows) - 1); const c = int(0, Math.min(model.grid[0].length, popupCols) - 1); const value = `p${int(100, 999)}`;
+          await editCell(dialog, r, c, value);
+          staged.push([r, c, value]);
+        }
+      } catch (error) {
+        // never leave the popup open for the next step: close it without saving, then report
+        [...dialog.querySelectorAll('button')].find(b => /^Cancel/.test(b.textContent.trim()))?.click();
+        for (let i = 0; i < 60 && document.querySelector('.inline-spreadsheet-dialog'); i++) await sleep(50);
+        throw error;
       }
       await measure('popup open');
       const pattern = apply ? /^(Update|Insert)/ : /^Cancel/;
