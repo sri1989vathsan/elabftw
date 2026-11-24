@@ -417,6 +417,30 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Show where the folder the page lists is: its row is marked as the current one (the panel is fetched without the page's
+  // ?folder, so the server cannot do it) and scrolled into view once the panel is on screen.
+  function revealCurrentFolder(node: Element | null): void {
+    document.querySelectorAll('#experimentsFoldersTree .folder-row.is-current-folder').forEach(row => {
+      row.classList.remove('is-current-folder');
+      row.querySelector('a[data-folder-entity-link]')?.classList.remove('font-weight-bold');
+    });
+    const row = node?.querySelector<HTMLElement>(':scope > .folder-row');
+    if (!row) return;
+    row.classList.add('is-current-folder');
+    row.querySelector('a[data-folder-entity-link]')?.classList.add('font-weight-bold');
+    window.setTimeout(() => row.scrollIntoView({ block: 'nearest' }), 0);
+  }
+
+  // A plain click on a bookmarked folder (the Bookmarked section or the star list) goes to that folder and keeps the
+  // Folders panel open on the next page, where the tree opens up to it. Ctrl/cmd/shift/middle click change nothing here.
+  document.addEventListener('click', event => {
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    const link = (event.target as HTMLElement | null)?.closest<HTMLAnchorElement>(
+      '#foldersPanel .bookmarked-folders-section a[data-folder-entity-link], #foldersPanel #folderFavoritesMenu a[href]',
+    );
+    if (link) localStorage.setItem('opened-sidepanel', 'folders');
+  });
+
   function initializeFolderTreeState(): void {
     // On first use, every parent folder is collapsed. Only the ancestor paths to
     // the active and bookmarked folders are opened so their location is visible.
@@ -444,6 +468,7 @@ document.addEventListener('DOMContentLoaded', () => {
       : null;
     const activeFolderIsOther = Boolean(currentNode?.closest('.other-folders-wrapper'));
     setOtherFoldersOpen(activeFolderIsOther || localStorage.getItem(OTHER_FOLDERS_KEY) === 'open');
+    revealCurrentFolder(currentNode);
     applyFolderEntityType(activeFolderEntityType);
     // An open entry filed in somebody else's folder: show all folders once, so its folder is there to be shown. The saved
     // "My folders" choice stays untouched for the other pages.
