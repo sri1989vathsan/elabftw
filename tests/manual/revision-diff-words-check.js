@@ -21,7 +21,7 @@ if (!base0 || !email || !password) { console.error('usage: revision-diff-words-c
 const base = base0.replace(/\/$/, '');
 const compose = process.env.CHECK_COMPOSE || 'docker compose';
 const root = require('path').resolve(__dirname, '..', '..');
-const sql = q => execSync(`${compose} exec -T mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" elabftw -N -e "${q.replace(/"/g, '\\"')}"'`, { cwd: root }).toString().trim();
+const sql = q => execSync(`${compose} exec -T mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" elabftw -N'`, { cwd: root, input: q, stdio: ['pipe', 'pipe', 'ignore'] }).toString().trim();
 const esc = s => s.replace(/'/g, "''").replace(/\\/g, '\\\\');
 
 const OLD = '<h2>Method heading</h2><p>The black cat sat on the old mat and slept.</p><ul><li>first item</li><li>second item</li></ul><table><tbody><tr><td>alpha</td><td>beta</td></tr></tbody></table><p><img src="x" onerror="window.__xss=1"> end</p>';
@@ -35,7 +35,8 @@ const NEW = '<h2>Method heading</h2><p>The black car sat on the mat and slept so
   let expId = 0;
   try {
     await c.login(base, email, password);
-    expId = await c.js(`const r = await fetch('/api/v2/experiments', { method: 'POST', credentials: 'same-origin', headers: ${hdr}, body: JSON.stringify({ title: 'revision diff words' }) }); return Number(r.headers.get('Location').split('/').pop())`);
+    await c.nav(`${base}/experiments.php`);
+    expId = await c.js(`const r = await fetch('/api/v2/experiments', { method: 'POST', credentials: 'same-origin', headers: ${hdr}, body: JSON.stringify({ title: 'revision diff words' }) }); if (!r.headers.get('Location')) throw new Error('create failed ' + r.status + ' ' + location.href); return Number(r.headers.get('Location').split('/').pop())`);
     const userid = sql(`SELECT userid FROM experiments WHERE id = ${expId}`);
     const ins = body => sql(`INSERT INTO experiments_revisions (item_id, body, userid) VALUES (${expId}, '${esc(body)}', ${userid}); SELECT LAST_INSERT_ID()`);
     ins(OLD); ins(NEW);
