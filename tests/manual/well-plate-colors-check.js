@@ -81,6 +81,24 @@ if (lib) {
   check('C20 recolouring keeps which wells are together and leaves empty wells alone', sameMembers, JSON.stringify(after));
   const swap = recolorGroups([{ color: '#aaaaaa' }, { color: '#bbbbbb' }], ['#bbbbbb', '#aaaaaa']);
   check('C21 a swap of two colours stays unique', swap[0] === '#bbbbbb' && swap[1] === '#aaaaaa', swap.join());
+  // templates of any length
+  const mk = n => Array.from({ length: n }, () => ({ color: '#000000' }));
+  const four = ['#e5484d', '#2a6df4', '#30a46c', '#e5a50a'];
+  const o12 = recolorGroups(mk(12), four);
+  check('C36 a 4-colour template on 12 groups: its 4 colours first, in order, then 8 further colours, all 12 different', four.every((c, i) => o12[i] === c) && new Set(o12).size === 12 && o12.slice(4).every(c => !four.includes(c)), o12.join());
+  const nbr = o12.slice(4).every((c, i, a) => i === 0 || colorDistance(c, a[i - 1]) >= 60) && colorDistance(o12[3], o12[4]) >= 60;
+  check('C37 the continued colours next to each other are clearly different', nbr, o12.join());
+  const twenty = Array.from({ length: 20 }, (_, i) => P[i]);
+  const o3 = recolorGroups(mk(3), twenty);
+  check('C38 a 20-colour template on 3 groups uses just its first 3', o3.join() === twenty.slice(0, 3).join(), o3.join());
+  const fifteen = Array.from({ length: 15 }, (_, i) => P[i + 2]);
+  const store15 = { data: {}, getItem(k) { return this.data[k] ?? null; }, setItem(k, v) { this.data[k] = v; } };
+  check('C39 a custom template with 15 colours is saved whole and loaded whole', saveUserTemplate('Fifteen', fifteen, store15) && JSON.stringify(loadUserTemplates(store15)[0].colors) === JSON.stringify(fifteen), JSON.stringify(loadUserTemplates(store15)));
+  const o15 = recolorGroups(mk(15), loadUserTemplates(store15)[0].colors);
+  const o20 = recolorGroups(mk(20), loadUserTemplates(store15)[0].colors);
+  check('C40 that 15-colour template gives exactly those on 15 groups and 5 more different ones on 20', o15.join() === fifteen.join() && new Set(o20).size === 20 && o20.slice(0, 15).join() === fifteen.join(), o20.join());
+  const bigSave = Array.from({ length: 40 }, (_, i) => lib.colorForIndex(i));
+  check('C41 a template of 40 colours is kept whole', saveUserTemplate('Forty', bigSave, store15) && loadUserTemplates(store15).find(t => t.name === 'Forty').colors.length === 40, 'trimmed');
   // saving a personal template
   const store = { data: {}, getItem(k) { return this.data[k] ?? null; }, setItem(k, v) { this.data[k] = v; } };
   check('C22 a saved template can be loaded again', saveUserTemplate('Mine', ['#112233', '#445566'], store) && JSON.stringify(loadUserTemplates(store)) === JSON.stringify([{ name: 'Mine', colors: ['#112233', '#445566'] }]), JSON.stringify(loadUserTemplates(store)));
