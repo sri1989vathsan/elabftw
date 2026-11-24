@@ -74,8 +74,8 @@ export function distinctColor(used: string[], random: () => number = Math.random
 }
 
 /**
- * New colours for groups, in order, from a template: group i gets the template's colour i. When the template has fewer
- * colours than there are groups, or repeats one, the rest take generated colours that are not in use, so two groups
+ * New colours for groups, in order, from a template of any length: group i gets the template's colour i; with fewer groups than
+ * colours it just uses the first ones. When the template has fewer colours than there are groups, or repeats one, the rest continue with generated colours that are not in use, so two groups
  * never end up with the same colour (a group is its colour, so that would merge them).
  */
 export function recolorGroups(groups: Array<{ color: string }>, template: string[]): string[] {
@@ -87,8 +87,17 @@ export function recolorGroups(groups: Array<{ color: string }>, template: string
       result.push(wanted);
       return;
     }
-    let candidate = colorForIndex(next++);
-    while (result.includes(candidate) || template.includes(candidate)) candidate = colorForIndex(next++);
+    // continue past the template: the next colour that is not in use and clearly different from those chosen so far
+    // (when none is, the next unused one), so groups side by side never share or nearly share a colour
+    let candidate = '';
+    let fallback = '';
+    for (let tries = 0; tries < 400 && candidate === ''; tries++) {
+      const option = colorForIndex(next++);
+      if (result.includes(option) || template.includes(option)) continue;
+      if (fallback === '') fallback = option;
+      if (result.every(other => colorDistance(option, other) >= 60)) candidate = option;
+    }
+    if (candidate === '') candidate = fallback;
     result.push(candidate);
   });
   return result;
