@@ -64,6 +64,11 @@ class FilterTest extends \PHPUnit\Framework\TestCase
         Filter::body(str_repeat('a', 4120001));
     }
 
+    public function testBodyKeepsOrderedListStartNumber(): void
+    {
+        $this->assertSame('<ol start="4"><li>four</li></ol>', Filter::body('<ol start="4"><li>four</li></ol>'));
+    }
+
     public function testBodyAllowsInternalLinksToOpenInNewWindow(): void
     {
         $link = '<a href="/experiments/1" target="_blank" rel="noreferrer noopener">Experiment</a>';
