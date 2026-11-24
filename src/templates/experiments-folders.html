@@ -168,35 +168,24 @@
       {% endmacro %}
 
       <div id='experimentsFoldersTree' class='folder-tree-list'>
-        {% if folderBookmarkRootIds is not empty %}
-          <section class='bookmarked-folders-section folder-tree-section mb-2'>
-            <div class='folder-tree-section-label small font-weight-bold mb-1'>
-              <i class='fas fa-star fa-fw mr-1'></i>{{ 'Bookmarked'|trans }}
-            </div>
-            <div class='bookmarked-folders-content'>
-              {% if experimentsFoldersTreeArr[''] is defined %}
-                {% for folder in experimentsFoldersTreeArr[''] %}
-                  {% if folder.id in folderBookmarkRootIds %}
-                    {{ _self.renderFolderBranch(experimentsFoldersTreeArr, folder, 0, currentFolderId, folderBookmarkIds, folderPage, folderEntityType) }}
-                  {% endif %}
-                {% endfor %}
-              {% endif %}
-            </div>
-          </section>
-        {% endif %}
+        {# Shortcuts to the bookmarked folders: filled in by experiments-folders.ts from the tree below (each folder is in the tree once). #}
+        <section class='bookmarked-folders-section folder-tree-section mb-2' hidden>
+          <div class='folder-tree-section-label small font-weight-bold mb-1'>
+            <i class='fas fa-star fa-fw mr-1'></i>{{ 'Bookmarked'|trans }}
+          </div>
+          <div class='bookmarked-folders-content'></div>
+        </section>
 
         <section class='other-folders-wrapper folder-tree-section'>
-          <button type='button' class='btn btn-sm btn-block text-left other-folders-header' data-action='toggle-other-folders' aria-expanded='false'>
-            <i class='fas fa-caret-right fa-fw fa-xs mr-1'></i>
-            <i class='fas fa-folder fa-fw mr-1'></i>
-            <span>{{ 'Other folders'|trans }}</span>
+          <button type='button' class='btn btn-sm btn-block text-left other-folders-header' data-action='toggle-other-folders' aria-expanded='true'>
+            <i class='fas fa-caret-down fa-fw fa-xs mr-1'></i>
+            <i class='fas fa-folder-open fa-fw mr-1'></i>
+            <span>{{ 'All folders'|trans }}</span>
           </button>
-          <div class='other-folders-content mt-1' style='display:none'>
+          <div class='other-folders-content mt-1'>
             {% if experimentsFoldersTreeArr[''] is defined %}
               {% for folder in experimentsFoldersTreeArr[''] %}
-                {% if folder.id not in folderBookmarkRootIds %}
-                  {{ _self.renderFolderBranch(experimentsFoldersTreeArr, folder, 0, currentFolderId, folderBookmarkIds, folderPage, folderEntityType) }}
-                {% endif %}
+                {{ _self.renderFolderBranch(experimentsFoldersTreeArr, folder, 0, currentFolderId, folderBookmarkIds, folderPage, folderEntityType) }}
               {% endfor %}
             {% endif %}
           </div>
