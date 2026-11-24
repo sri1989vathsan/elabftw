@@ -144,6 +144,9 @@
   align-items: center;
   gap: var(--nav-icon-gap);
   height: 43px;
+  /* the row sits on the same centre line as the nav links (the template's mt-2
+     used to push it 4.5 px below them) */
+  margin-top: 0 !important;
 
   > .nav-item {
     margin: 0 !important;
@@ -178,10 +181,16 @@
     width: 1em;
   }
 
+  /* the thin plus fills its whole em box, unlike the bell or the circles: a bit
+     smaller so it looks the same size */
+  #createNewDropdown .fa-plus {
+    font-size: calc(var(--nav-icon-glyph) * 0.85);
+  }
+
   /* the user's initials fill the same box (two letters fit, a third squeezes) */
   .initials {
     display: block;
-    font-size: calc(var(--nav-icon-glyph) * 0.9);
+    font-size: calc(var(--nav-icon-glyph) * 0.95);
     letter-spacing: -0.02em;
     line-height: 1;
     white-space: nowrap;
