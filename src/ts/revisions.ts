@@ -234,9 +234,7 @@ on('compare-revisions', async (el: HTMLElement) => {
 
   // Diff the readable text of the two bodies (block ends become line breaks), not their markup: tags cut in half by a
   // character diff made the old output unreadable. Deletions are struck through, insertions underlined, both tinted.
-  const dmp = new DiffMatchPatch();
-  const diff = dmp.diff_main(bodyToText(body0), bodyToText(body1));
-  dmp.diff_cleanupSemantic(diff);
+  const diff = diffByWords(bodyToText(body0), bodyToText(body1));
   let added = 0;
   let removed = 0;
   const pre = document.createElement('div');
@@ -247,19 +245,71 @@ on('compare-revisions', async (el: HTMLElement) => {
       pre.append(document.createTextNode(part[1]));
       return;
     }
+    // textContent only: nothing from the body is ever parsed as HTML here
     const mark = document.createElement(res === DiffMatchPatch.DIFF_DELETE ? 'del' : 'ins');
     mark.textContent = part[1];
     pre.append(mark);
-    if (res === DiffMatchPatch.DIFF_DELETE) removed += part[1].length;
-    else added += part[1].length;
+    const words = countWords(part[1]);
+    if (res === DiffMatchPatch.DIFF_DELETE) removed += words;
+    else added += words;
   });
   const summary = document.createElement('p');
   summary.className = 'revision-diff-summary';
-  summary.textContent = added === 0 && removed === 0
+  summary.textContent = !diff.some((part: DiffArr) => part[0] !== DiffMatchPatch.DIFF_EQUAL)
     ? 'No text changes between these two revisions.'
-    : `${added} characters added, ${removed} removed`;
+    : `${added} ${added === 1 ? 'word' : 'words'} added, ${removed} removed`;
   diffDiv.append(summary, pre);
 });
+
+// Above this many tokens on either side the word diff gets slow, so the comparison falls back to whole lines.
+const MAX_WORD_TOKENS = 30000;
+const WORD_TOKEN = /\n|[^\S\n]+|[\p{L}\p{N}_]+|[^\p{L}\p{N}_\s]/gu;
+const LINE_TOKEN = /[^\n]*\n|[^\n]+/g;
+
+function countWords(text: string): number {
+  return text.match(/[\p{L}\p{N}_]+/gu)?.length ?? 0;
+}
+
+/**
+ * Diff two texts word by word: each word, run of spaces, line break or punctuation mark is one unit, so a changed word is
+ * marked whole instead of as a few letters. Past MAX_WORD_TOKENS (or when there are too many different units to encode)
+ * it compares whole lines instead, which stays fast for very long bodies.
+ */
+function diffByWords(a: string, b: string): DiffArr[] {
+  let tokensA = a.match(WORD_TOKEN) ?? [];
+  let tokensB = b.match(WORD_TOKEN) ?? [];
+  if (tokensA.length > MAX_WORD_TOKENS || tokensB.length > MAX_WORD_TOKENS) {
+    tokensA = a.match(LINE_TOKEN) ?? [];
+    tokensB = b.match(LINE_TOKEN) ?? [];
+  }
+  const ids = new Map<string, number>();
+  const units: string[] = [];
+  const encode = (tokens: string[]): string => {
+    let out = '';
+    for (const token of tokens) {
+      let id = ids.get(token);
+      if (id === undefined) {
+        id = units.length;
+        ids.set(token, id);
+        units.push(token);
+      }
+      out += String.fromCharCode(id);
+    }
+    return out;
+  };
+  const encodedA = encode(tokensA);
+  const encodedB = encode(tokensB);
+  // one UTF-16 unit per distinct token: more than that and the encoding would collide, so use the plain character diff
+  const dmp = new DiffMatchPatch();
+  if (units.length > 60000) {
+    const plain = dmp.diff_main(a, b);
+    dmp.diff_cleanupSemantic(plain);
+    return plain as DiffArr[];
+  }
+  const diff = dmp.diff_main(encodedA, encodedB, false);
+  dmp.diff_cleanupSemantic(diff);
+  return diff.map((part: DiffArr) => [part[0], Array.from(part[1], ch => units[ch.charCodeAt(0)]).join('')] as unknown as DiffArr);
+}
 
 /** The readable text of an HTML body, with a line break at the end of each block. */
 function bodyToText(html: string): string {
