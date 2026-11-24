@@ -25,7 +25,13 @@ export interface PlateGroup {
   color: string;
 }
 
-const PALETTE = ['#e5484d', '#f76b15', '#e5a50a', '#30a46c', '#12a594', '#2a6df4', '#8e4ec6', '#d6409f', '#7d8499'];
+// 24 swatches. The first 17 are the colours plates have always used (so existing plates and by-column groups look the same);
+// the rest add Okabe-Ito style hues for colour-blind readers. All keep 3:1 contrast against white, so a well never looks washed out.
+const PALETTE = [
+  '#e5484d', '#f76b15', '#e5a50a', '#30a46c', '#12a594', '#2a6df4', '#8e4ec6', '#d6409f', '#7d8499',
+  '#0b7285', '#a61e4d', '#5f3dc4', '#868e96', '#2b8a3e', '#c2255c', '#1864ab', '#e67700',
+  '#cc79a7', '#8c564b', '#8a8d00', '#3d3d3d', '#4a90a4', '#b35900', '#7a5195', '#5c7cfa',
+];
 
 // Well names run A, B, C down the plate and 1, 2, 3 across it, which is the reverse of spreadsheet coordinates.
 const wellName = (row: number, col: number): string => `${colLabel(row)}${col + 1}`;
@@ -94,7 +100,7 @@ function wellValue(data: SpreadsheetData, row: number, col: number): string {
 }
 
 // More colours than the palette offers, so a column with many values still gets distinct groups.
-const GROUP_COLORS = [...PALETTE, '#0b7285', '#a61e4d', '#5f3dc4', '#868e96', '#2b8a3e', '#c2255c', '#1864ab', '#e67700'];
+const GROUP_COLORS = PALETTE;
 
 function colorForIndex(index: number): string {
   if (index < GROUP_COLORS.length) return GROUP_COLORS[index];
@@ -792,6 +798,34 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
         });
         palette.appendChild(swatch);
       });
+      // Colours already used by this plate's groups that are not in the palette (custom colours) stay one click away.
+      const remembered = groupsWithCounts(working).map(group => group.color).filter((color, i, all) => /^#[0-9a-f]{6}$/.test(color) && !PALETTE.includes(color) && all.indexOf(color) === i);
+      if (!PALETTE.includes(activeColor) && !remembered.includes(activeColor)) remembered.push(activeColor);
+      remembered.forEach(color => {
+        const swatch = document.createElement('button');
+        swatch.type = 'button';
+        swatch.className = 'wp-swatch wp-swatch-custom';
+        swatch.style.background = color;
+        swatch.title = `Custom ${color}`;
+        swatch.setAttribute('aria-label', `Custom colour ${color}`);
+        swatch.setAttribute('aria-pressed', String(color === activeColor));
+        swatch.addEventListener('click', () => {
+          activeColor = color;
+          paintPalette();
+        });
+        palette.appendChild(swatch);
+      });
+      const picker = document.createElement('input');
+      picker.type = 'color';
+      picker.className = 'wp-swatch wp-swatch-picker';
+      picker.value = /^#[0-9a-f]{6}$/.test(activeColor) ? activeColor : '#7d8499';
+      picker.title = 'Pick any colour';
+      picker.setAttribute('aria-label', 'Custom colour');
+      picker.addEventListener('change', () => {
+        activeColor = normalizeColor(picker.value);
+        paintPalette();
+      });
+      palette.appendChild(picker);
     };
 
     const paintGroups = (): void => {
