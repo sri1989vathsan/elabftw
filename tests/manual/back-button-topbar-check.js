@@ -1,19 +1,20 @@
 #!/usr/bin/env node
 /**
- * The "Back to ..." control (src/ts/back-to-link.ts) sits in the top bar, after the logo and the home icon, and no longer floats over the page.
+ * The "Back to ..." control (src/ts/back-to-link.ts) is an arrow button in the top bar, left of the eLabFTW logo, and no longer floats over the page.
  * Headless Chrome (DevTools protocol, tests/manual/cdp-lib.js):
  *
  *   node tests/manual/back-button-topbar-check.js http://localhost:8973 EMAIL PASSWORD [shots-dir]
  *
  * The place to go back to is stored the way the page stores it after a click on an internal link (sessionStorage elabftw-back-stack), then the
  * page is loaded again. Asserts, at 1400 px, 800 px and 480 px wide, in the compact and the comfortable interface size:
- *  (a) the control is inside <nav id="main-navbar">, its box is inside the bar's box, it is a flex item of the bar's row after the home icon;
- *  (b) it is not position: fixed, and nothing of the page content area (below the bar) lies under its box;
- *  (c) the bar has the same height with and without it, and the right-hand icons and the page width are as without it;
- *  (d) the label is shown on wide windows, hidden on narrow ones, and the tooltip always names the place;
- *  (e) a click on the main button goes to the stored page (the dashboard);
- *  (f) the × removes it, the stored places are dropped, and after a reload it stays away.
- * Screenshots of the top bar (before: without, after: with) go to shots-dir when given. Prints PASS/FAIL; exit code 1 on any failure.
+ *  (a) the control is a button inside <nav id="main-navbar">, its box is inside the bar's box, and it lies left of the logo;
+ *  (b) it overlaps no other item of the bar (logo, home icon, the narrow window's sidebar button, menu links, icons on the right);
+ *  (c) it is not position: fixed, and nothing of the page content area (below the bar) lies under it;
+ *  (d) the logo, the bar's height, the right-hand icons and the page width are exactly as without the control (no layout jump);
+ *  (e) it shows no text (the arrow only); the tooltip and the aria-label name the place ("Back to Dashboard");
+ *  (f) a click goes to the stored page (the dashboard) and the control is gone there;
+ *  (g) on a page that is not where the link led, the control is not offered, and the stored places are dropped.
+ * Screenshots of the top bar (without, with) go to shots-dir when given. Prints PASS/FAIL; exit code 1 on any failure.
  * EMAIL/PASSWORD: see tests/manual/TEST-ACCOUNTS.md.
  */
 const fs = require('fs');
@@ -42,21 +43,25 @@ const check = (name, ok, detail) => { if (!ok) failed++; console.log(`${ok ? 'PA
     const measure = () => c.js(`
       const bar = document.getElementById('main-navbar'); const el = document.getElementById('elabftwBackButton');
       const r = n => { const b = n.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom, w: b.width, h: b.height }; };
-      const out = { barH: bar ? r(bar).h : 0, scrollW: document.documentElement.scrollWidth, innerW: innerWidth };
+      const logo = bar.querySelector('.logo-header');
+      const out = { barH: r(bar).h, scrollW: document.documentElement.scrollWidth, innerW: innerWidth, logoL: logo ? Math.round(r(logo).l * 10) / 10 : null };
       const secondary = document.getElementById('navbar-secondary-nav');
-      if (secondary && bar) out.secondaryInside = r(secondary).r <= r(bar).r + 1 && r(secondary).b <= r(bar).b + 1;
+      if (secondary) out.secondaryInside = r(secondary).r <= r(bar).r + 1 && r(secondary).b <= r(bar).b + 1;
+      out.secondaryL = secondary ? Math.round(r(secondary).l) : null;
       if (!el) return out;
       const b = r(el), bb = r(bar), cs = getComputedStyle(el);
-      const home = [...bar.querySelectorAll('a.navbar-left-group')].pop();
-      const label = el.querySelector('.elabftw-back-button-label');
-      Object.assign(out, { present: true, inBar: bar.contains(el), parentIsBar: el.parentElement === bar, box: b,
+      Object.assign(out, { present: true, isButton: el.tagName === 'BUTTON', parentIsBar: el.parentElement === bar, box: b,
         within: b.l >= bb.l - 1 && b.r <= bb.r + 1 && b.t >= bb.t - 1 && b.b <= bb.b + 1,
-        afterHome: !!home && (home.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0 && b.l >= r(home).r - 1,
-        fixed: cs.position === 'fixed', labelShown: !!label && getComputedStyle(label).display !== 'none',
-        title: el.querySelector('.elabftw-back-button-go').title });
+        leftOfLogo: !!logo && b.r <= r(logo).l + 0.5,
+        fixed: cs.position === 'fixed', text: el.textContent.trim(), title: el.title, aria: el.getAttribute('aria-label') });
+      // other items of the bar under the control's box
+      out.overlaps = [...bar.querySelectorAll('a, button, img, .nav-item')].filter(e => {
+        if (e === el || el.contains(e)) return false; const q = e.getBoundingClientRect();
+        return q.width > 0 && q.height > 0 && getComputedStyle(e).visibility !== 'hidden' && q.left < b.r && q.right > b.l && q.top < b.b && q.bottom > b.t;
+      }).slice(0, 3).map(e => e.id || String(e.className).split(' ')[0] || e.tagName);
       // anything of the page content (below the bar) under the control's box
       out.covered = [...document.querySelectorAll('#container > *:not(nav), main *, #content-start ~ *')].filter(e => {
-        if (bar.contains(e) || el.contains(e)) return false; const q = e.getBoundingClientRect();
+        if (bar.contains(e)) return false; const q = e.getBoundingClientRect();
         return q.width > 0 && q.height > 0 && q.top < b.b && q.bottom > b.t && q.left < b.r && q.right > b.l && getComputedStyle(e).visibility !== 'hidden';
       }).slice(0, 3).map(e => e.id || String(e.className).split(' ')[0] || e.tagName);
       return out;`);
@@ -71,32 +76,30 @@ const check = (name, ok, detail) => { if (!ok) failed++; console.log(`${ok ? 'PA
         await seed(); await go();
         const m = await measure();
         if (shots) await c.shot(path.join(shots, `topbar-with-${ui}-${w}.png`));
-        check(`${tag}: the control is in the top bar, as a child of it`, m.present && m.inBar && m.parentIsBar, JSON.stringify(m));
+        check(`${tag}: the control is a button in the top bar`, m.present && m.isButton && m.parentIsBar, JSON.stringify(m));
         if (!m.present) continue;
         check(`${tag}: its box is inside the bar's box`, m.within, JSON.stringify(m.box));
-        check(`${tag}: it comes after the logo and the home icon`, m.afterHome, JSON.stringify(m.box));
+        check(`${tag}: it lies left of the logo`, m.leftOfLogo, `${JSON.stringify(m.box)} logo at ${m.logoL}`);
+        check(`${tag}: it overlaps no other item of the bar`, m.overlaps.length === 0, m.overlaps.join(' | '));
         check(`${tag}: it is not floating (position is not fixed)`, !m.fixed, 'fixed');
         check(`${tag}: nothing of the page content lies under it`, m.covered.length === 0, m.covered.join(' | '));
+        check(`${tag}: the logo does not move (${without.logoL} -> ${m.logoL})`, m.logoL === without.logoL, `${without.logoL} vs ${m.logoL}`);
         check(`${tag}: the bar keeps its height (${without.barH} -> ${m.barH})`, Math.abs(m.barH - without.barH) < 1, `${without.barH} vs ${m.barH}`);
-        // the same as without the control (the bar itself may be wider than a very narrow window): the control must not make it worse
-        check(`${tag}: the right-hand icons and the width of the page are as without it`, m.secondaryInside === without.secondaryInside && m.scrollW <= Math.max(without.scrollW, m.innerW) + 1, `scrollW ${without.scrollW} -> ${m.scrollW}, secondaryInside ${without.secondaryInside} -> ${m.secondaryInside}`);
-        check(`${tag}: label ${w >= 992 ? 'shown' : 'hidden'}, tooltip names the place`, m.labelShown === (w >= 992) && /Dashboard/.test(m.title), `labelShown ${m.labelShown}, title ${m.title}`);
+        check(`${tag}: the right-hand icons and the width of the page are as without it`, m.secondaryInside === without.secondaryInside && m.secondaryL === without.secondaryL && m.scrollW <= Math.max(without.scrollW, m.innerW) + 1, `scrollW ${without.scrollW} -> ${m.scrollW}, secondary ${without.secondaryL} -> ${m.secondaryL}`);
+        check(`${tag}: arrow only, the tooltip and aria-label name the place`, m.text === '' && /^Back to .*Dashboard/.test(m.title) && m.aria === m.title, `text "${m.text}", title "${m.title}", aria "${m.aria}"`);
       }
     }
 
     // behaviour, once, at the default size
     await size(1400, 800, 'compact');
     await seed(); await go();
-    await c.js(`document.querySelector('#elabftwBackButton .elabftw-back-button-go').click(); return 1`);
+    await c.js(`document.getElementById('elabftwBackButton').click(); return 1`);
     await sleep(2500);
-    const where = await c.js('return location.pathname');
-    check('a click goes to the stored page (dashboard)', /dashboard\.php$/.test(where), where);
-    await seed(); await go();
-    await c.js(`document.querySelector('#elabftwBackButton .elabftw-back-button-close').click(); return 1`);
-    const gone = await c.js(`return { el: !!document.getElementById('elabftwBackButton'), stack: sessionStorage.getItem('elabftw-back-stack') }`);
-    check('the x removes the control and drops the stored places', !gone.el && !gone.stack, JSON.stringify(gone));
-    await go();
-    check('after a reload it stays away', !(await c.js(`return !!document.getElementById('elabftwBackButton')`)), 'came back');
+    const where = await c.js('return location.pathname + "|" + !!document.getElementById("elabftwBackButton")');
+    check('a click goes to the stored page (dashboard) and the control is gone there', /dashboard\.php\|false$/.test(where), where);
+    await seed(); await c.nav(`${base}/team.php`); await sleep(700);
+    const other = await c.js(`return { el: !!document.getElementById('elabftwBackButton'), stack: sessionStorage.getItem('elabftw-back-stack') }`);
+    check('on a page the link did not lead to, it is not offered and the stored places are dropped', !other.el && !other.stack, JSON.stringify(other));
   } finally {
     await c.close();
   }
