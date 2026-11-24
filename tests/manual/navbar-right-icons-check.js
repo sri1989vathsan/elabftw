@@ -31,7 +31,7 @@ window.navbarRightIconsCheck = async function navbarRightIconsCheck() {
   const icons = glyphs.filter(g => !['navbarDropdown', 'createNewDropdown'].includes(g.id));
   check('the icon glyphs have one size (within 1 px)', spread(icons.map(g => g.w)) <= 1 && spread(icons.map(g => g.h)) <= 1, JSON.stringify(icons.map(g => [g.id, r1(g.w), r1(g.h)])));
   const navText = document.querySelector('#navbar-primary-nav .nav-link');
-  if (navText) { const nb = box(navText); check('the row is on the same centre line as the nav links (within 1 px)', Math.abs(boxes[0].cy - nb.cy) <= 1, `${r1(boxes[0].cy)} vs ${r1(nb.cy)}`); }
+  if (navText && navText.getBoundingClientRect().height > 0) { const nb = box(navText); check('the row is on the same centre line as the nav links (within 1 px)', Math.abs(boxes[0].cy - nb.cy) <= 1, `${r1(boxes[0].cy)} vs ${r1(nb.cy)}`); }
   const row = document.getElementById('navbar-secondary-nav');
   if (row) { const rb = row.getBoundingClientRect(); check('they sit on the middle of the icon row', Math.abs(boxes[0].cy - (rb.top + rb.height / 2)) <= 1, `${r1(boxes[0].cy)} vs ${r1(rb.top + rb.height / 2)}`); }
 
