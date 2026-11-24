@@ -242,6 +242,8 @@
       "A new item shows a box, Add it to the Database too, not ticked. Tick it to see its name, module and Columns under the box.",
       "An order with several links has one block for each item. A button follows your ticks: Add all, Add the other, or Remove all.",
       "After the order is placed, the card button Add to database opens a window with a tick for each line, so you can add all or only some."
-    ]
+    ],
+    "image": "orders-database-flow.png",
+    "imageAlt": "The new-order form with a title typed: under the notes, a box Add it to the Database too (not ticked) says the item is not in the database yet"
   }
 ]
