@@ -9571,17 +9571,9 @@ input[type='color'] {
  * always stay reachable next to the logo and More. */
 @media (max-width: 767.98px) {
   #navbar-secondary-nav {
-    gap: 0;
-  }
-
-  #navbar-secondary-nav .nav-link,
-  #navbar-secondary-nav .btn.nav-link {
-    padding-left: 0.35rem;
-    padding-right: 0.35rem;
-  }
-
-  #navbar-secondary-nav .fa-2x {
-    font-size: 1.3em;
+    --nav-icon-box: 32px;
+    --nav-icon-glyph: 18px;
+    --nav-icon-gap: 2px;
   }
 
   #navbarMoreItem .nav-link {
@@ -9648,6 +9640,8 @@ input[type='color'] {
 
 /* SCROLL TO TOP OF PAGE BUTTON */
 .floating-middle-right {
+  /* the right-hand icons keep one box size and one glyph size, only smaller
+   * (variables defined with the rules in _header.scss) */
   align-items: flex-end;
   gap: 0.5rem;
   pointer-events: none;
