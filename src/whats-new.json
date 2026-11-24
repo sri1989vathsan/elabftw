@@ -1,5 +1,19 @@
 [
   {
+    "id": "back-to-link-in-top-bar",
+    "date": "2026-11-24",
+    "area": "Navigation",
+    "featured": false,
+    "title": "Back to Dashboard now sits in the top bar",
+    "summary": "The Back to … button that appears after you follow a link has moved from the page into the top bar, next to the logo.",
+    "details": [
+      "It no longer floats over the page, so it never covers the folders, the side panels or your text.",
+      "It still shows only after you follow an internal link, takes you back to where you clicked, and × dismisses it. On narrow windows it shows only the arrow; hover for the full name."
+    ],
+    "image": "guide-dashboard-back-topbar.png",
+    "imageAlt": "The top bar with the eLabFTW logo, the home icon and, next to them, the Back to Dashboard button with its × to dismiss it"
+  },
+  {
     "id": "order-collection-sheets",
     "date": "2026-11-23",
     "area": "Orders",
@@ -1502,7 +1516,8 @@
       "fa-gauge::The tiles show experiments and resources changed this week and your open steps and tasks. A tile opens what it counts.",
       "fa-tags::The category and status chips show how many entries each has. Press one to list them; empty ones are dimmed.",
       "fa-plus::Each card has a Create button. For Announcements it is for admins and opens the Announcements tab of the Admin panel.",
-      "fa-magnifying-glass::The search box on a card searches experiments or resources."
+      "fa-magnifying-glass::The search box on a card searches experiments or resources.",
+      "fa-arrow-left::After you follow a link inside an entry, Back to … sits next to the logo. It returns you to where you clicked; × dismisses it."
     ],
     "imageAlt": "The dashboard with four tiles of your own activity, then cards for experiments, resources and announcements",
     "featured": false,
@@ -1517,7 +1532,12 @@
     "news": "New: tiles, counts on the chips and one Create button on every card.",
     "shot": "",
     "image": "guide-dashboard.png",
-    "screenshots": []
+    "screenshots": [
+      {
+        "image": "guide-dashboard-back-topbar.png",
+        "caption": "The top bar after following a link from the dashboard: Back to Dashboard sits next to the logo and the home icon; × dismisses it"
+      }
+    ]
   },
   {
     "id": "guide-create-entry",
