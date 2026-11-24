@@ -148,22 +148,42 @@ async function printCheckRun() {
   const savedMode = document.body.dataset.sheetsMode;
   // the rendered width of the grid: columns hidden by the page (the grey filler columns) stay in the colgroup with their width but take no room
   const widthOf = h => { const ws = h.querySelector('.jss_worksheet'); const cols = [...h.querySelectorAll('.jss_worksheet > colgroup > col')]; const heads = [...h.querySelectorAll('.jss_worksheet > thead > tr > *')]; const shown = heads.reduce((sum, th) => sum + (th.offsetWidth || th.getBoundingClientRect().width || 0), 0); return Math.round(shown || (ws ? ws.getBoundingClientRect().width : 0) || cols.reduce((a, c) => a + (parseFloat(c.getAttribute('width')) || 0), 0)); };
+  // print-only-view: Ctrl+P / the browser's File > Print (beforeprint with no copy made by a button) prints the same print-only copy as the
+  // buttons, never the screen: the copy exists during the print, the page is hidden behind it, everything is put back afterwards
+  const hasEntryText = !!(document.getElementById('body_view') || window.tinymce?.activeEditor?.getBody?.());
+  if (hasEntryText) {
+    window.dispatchEvent(new Event('beforeprint'));
+    const implicit = document.getElementById('tocPrintSelectionDocument');
+    const titleNow = (document.getElementById('documentTitle')?.textContent || '').trim();
+    check('print-only-view: Ctrl+P builds the print-only copy (title, details, main text) and hides the page behind it', !!implicit && document.body.classList.contains('toc-print-selection-active') && (!titleNow || (implicit.querySelector('.toc-print-title')?.textContent || '').includes(titleNow)), 'no copy at beforeprint');
+    check('print-only-view: the Ctrl+P copy has no editing parts (toolbars, editors, inputs, buttons, contenteditable)', !!implicit && !implicit.querySelector('.tox, .mce-content-body, .jss_toolbar, .elabftw-spreadsheet-readonly-toggle, .elabftw-own-scrollbar, [contenteditable="true"], input, textarea, select, button'), 'editing parts in the copy');
+    const heads = [...(document.getElementById('body_view')?.querySelectorAll('h1,h2,h3,h4,h5,h6') || [])].map(h => h.textContent.trim()).filter(Boolean);
+    check('print-only-view: the Ctrl+P copy holds the whole text (every heading)', !!implicit && heads.every(t => (implicit.textContent || '').includes(t)), 'headings missing');
+    window.dispatchEvent(new Event('beforeprint'));
+    check('print-only-view: a second beforeprint (the Print buttons print their own copy first) does not make a second copy', document.querySelectorAll('#tocPrintSelectionDocument').length === 1, 'two copies');
+    window.dispatchEvent(new Event('afterprint'));
+    check('print-only-view: afterprint removes the copy and shows the page again', !document.getElementById('tocPrintSelectionDocument') && !document.body.classList.contains('toc-print-selection-active'), 'copy or class left behind');
+  }
   for (const mode of ['landscape', 'fit', 'split']) {
     document.body.dataset.sheetsMode = mode;
     window.dispatchEvent(new Event('beforeprint'));
+    // the sheets of the print copy (the page print itself now goes through the copy as well), in the order of the live ones
+    const copies = [...document.querySelectorAll('#tocPrintSelectionDocument .print-sheet-copy')];
     liveHosts.forEach((host, i) => {
       const natural = widthOf(host);
       if (!(natural > 700)) return;
-      const zoom = parseFloat(host.style.zoom) || 1;
-      const wide = host.classList.contains('print-wide-sheet');
-      const split = host.nextElementSibling && host.nextElementSibling.classList.contains('print-split-sheet');
-      if (mode === 'fit') check(`print mode fit: sheet ${i + 1} stays portrait and is scaled to the page width`, !wide && !split && natural * zoom <= 701, `wide=${wide} zoom=${zoom}`);
+      const copy = copies[i];
+      if (!copy) { check(`print mode ${mode}: sheet ${i + 1} is in the printed copy`, false, 'no .print-sheet-copy'); return; }
+      const zoom = parseFloat(copy.style.zoom) || 1;
+      const wide = copy.classList.contains('print-wide-sheet');
+      const tables = [...copy.querySelectorAll('table')];
+      if (mode === 'fit') check(`print mode fit: sheet ${i + 1} stays portrait and is scaled to the page width`, !wide && natural * zoom <= 701, `wide=${wide} zoom=${zoom}`);
       if (mode === 'landscape') check(`print mode landscape: sheet ${i + 1} ${700 / natural < 0.7 && chromium ? 'is on a landscape page' : 'stays portrait'}`, wide === (700 / natural < 0.7 && chromium) && natural * zoom <= (wide ? 1031 : 701), `wide=${wide} zoom=${zoom} natural=${natural}`);
-      if (mode === 'split') check(`print mode split: sheet ${i + 1} is printed as blocks at actual size (no zoom), none wider than the page`, (split || widthOf(host) <= 700) && !wide && zoom === 1 && [...(split ? host.nextElementSibling.querySelectorAll('table') : [])].every(t => parseFloat(t.style.width) <= 701), `split=${split} zoom=${zoom}`);
+      if (mode === 'split') check(`print mode split: sheet ${i + 1} is printed as blocks at actual size (no zoom), none wider than the page`, !wide && zoom === 1 && tables.every(t => (parseFloat(t.style.width) || 0) <= 701), `zoom=${zoom} tables=${tables.length}`);
     });
     window.dispatchEvent(new Event('afterprint'));
   }
   if (savedMode) document.body.dataset.sheetsMode = savedMode; else delete document.body.dataset.sheetsMode;
-  check('print: afterprint puts the sheets back (nothing hidden, no zoom, no split copies)', liveHosts.every(h => h.style.display !== 'none' && !h.style.zoom && !h.classList.contains('print-wide-sheet')) && !document.querySelector('.print-split-sheet'), 'leftovers after afterprint');
+  check('print: afterprint puts the sheets back (nothing hidden, no zoom, no copies left)', liveHosts.every(h => h.style.display !== 'none' && !h.style.zoom && !h.classList.contains('print-wide-sheet')) && !document.querySelector('.print-split-sheet, #tocPrintSelectionDocument'), 'leftovers after afterprint');
   return { pass: results.every(r => r.ok), results };
 }
