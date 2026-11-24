@@ -154,9 +154,28 @@ async function spreadsheetSoak(options = {}) {
     return uid;
   }
 
+  // A step picks its cell from the record at the start of the round; the app may have taken the EMPTY grey filler columns (or empty rows) off since,
+  // on a press outside that table (see model.fillerBase and SOAK-TEST.md 11.6), so the record is longer than the grid. If the cell is outside the
+  // grid and everything the record holds outside it is empty, that is the app's rule, not a problem: the record is cut to the grid and the step is
+  // skipped (counted as 'skipped-cell-gone'). If the record has text there, or the cell is inside the grid but missing, it is a real failure.
+  const missingCell = (root, r, c) => {
+    const cols = root.querySelectorAll('.jss_worksheet thead td[data-x]').length;
+    const rows = root.querySelectorAll('.jss_worksheet tbody tr').length;
+    const key = [...models.keys()].find(k => api.overlayElement(k) === root);
+    const model = key ? models.get(key) : null;
+    const outside = r >= rows || c >= cols;
+    const textOutside = model ? model.grid.some((row, ri) => row.some((v, ci) => (ri >= rows || ci >= cols) && v !== '')) : false;
+    if (!outside || textOutside) return new Error(`cell ${cellName(r, c)} not found (grid ${cols}x${rows}${model ? `, record ${model.grid[0]?.length}x${model.grid.length}` : ''}${textOutside ? ', the record has text outside the grid' : ''})`);
+    if (model) { model.grid = model.grid.slice(0, rows).map(row => row.slice(0, cols)); model.fillerBase = undefined; }
+    note('skipped-cell-gone');
+    const error = new Error(`cell ${cellName(r, c)} is gone from the grid (${cols}x${rows}), only empty filler was cut; step skipped`);
+    error.skip = true;
+    return error;
+  };
+
   async function editCell(root, r, c, value, key = 'Tab') {
     const td = root.querySelector(`td[data-x="${c}"][data-y="${r}"]`);
-    if (!td) throw new Error(`cell ${cellName(r, c)} not found`);
+    if (!td) throw missingCell(root, r, c);
     // a real double click is two presses of the cell first: they select it and tell the page editor that a grid is in use
     press(td); await sleep(80);
     const rect = td.getBoundingClientRect();
@@ -188,7 +207,7 @@ async function spreadsheetSoak(options = {}) {
   async function selectCell(uid, r, c) {
     const root = await live(uid);
     const td = root.querySelector(`td[data-x="${c}"][data-y="${r}"]`);
-    if (!td) throw new Error(`cell ${cellName(r, c)} not found`);
+    if (!td) throw missingCell(root, r, c);
     press(td); await sleep(220);
     return root;
   }
@@ -196,11 +215,14 @@ async function spreadsheetSoak(options = {}) {
   // the text goes into the box. finish: 'Enter' | 'Tab' | null (leave the editor open, as when a resize follows).
   async function typeDirect(uid, r, c, value, finish = 'Enter') {
     const model = models.get(uid);
+    // a popup that is still closing (after its Update or Cancel) takes the keyboard: wait until it is gone before typing
+    for (let i = 0; i < 80 && popupOpen(); i++) await sleep(50);
     const root = await selectCell(uid, r, c);
     const first = value[0];
     (document.activeElement || root).dispatchEvent(new KeyboardEvent('keydown', { key: first, code: `Key${first.toUpperCase()}`, bubbles: true, cancelable: true }));
+    // the editor opens after the cell took the key; wait up to 3 s (a busy page is slow), not 1 s
     let box = null;
-    for (let i = 0; i < 40 && !(box = visibleRescue()); i++) await sleep(25);
+    for (let i = 0; i < 120 && !(box = visibleRescue()); i++) await sleep(25);
     if (!box) { fail(`typing "${first}" over ${cellName(r, c)} did not open the editor`, { table: model.label }); return false; }
     box.value = value;
     box.dispatchEvent(new Event('input', { bubbles: true }));
@@ -535,17 +557,29 @@ async function spreadsheetSoak(options = {}) {
   };
   const openMenu = () => [...document.querySelectorAll('.jcontextmenu, .jss_contextmenu')]
     .find(menu => getComputedStyle(menu).display !== 'none' && menu.getBoundingClientRect().width > 0);
+  // The context menu opens after the grid's own handlers and a busy page: wait for it (up to 2.5 s) instead of looking once after a fixed pause.
+  async function waitMenu() {
+    let menu = null;
+    for (let waited = 0; waited < 2500 && !(menu = openMenu()); waited += 50) await sleep(50);
+    return menu;
+  }
   async function menuCheck(root, target, where, label) {
     const rect = target.getBoundingClientRect();
     const x = rect.x + Math.min(rect.width / 2, 40); const y = rect.y + rect.height / 2;
+    // A real right-click lands on whatever is on top at that point: a cell under the sticky bar (the navbar, the toolbar) cannot be right-clicked
+    // by a person there, so a click there is not tried (and not counted); the tour's "top of screen" position puts the first cell there at times.
+    const hit = document.elementFromPoint(x, y);
+    if (!hit || !target.contains(hit)) { note('menu-target-covered-skipped'); return null; }
     // A real right-click: button down, button up, then the menu event.
     const init = { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y, button: 2, buttons: 2 };
     target.dispatchEvent(new PointerEvent('pointerdown', init));
     target.dispatchEvent(new MouseEvent('mousedown', init));
     target.dispatchEvent(new MouseEvent('mouseup', { ...init, buttons: 0 }));
     target.dispatchEvent(new MouseEvent('contextmenu', init));
-    await sleep(300);
-    const menu = openMenu();
+    // the menu opens after the grid's own handlers (and a busy page): wait for it, up to 2.5 s, instead of looking once after a fixed pause
+    let menu = await waitMenu();
+    await sleep(250);
+    menu = openMenu() || menu;
     menus.checked++;
     const problem = text => { if (menus.problems.length < 40) menus.problems.push({ context, target: label, where, problem: text }); };
     if (!menu) { problem('no menu appeared'); return null; }
@@ -647,8 +681,8 @@ async function spreadsheetSoak(options = {}) {
       header.dispatchEvent(new MouseEvent('mousedown', rc));
       header.dispatchEvent(new MouseEvent('mouseup', { ...rc, buttons: 0 }));
       header.dispatchEvent(new MouseEvent('contextmenu', rc));
-      await sleep(300);
-      const menu = openMenu();
+      await sleep(100);
+      const menu = await waitMenu();
       const pattern = {
         'row-after': /insert a new row after/i, 'row-before': /insert a new row before/i,
         'col-after': /insert a new column after/i, 'col-before': /insert a new column before/i,
@@ -874,8 +908,8 @@ async function spreadsheetSoak(options = {}) {
       const rect = target.getBoundingClientRect();
       const init = { bubbles: true, cancelable: true, view: window, clientX: rect.x + 12, clientY: rect.y + 8, button: 2, buttons: 2 };
       target.dispatchEvent(new MouseEvent('contextmenu', init));
-      await sleep(300);
-      const menu = openMenu();
+      await sleep(100);
+      const menu = await waitMenu();
       const item = menu && [...menu.querySelectorAll('a')].find(a => (byRow ? /delete selected rows/i : /delete selected columns/i).test(a.textContent));
       if (!item) {
         const seen = [...document.querySelectorAll('.jcontextmenu, .jss_contextmenu')].map(m => ({ display: getComputedStyle(m).display, width: Math.round(m.getBoundingClientRect().width), items: [...m.querySelectorAll('a')].map(a => a.textContent.trim()).slice(0, 6) }));
@@ -1873,8 +1907,8 @@ async function spreadsheetSoak(options = {}) {
         const rc = { bubbles: true, cancelable: true, view: window, clientX: hr.x + 10, clientY: hr.y + 8, button: 2, buttons: 2 };
         td.dispatchEvent(new PointerEvent('pointerdown', rc)); td.dispatchEvent(new MouseEvent('mousedown', rc));
         td.dispatchEvent(new MouseEvent('mouseup', { ...rc, buttons: 0 })); td.dispatchEvent(new MouseEvent('contextmenu', rc));
-        await sleep(300);
-        const menu = openMenu();
+        await sleep(100);
+        const menu = await waitMenu();
         const item = menu && [...menu.querySelectorAll('a')].find(a => /insert a new row before/i.test(a.textContent));
         const colsAfterPress = gridSize()[1];
         if (!item) { note('race-no-menu'); models.delete(uid); api.removeTable(uid); continue; }
@@ -3619,7 +3653,7 @@ async function spreadsheetSoak(options = {}) {
           name = chosen[1];
           await chosen[2]();
         } catch (error) {
-          fail(`${name}: ${error && error.message || error}`, { stack: String(error && error.stack || '').split('\n').slice(0, 4).join(' | ') });
+          if (!(error && error.skip)) fail(`${name}: ${error && error.message || error}`, { stack: String(error && error.stack || '').split('\n').slice(0, 4).join(' | ') });
         }
         await sleep(pick([0, 30, 120, 450, 520, 700]));
         try {
@@ -3741,19 +3775,24 @@ async function spreadsheetSoakAfterReload(options = {}) {
   const tables = api.snapshot(true);
   const mine = tables.slice(stored.baseline);
   const problems = [];
+  const sizeOnly = [];
   if (mine.length !== stored.expected.length) problems.push({ problem: `${stored.expected.length} spreadsheets were saved, ${mine.length} came back` });
   stored.expected.forEach((expected, index) => {
     const have = mine[index]?.tableData;
     if (!have) { problems.push({ table: expected.label, problem: 'missing after reload' }); return; }
     // a well plate is stored as a plate, not as a grid of cell text: it only has to come back
     if (expected.plate) return;
-    if (have.length !== expected.grid.length || (have[0]?.length ?? 0) !== (expected.grid[0]?.length ?? 0)) {
-      problems.push({ table: expected.label, problem: `size ${have.length}x${have[0]?.length} instead of ${expected.grid.length}x${expected.grid[0]?.length}` });
-      return;
-    }
-    for (let r = 0; r < expected.grid.length; r++) {
-      for (let c = 0; c < expected.grid[r].length; c++) {
-        if ((have[r][c] ?? '') !== expected.grid[r][c]) problems.push({ table: expected.label, cell: `${String.fromCharCode(65 + (c % 26))}${r + 1}`, expected: expected.grid[r][c], saved: have[r][c] ?? '' });
+    // What matters is the cell text. The saved table has no trailing empty rows or columns (the app drops the grey filler columns and the empty rows
+    // below the data on a press outside the table, and the grid may show one more empty row or column than it was saved with), while the record
+    // keeps the ones it made: so compare over the larger of the two sizes, a missing cell counting as empty. A size difference is only a problem when
+    // a cell in the part that is missing on one side has text on the other (that is reported cell by cell below).
+    const haveRows = have.length; const haveCols = have.reduce((n, row) => Math.max(n, row.length), 0);
+    const wantRows = expected.grid.length; const wantCols = expected.grid.reduce((n, row) => Math.max(n, row.length), 0);
+    if (haveRows !== wantRows || haveCols !== wantCols) sizeOnly.push({ table: expected.label, saved: `${haveRows}x${haveCols}`, record: `${wantRows}x${wantCols}` });
+    for (let r = 0; r < Math.max(haveRows, wantRows); r++) {
+      for (let c = 0; c < Math.max(haveCols, wantCols); c++) {
+        const saved = have[r]?.[c] ?? ''; const wanted = expected.grid[r]?.[c] ?? '';
+        if (saved !== wanted) problems.push({ table: expected.label, cell: `${String.fromCharCode(65 + (c % 26))}${r + 1}`, expected: wanted, saved, ...(r >= haveRows || c >= haveCols ? { note: 'outside the saved size' } : {}) });
       }
     }
   });
@@ -3762,5 +3801,5 @@ async function spreadsheetSoakAfterReload(options = {}) {
     tinymce.activeEditor.execCommand('mceSave');
   }
   sessionStorage.removeItem('spreadsheetSoak');
-  return { ok: problems.length === 0, dataLossAfterReload: problems.slice(0, 30), count: problems.length, scratchTablesRemoved: !options.keepTables && problems.length === 0 };
+  return { ok: problems.length === 0, dataLossAfterReload: problems.slice(0, 30), count: problems.length, sizeDiffersOnlyByEmptyCells: sizeOnly, scratchTablesRemoved: !options.keepTables && problems.length === 0 };
 }
