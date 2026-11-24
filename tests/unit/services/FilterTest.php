@@ -67,6 +67,7 @@ class FilterTest extends \PHPUnit\Framework\TestCase
     public function testBodyKeepsOrderedListStartNumber(): void
     {
         $this->assertSame('<ol start="4"><li>four</li></ol>', Filter::body('<ol start="4"><li>four</li></ol>'));
+        $this->assertSame('<ol start="4" data-continues="true"><li>four</li></ol>', Filter::body('<ol start="4" data-continues="true"><li>four</li></ol>'));
     }
 
     public function testBodyAllowsInternalLinksToOpenInNewWindow(): void
