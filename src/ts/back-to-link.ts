@@ -1,8 +1,9 @@
 /**
  * A "Back" button for internal links: after following a link in the text of an entry (to another entry, or to
- * another place in the same one, e.g. through the table of contents), a button in the top bar, right after the logo
- * and the home icon, returns to the place the link was clicked, with the page scrolled to where it was. It is part
- * of the bar (not floating), so it never covers the page; the row of menu links makes room for it.
+ * another place in the same one, e.g. through the table of contents), an arrow button in the top bar, left of the logo,
+ * returns to the place the link was clicked, with the page scrolled to where it was. The name of that place is in the
+ * tooltip. The arrow lies in the bar's left padding (positioned absolutely), so it never covers the page and the logo
+ * does not move whether it is shown or not. It goes away when the user goes to an unrelated page.
  *
  * The places are kept in sessionStorage (this tab only). A place is shown as the button only while the page is the
  * one the link led to; as soon as the user goes anywhere else the places are dropped, so the button never offers
@@ -131,25 +132,20 @@ function render(): void {
   }
   writeStack(places);
   const place = places[places.length - 1];
-  // the top bar's left end: after the logo and the home icon, before the menu links. Pages without that bar (login) offer nothing.
-  const anchor = document.getElementById('main-nav');
-  if (!anchor?.parentElement) return;
-  const bar = document.createElement('div');
-  bar.id = 'elabftwBackButton';
-  bar.className = 'elabftw-back-button navbar-left-group';
+  // the top bar's left end, left of the logo. Pages without that bar (login) offer nothing.
+  const navbar = document.getElementById('main-navbar');
+  if (!navbar) return;
   const back = document.createElement('button');
   back.type = 'button';
-  back.className = 'elabftw-back-button-go';
+  back.id = 'elabftwBackButton';
+  back.className = 'elabftw-back-button';
   const text = i18next.t('Back to {{name}}', { name: place.label });
   back.title = text;
   back.setAttribute('aria-label', text);
   const arrow = document.createElement('i');
   arrow.className = 'fas fa-arrow-left';
   arrow.setAttribute('aria-hidden', 'true');
-  const label = document.createElement('span');
-  label.className = 'elabftw-back-button-label';
-  label.textContent = text;
-  back.append(arrow, label);
+  back.append(arrow);
   back.addEventListener('click', () => {
     const rest = readStack().slice(0, -1);
     writeStack(rest);
@@ -166,18 +162,7 @@ function render(): void {
     }
     window.location.assign(place.url);
   });
-  const close = document.createElement('button');
-  close.type = 'button';
-  close.className = 'elabftw-back-button-close';
-  close.setAttribute('aria-label', i18next.t('Close'));
-  close.title = i18next.t('Close');
-  close.textContent = '×';
-  close.addEventListener('click', () => {
-    writeStack([]);
-    bar.remove();
-  });
-  bar.append(back, close);
-  anchor.parentElement.insertBefore(bar, anchor);
+  navbar.insertBefore(back, navbar.firstChild);
 }
 
 export function initBackToLink(): void {
