@@ -861,7 +861,7 @@
           <p class='fx-empty'>{t('No entries to show.')}</p>
         {/if}
         {#each groups as group (group.key)}
-          <h3 class='entity-group-title'>{group.label} <span class='entity-group-count'>{group.items.length}</span></h3>
+          <h3 class='entity-group-title'>{group.label} <span class='entity-group-count'>{group.items.length}</span>{#if group.key === 'pinned'}<button type='button' class='btn btn-link guide-info-btn p-0 ml-1' data-action='open-guide-card' data-card='guide-pins' title={t('About Pins in the guide')} aria-label={t('About Pins in the guide')}><i class='fas fa-circle-info' aria-hidden='true'></i></button>{/if}</h3>
           {#each group.items as entity, index (`${entity.id}-${index}`)}
             {@render compactRow(entity, index)}
           {/each}
