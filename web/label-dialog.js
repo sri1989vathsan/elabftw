@@ -93,11 +93,62 @@
     custom.rows = entry.generic ? 5 : 3;
     custom.maxLength = entry.generic ? 1000 : 400;
     customLabel.append(custom);
+    // mixed styles inside one line: select a piece of the text and click B, I, A+ or A-; this only puts the markers (label-markup.js) around it
+    const markupBar = element('div', 'mb-2');
+    markupBar.dataset.labelMarkupBar = '1';
+    const wrapSelection = function (open, close) {
+      const value = custom.value;
+      const from = custom.selectionStart === undefined ? value.length : custom.selectionStart;
+      const to = custom.selectionEnd === undefined ? from : custom.selectionEnd;
+      const chosen = value.slice(from, to);
+      // a single * is the italic marker, not the start of a bold one
+      const isOpen = function (text) { return text.startsWith(open) && !(open === '*' && text.startsWith('**')); };
+      let next;
+      let start;
+      let end;
+      if (chosen.length >= open.length + close.length && isOpen(chosen) && chosen.endsWith(close)) {
+        // the selection already has these markers: they come off
+        const inner = chosen.slice(open.length, chosen.length - close.length);
+        next = value.slice(0, from) + inner + value.slice(to);
+        start = from;
+        end = from + inner.length;
+      } else if (value.slice(Math.max(0, from - open.length), from) === open && value.slice(to, to + close.length) === close && !(open === '*' && value.slice(from - 2, from) === '**')) {
+        next = value.slice(0, from - open.length) + chosen + value.slice(to + close.length);
+        start = from - open.length;
+        end = start + chosen.length;
+      } else {
+        next = value.slice(0, from) + open + chosen + close + value.slice(to);
+        start = from + open.length;
+        end = start + chosen.length;
+      }
+      custom.value = next;
+      custom.focus();
+      custom.setSelectionRange(start, end);
+      custom.dispatchEvent(new Event('input'));
+    };
+    [['B', '**', '**', 'Bold: select part of a line, then click (or type ** around it)', 'font-weight:bold;min-width:2rem'],
+      ['I', '*', '*', 'Italic: select part of a line, then click (or type * around it)', 'font-style:italic;min-width:2rem'],
+      ['A+', '[big]', '[/big]', 'Bigger: select part of a line, then click (or type [big]...[/big], 1.4 times the size of the line)', 'min-width:2rem'],
+      ['A\u2212', '[small]', '[/small]', 'Smaller: select part of a line, then click (or type [small]...[/small], 0.7 times the size of the line)', 'min-width:2rem']].forEach(function (b) {
+      const button = element('button', 'btn btn-sm btn-outline-secondary mr-1', b[0]);
+      button.type = 'button';
+      button.title = b[3];
+      button.style.cssText = b[4];
+      // the click must not take the selection away from the text
+      button.addEventListener('mousedown', function (event) {
+        event.preventDefault();
+      });
+      button.addEventListener('click', function () {
+        wrapSelection(b[1], b[2]);
+      });
+      markupBar.append(button);
+    });
+    markupBar.append(element('span', 'small text-muted', 'Different styles in one line: select a part, then B, I, A+ (bigger), A\u2212 (smaller)'));
     const variablesBox = element('div', 'mb-2');
     // formatting of each line of the text: a size (mm), bold, italic, and left / centre / right; kept by the number of the line
     const styleBox = element('div', 'mb-2');
     const tableBox = element('div', 'mb-2');
-    box.append(customLabel, styleBox, tableBox, variablesBox);
+    box.append(customLabel, markupBar, styleBox, tableBox, variablesBox);
     if (entry.prefill) {
       custom.value = entry.prefill;
     }
