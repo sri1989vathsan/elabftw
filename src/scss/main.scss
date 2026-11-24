@@ -2469,61 +2469,34 @@ h1:has(> #documentTitle) {
   }
 }
 
-/* "Back to ..." after following an internal link (back-to-link.ts): a control in the top bar, after the logo and the home icon. It is part
-   of the bar's row (the menu links make room for it), so it never lies over the page. */
+/* "Back to ..." after following an internal link (back-to-link.ts): an arrow in the top bar, left of the logo. It lies in the bar's left padding
+   (absolute, so it takes no room in the row): the logo and the menu do not move whether it is shown or not. The place it returns to is its tooltip. */
 .elabftw-back-button {
-  align-items: stretch;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.14);
+  border: 0;
+  border-radius: 999px;
+  color: var(--primary-fg, #fff);
+  cursor: pointer;
   display: flex;
-  height: 2rem;
-  // a long page name is cut, never pushes the right-hand icons out
-  max-width: min(18rem, 30vw);
-  min-width: 0;
+  height: 1.75rem;
+  justify-content: center;
+  left: 0.25rem;
+  padding: 0;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.75rem;
+  z-index: 2;
 
-  button {
-    align-items: center;
-    background: rgba(255, 255, 255, 0.14);
-    border: 0;
-    color: var(--primary-fg, #fff);
-    cursor: pointer;
-    display: flex;
-    font-size: 0.85rem;
-    font-weight: 600;
-    gap: 0.4rem;
-    padding: 0 0.7rem;
-
-    &:hover,
-    &:focus-visible {
-      background: rgba(255, 255, 255, 0.26);
-    }
-  }
-
-  .elabftw-back-button-go {
-    border-radius: 999px 0 0 999px;
-    min-width: 0;
+  &:hover,
+  &:focus-visible {
+    background: rgba(255, 255, 255, 0.26);
   }
 
   // the icon colour of the bar's icons is set globally (dark on the bar); this one follows the button text
-  button i {
+  i {
     color: inherit !important;
-  }
-
-  .elabftw-back-button-label {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .elabftw-back-button-close {
-    border-left: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 0 999px 999px 0;
-    padding: 0 0.6rem;
-  }
-}
-
-// narrow windows: the arrow alone (the full text is in the tooltip)
-@media (max-width: 991.98px) {
-  .elabftw-back-button .elabftw-back-button-label {
-    display: none;
   }
 }
 
