@@ -21,6 +21,10 @@
     const meta = document.querySelector('meta[name="csrf-token"]');
     return meta ? meta.content : (document.body.dataset.csrf || '');
   };
+  // the rules for mixed styles in a line (label-markup.js, loaded by the footer); without it every line is plain text
+  const markup = function () {
+    return window.labelMarkup || { parse: function (t) { return { plain: String(t) }; }, escapeValue: function (v) { return String(v); } };
+  };
   const element = function (tag, className, text) {
     const node = document.createElement(tag);
     if (className) {
@@ -87,7 +91,7 @@
     customLabel.append(element('span', 'd-block small text-muted', entry.generic ? 'Text of the label (one line each, up to 8). Write {name} where a value changes: it becomes an input' : 'Extra text on the label (optional, one line each)'));
     const custom = element('textarea', 'form-control form-control-sm');
     custom.rows = entry.generic ? 5 : 3;
-    custom.maxLength = entry.generic ? 640 : 240;
+    custom.maxLength = entry.generic ? 1000 : 400;
     customLabel.append(custom);
     const variablesBox = element('div', 'mb-2');
     // formatting of each line of the text: a size (mm), bold, italic, and left / centre / right; kept by the number of the line
@@ -150,7 +154,8 @@
     };
     const filled = function (row) {
       return custom.value.replace(/\{([^{}]+)\}/g, function (m, n) {
-        return row[n.trim()] !== undefined ? row[n.trim()] : '';
+        // a * or [ in a value is text, not a marker of label-markup.js
+        return row[n.trim()] !== undefined ? markup().escapeValue(row[n.trim()]) : '';
       });
     };
     const renderVariables = function () {
@@ -248,10 +253,12 @@
         }
         const st = styles[index] || (styles[index] = {});
         const row = element('div', 'd-flex align-items-center mb-1');
-        const name = element('span', 'small text-truncate mr-2', text.trim());
+        // the name of the row is the text as it is read, without the markers of mixed styles
+        const shown = markup().parse(text.trim()).plain;
+        const name = element('span', 'small text-truncate mr-2', shown);
         name.style.flex = 'none';
         name.style.width = '8rem';
-        name.title = text.trim();
+        name.title = shown;
         const size = element('input', 'form-control form-control-sm mr-2');
         size.type = 'number';
         size.min = '1';
