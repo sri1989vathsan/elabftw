@@ -111,10 +111,15 @@ function handleListShortcut(editor: Editor, event: KeyboardEvent): void {
   const marker = block.textContent ?? '';
   let command: 'InsertUnorderedList' | 'InsertOrderedList' | 'Checklist' | null = null;
   let checklistChecked = false;
+  let startNumber = 1;
+  const numbered = /^(\d{1,3})[.)]$/.exec(marker);
   if (marker === '-') {
     command = 'InsertUnorderedList';
-  } else if (marker === '1' || marker === '1.') {
+  } else if (marker === '1' || numbered) {
+    // "1" alone, or "N." / "N)" with N of 1 to 3 digits (so "2024. " stays text).
+    // The marker is the whole paragraph, so "10.5 mg" or a number inside a sentence never matches.
     command = 'InsertOrderedList';
+    if (numbered) startNumber = Math.max(1, parseInt(numbered[1], 10));
   } else if (marker === '[]' || marker === '[ ]' || marker === '- [ ]') {
     command = 'Checklist';
   } else if (/^(?:- )?\[[xX]\]$/.test(marker)) {
@@ -136,6 +141,11 @@ function handleListShortcut(editor: Editor, event: KeyboardEvent): void {
       applyChecklist(editor, checklistChecked);
     } else {
       editor.execCommand(command);
+      if (command === 'InsertOrderedList' && startNumber > 1) {
+        const list = (editor.selection.getNode() as HTMLElement).closest('ol');
+        // a list merged into a neighbouring one keeps that one's numbering
+        if (list && list.children.length === 1) list.setAttribute('start', String(startNumber));
+      }
     }
   });
 }
