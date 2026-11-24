@@ -2748,6 +2748,8 @@ h1:has(> #documentTitle) {
     --fx-gap: 0.35rem;
     --fx-icon-size: 0.78rem;
     --fx-icon-col: 1rem;
+    --fx-star-col: 1.25rem;
+    --fx-hover-solid: color-mix(in srgb, var(--chrome-bg) 91%, #fff);
     --fx-fg: var(--chrome-fg);
     --fx-muted: var(--chrome-muted);
     --fx-hover: rgba(255, 255, 255, 0.09);
@@ -2927,7 +2929,7 @@ h1:has(> #documentTitle) {
     padding: 0.35rem;
 
     &:hover,
-    &:focus {
+    &:focus-visible {
       background: var(--disabled);
       color: var(--chrome-fg);
     }
@@ -3790,10 +3792,57 @@ h1:has(> #documentTitle) {
       width: var(--fx-lead) !important;
     }
 
+    // "Other folders" is a quiet toggle built like a folder row: caret in the caret column, folder icon in the icon column
+    // (the .btn it is would centre its content; a click leaves it focused, which must not fill it)
     .other-folders-header {
       color: var(--fx-muted);
       font-size: inherit;
+      justify-content: flex-start;
+      text-align: left;
       width: 100%;
+
+      &:focus {
+        box-shadow: none;
+        outline: 0;
+      }
+
+      &:focus-visible {
+        background: var(--fx-hover);
+        color: var(--fx-fg);
+        outline: 1px solid var(--fx-line);
+      }
+
+      > .fas:first-child {
+        flex: 0 0 var(--fx-lead);
+        margin: 0 !important;
+        text-align: center;
+        width: var(--fx-lead);
+      }
+
+      > .fas:nth-child(2) {
+        flex: 0 0 var(--fx-icon-col) !important;
+        margin: 0 !important;
+        text-align: center;
+        width: var(--fx-icon-col) !important;
+      }
+    }
+
+    // Unfiled, the Bookmarked heading and New folder have no caret, but their icon sits in the folders' icon column
+    .folder-quick-row,
+    .folder-create-section[data-folder-create='tree'] summary {
+      padding-left: calc(var(--fx-pad) + var(--fx-lead) + var(--fx-gap));
+    }
+
+    .folder-tree-section-label {
+      align-items: center;
+      display: flex;
+      gap: var(--fx-gap);
+
+      .fa-fw {
+        flex: 0 0 var(--fx-icon-col);
+        margin: 0 !important;
+        text-align: center;
+      }
     }
 
     // names fill the row; counts and buttons end on the right edge
@@ -3836,9 +3885,38 @@ h1:has(> #documentTitle) {
       padding: 0;
     }
 
-    .folder-actions {
-      gap: 0.05rem;
-      padding-left: 0.2rem;
+    // Right-hand columns that never move: the count ends where the star column begins, the star column is always there
+    // (the star shows when bookmarked or on hover, by the display rules above), and the README and three-dot buttons float over the count on hover
+    // instead of pushing it, so nothing shifts when the pointer arrives.
+    .folder-row .folder-actions {
+      align-self: stretch;
+      display: block;
+      flex: 0 0 var(--fx-star-col);
+      margin: 0 !important;
+      padding: 0;
+      position: relative;
+      width: var(--fx-star-col);
+    }
+
+    .folder-row .folder-action-btn {
+      background: transparent;
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+
+      &.favorite-folder-star {
+        right: 0;
+      }
+
+      &[data-action='toggle-folder-more-actions'] {
+        background: var(--fx-hover-solid);
+        right: var(--fx-star-col);
+      }
+
+      &[data-action='open-folder-readme'] {
+        background: var(--fx-hover-solid);
+        right: calc(var(--fx-star-col) + 1.25rem);
+      }
     }
 
     // (shown or hidden by the hover rules further down; only the size is set here)
@@ -3888,7 +3966,7 @@ h1:has(> #documentTitle) {
     .folder-tree-section-label {
       font-size: 0.66rem;
       margin-bottom: 0 !important;
-      padding: 0.15rem var(--fx-pad);
+      padding: 0.15rem var(--fx-pad) 0.15rem calc(var(--fx-pad) + var(--fx-lead) + var(--fx-gap));
     }
 
     .bookmarked-folders-section {
@@ -9538,6 +9616,8 @@ input[type='color'] {
 /* Narrow windows: tighter icons on the right so the profile menu and help
  * always stay reachable next to the logo and More. */
 @media (max-width: 767.98px) {
+  /* the right-hand icons keep one box size and one glyph size, only smaller
+   * (variables defined with the rules in _header.scss) */
   #navbar-secondary-nav {
     --nav-icon-box: 32px;
     --nav-icon-glyph: 18px;
@@ -9608,8 +9688,6 @@ input[type='color'] {
 
 /* SCROLL TO TOP OF PAGE BUTTON */
 .floating-middle-right {
-  /* the right-hand icons keep one box size and one glyph size, only smaller
-   * (variables defined with the rules in _header.scss) */
   align-items: flex-end;
   gap: 0.5rem;
   pointer-events: none;
