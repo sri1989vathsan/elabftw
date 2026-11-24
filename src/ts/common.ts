@@ -90,6 +90,7 @@ import './mention-keys';
 import { askConfirm } from './confirm-dialog';
 import { initBackToLink } from './back-to-link';
 import { initWhatsNewPopup } from './whats-new-popup';
+import { installPopupWheelLock } from './popup-wheel-lock';
 import PrimaryColorPicker from './components/PrimaryColorPicker.svelte';
 
 // we need to extend the interface from malle to add more properties
@@ -436,6 +437,7 @@ initBackToLink();
 
 // "What's new" popup after login (drawn by the server only when there is something new, see whats-new-popup.ts)
 initWhatsNewPopup();
+installPopupWheelLock();
 
 // Narrow windows: one button shows or hides the rest of the sidebar button rail (see main.scss).
 (function initSidepanelRailToggle(): void {
