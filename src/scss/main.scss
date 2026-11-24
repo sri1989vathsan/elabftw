@@ -12131,7 +12131,8 @@ button.wp-legend-item {
   margin-bottom: 5px;
 }
 
-.wp-group-color {
+.wp-group-color,
+input.wp-group-color[type='color'] {
   border: 0;
   flex: none;
   height: 26px;
@@ -12174,6 +12175,31 @@ button.wp-legend-item {
   &[aria-pressed='true'] {
     border-color: var(--strongest, #000);
   }
+}
+
+.wp-template-row {
+  align-items: center;
+  flex-wrap: wrap;
+
+  .wp-template {
+    flex: 1 1 100%;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .wp-template-name {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}
+
+.wp-palette {
+  align-items: center;
 }
 
 .wp-swatch-picker {
