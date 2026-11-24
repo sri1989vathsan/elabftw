@@ -71,7 +71,7 @@
     <div class='setting-row' data-setting-name='announcement the following text will be displayed to all users on all pages while it is active'>
       <div class='setting-text'>
         <label for='announcement' class='setting-title'>{{ 'Announcement'|trans }}</label>
-        <p class='setting-help'>{{ "The following text will be displayed to all users on all pages while it's active."|trans }}</p>
+        <p class='setting-help'>{{ "A short line shown to everyone on every page while it is set. For news with a photo or reactions, use the Announcements tab."|trans }}</p>
       </div>
       <input class='form-control setting-input' data-trigger='blur' data-model='{{ model }}' data-target='announcement' type='text' id='announcement' name='announcement' value='{{ App.Teams.teamArr.announcement }}' />
     </div>
@@ -761,7 +761,7 @@
 <div data-tabcontent='9' hidden style='padding-top:0.75rem'>
   {# the tab already says its name: the heading stays for screen readers only #}
   <h2 class='sr-only'>{{ 'Announcements'|trans }}</h2>
-  <p class='pl-3'>{{ 'Publish an announcement to notify every team member. It also shows as a dismissible banner on the dashboard until it expires.'|trans }}</p>
+  <p class='pl-3'>{{ 'Publish news for your team. It shows in the Announcements card on the dashboard, and everyone gets a notification.'|trans }}</p>
 
   {# CREATE AN ANNOUNCEMENT #}
   <form class='pl-3 mb-5' id='createAnnouncementForm' aria-label='{{ 'Create announcement'|trans }}'>
@@ -772,12 +772,12 @@
     <div class='form-group'>
       <label for='announcement_body'>{{ 'Message'|trans }}</label>
       <textarea name='body' id='announcement_body' class='form-control' rows='3' data-allow-empty='1'></textarea>
-      <small class='smallgray'>{{ 'Links (https://…) are shown as clickable text automatically.'|trans }}</small>
+      <small class='smallgray'>{{ 'Web addresses in the message become links.'|trans }}</small>
     </div>
     <div class='form-group'>
       <label for='announcement_image_url'>{{ 'Image URL (optional)'|trans }}</label>
       <input type='url' name='image_url' id='announcement_image_url' class='form-control' placeholder='https://…' data-allow-empty='1'>
-      <small class='smallgray d-block mt-1'>{{ 'Or attach an image file below -- uploaded once you publish.'|trans }}</small>
+      <small class='smallgray d-block mt-1'>{{ 'Or choose an image file. It is uploaded when you publish.'|trans }}</small>
       <div class='announcement-image-dropzone mt-1' id='createAnnouncementImageDropzone'>
         <img class='announcement-image-dropzone-preview' hidden alt=''>
         <input type='file' accept='image/*' class='form-control-file' data-ignore='1' id='createAnnouncementImageFile'>
@@ -811,7 +811,7 @@
     <h2 class='p-2 pl-3 section-title'>{{ 'Existing announcements'|trans }}{{ guide.info('guide-announcements', 'Announcements') }}</h2>
     <div class='pl-3'>
       {% if not announcementsAdminArr %}
-        <p class='mt-3'>{{ 'No announcement created yet.'|trans }}</p>
+        <p class='mt-3'>{{ 'No announcements yet.'|trans }}</p>
       {% endif %}
       {% for announcement in announcementsAdminArr %}
         <div class='box'>
@@ -838,7 +838,7 @@
           {% if announcement.body %}<div>{{ announcement.body|raw }}</div>{% endif %}
           <p class='smallgray mb-0'>
             {% if announcement.expires_at %}
-              {{ 'Expires on %s'|trans|format(announcement.expires_at) }}
+              {{ 'Expires on %s'|trans|format(announcement.expires_at|slice(0, 16)|replace({'T': ' '})) }}
             {% else %}
               {{ 'Never expires'|trans }}
             {% endif %}
