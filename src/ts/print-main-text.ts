@@ -76,6 +76,14 @@ function detailsLine(): string {
   if (date) parts.push(date);
   const category = document.getElementById('categoryBtn')?.textContent?.trim();
   if (category && !/^add category$/i.test(category)) parts.push(category);
+  const status = document.querySelector('.catstat-btn[data-target="status"]')?.textContent?.trim();
+  if (status && !/^add status$/i.test(status)) parts.push(status);
+  // owner and team: the view page shows them in its meta grid (label, then value)
+  document.querySelectorAll('.entity-meta-label').forEach(label => {
+    const name = label.textContent?.trim() ?? '';
+    const value = label.nextElementSibling?.textContent?.replace(/\s+/g, ' ').trim();
+    if (value && /^(owner|team)$/i.test(name)) parts.push(`${name}: ${value}`);
+  });
   const tags = document.querySelector('[id^="tags_div_currenttags_"]')?.textContent?.replace(/\s+/g, ' ').trim();
   if (tags) parts.push(`Tags: ${tags}`);
   return parts.join('  |  ');
