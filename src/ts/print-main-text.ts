@@ -139,9 +139,10 @@ export function printEverything(editorBody?: HTMLElement | null): void {
   printWithSheetsChoice(() => printEverythingNow(editorBody));
 }
 
-function printEverythingNow(editorBody?: HTMLElement | null): void {
+/** The whole entry as the isolated print copy (title, details, main text, sections); null when the page has no entry text. */
+function buildEverything(editorBody?: HTMLElement | null): HTMLElement | null {
   const source = document.getElementById('body_view') ?? editorBody;
-  if (!source) return;
+  if (!source) return null;
   const { container, title, context } = printHeader('Complete entry', 'Complete entry');
   container.append(title, context);
   const details = detailsLine();
@@ -158,5 +159,41 @@ function printEverythingNow(editorBody?: HTMLElement | null): void {
   mainSection.append(mainHeading, mainTextClone(source));
   container.appendChild(mainSection);
   pageSections().forEach(section => container.appendChild(section));
-  printDocument(container);
+  return container;
+}
+
+function printEverythingNow(editorBody?: HTMLElement | null): void {
+  const container = buildEverything(editorBody);
+  if (container) printDocument(container);
+}
+
+/**
+ * Printing never prints the screen. Every Print button builds the print copy itself (above); this covers the other ways in
+ * (Ctrl+P, the browser's File > Print, Print from the editor's own menu bar in edit mode): when the browser is about to print and no copy
+ * exists yet, the whole-entry copy is built from the page (the edit view included: the editor's text, not its toolbars) and everything else is
+ * hidden by the same rule as for the buttons; afterprint puts the page back. Pages without an entry text print as they are.
+ */
+let implicitCopy: HTMLElement | null = null;
+
+function onBeforePrint(): void {
+  if (document.getElementById('tocPrintSelectionDocument')) return;
+  const editorBody = (window as unknown as { tinymce?: { activeEditor?: { getBody(): HTMLElement } } }).tinymce?.activeEditor?.getBody();
+  const container = buildEverything(editorBody);
+  if (!container) return;
+  document.body.appendChild(container);
+  document.body.classList.add('toc-print-selection-active');
+  implicitCopy = container;
+}
+
+function onAfterPrint(): void {
+  if (!implicitCopy) return;
+  implicitCopy.remove();
+  implicitCopy = null;
+  document.body.classList.remove('toc-print-selection-active');
+}
+
+if (typeof window !== 'undefined') {
+  // capture: this must run before the page-print handler of the spreadsheets (inline-spreadsheet.ts), which leaves a page with a copy alone
+  window.addEventListener('beforeprint', onBeforePrint, true);
+  window.addEventListener('afterprint', onAfterPrint, true);
 }
