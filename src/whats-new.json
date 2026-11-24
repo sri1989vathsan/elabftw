@@ -406,6 +406,7 @@
       "Open Tools in the top bar and choose Print label. Pick a format, type up to eight lines of text and press Print. A preview shows the label with dashed lines for the margins.",
       "Write a name in curly brackets, for example {sample}, where a value changes: it becomes a box you fill in.",
       "Format each line: size, bold, italic and left, centre or right.",
+        "Mix styles inside one line: select a part of the text and click B, I, A+ (bigger) or A− (smaller), or type **bold**, *italic*, [big]bigger[/big] and [small]smaller[/small]. The parts are printed side by side on one row; a row wider than the label is made smaller as a whole.",
       "To print many labels, paste cells from a spreadsheet and click the columns you want. Each row is one label.",
       "Fisher (37 x 15 mm) is the first format by default. An admin adds or changes formats and sets the printer in Admin panel, Labels: the address and port of the printer, its resolution and the web address for the QR code.",
       "Printing goes to the label printer of the lab over the network. It needs the printer address, which only an admin can set."
@@ -1555,6 +1556,7 @@
       "fa-print::Open Tools in the top bar and choose Print label. Pick a format, type up to eight lines and press Print.",
       "fa-brackets-curly::Write a name in curly brackets, for example {sample}, where a value changes: it becomes a box you fill in.",
       "fa-bold::Format each line: size, bold, italic, left, centre or right. The preview shows dashed lines for the margins.",
+        "fa-text-height::Mix styles in one line: select a part, then click B, I, A+ or A−, or type **bold**, *italic*, [big]…[/big], [small]…[/small].",
       "fa-table::To print many labels, paste cells from a spreadsheet and click the columns you want. Each row is one label.",
       "fa-gear::Admins set the printer address, port, resolution and formats in Admin panel, Labels. Without a printer address nothing prints."
     ],
