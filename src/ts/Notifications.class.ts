@@ -103,6 +103,9 @@ export class Notification {
     overlay.addEventListener('animationend', () => {
       overlay.remove();
     });
+    // fallback: if the animation never runs or ends (missing CSS rule,
+    // reduced motion, hidden tab), the toast must still go away
+    window.setTimeout(() => overlay.remove(), 5000);
     // create overlay content
     const p = document.createElement('p');
     // "status" role: see WCAG2.1 4.1.3
