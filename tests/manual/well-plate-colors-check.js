@@ -91,4 +91,7 @@ if (lib) {
 }
 check('C27 popup has the + button, template select, apply, save and delete', ['wp-add-random', 'wp-template"', 'wp-template-apply', 'wp-template-save', 'wp-template-delete'].every(c => view.includes(c)), 'missing');
 console.log(results.map(r => `${r.ok ? 'PASS' : 'FAIL'} ${r.name}${r.detail ? ' -- ' + r.detail : ''}`).join('\n'));
+const scss = read('src/scss/main.scss');
+check('C28 the group colour input beats the form-control padding (else its swatch is a thin line) and the template row wraps', /input\.wp-group-color\[type='color'\]/.test(scss) && /\.wp-template-row \{[\s\S]{0,80}flex-wrap: wrap/.test(scss), 'rule missing');
+console.log(results[results.length - 1].ok ? 'PASS ' + results[results.length - 1].name : 'FAIL ' + results[results.length - 1].name);
 process.exit(results.every(r => r.ok) ? 0 : 1);
