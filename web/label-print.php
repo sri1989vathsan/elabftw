@@ -55,6 +55,7 @@ use function trim;
  * POST {action: save_format|delete_format|save_settings} is for admins.
  */
 require_once __DIR__ . '/app/init.inc.php';
+require_once __DIR__ . '/label-markup.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -299,7 +300,8 @@ try {
         $line = trim(preg_replace_callback('/\{(field:)?([^}]+)\}/', static function (array $m) use ($values, $fields, &$empty): string {
             $value = $m[1] === 'field:' ? ($fields[$m[2]] ?? '') : ($values[$m[2]] ?? '');
             $empty = $empty || $value === '';
-            return $value;
+            // a * or [ in a value is text, not a marker of label-markup.php
+            return LabelMarkup::escape($value);
         }, (string) $template));
         if ($line !== '' && !$empty) {
             $lines[] = $line;
@@ -309,7 +311,9 @@ try {
 
     // the text typed in the print dialog goes below: one line each, a few at most
     foreach (array_slice(explode("\n", (string) ($payload['custom'] ?? '')), 0, $generic ? 8 : 4) as $index => $custom) {
-        $custom = trim(mb_substr($custom, 0, $generic ? 80 : 60));
+        // a line with markers (label-markup.php) may be longer by what the markers take
+        $limit = ($generic ? 80 : 60) * (preg_match('/[*\[]/', $custom) === 1 ? 2 : 1);
+        $custom = trim(mb_substr($custom, 0, $limit));
         if ($custom !== '') {
             $lines[] = $custom;
             $lineStyles[] = $styleOf($index);
@@ -381,11 +385,48 @@ try {
         $box = imagettfbbox($size * 0.75, 0, $fontFile($style), $text);
         return $box === false ? 0 : (int) ($box[2] - $box[0]);
     };
+    // the width a piece of text takes on the row (what the next piece is put after), not only its ink
+    $advance = static function (string $text, int $size, array $style) use ($fontFile): int {
+        $with = imagettfbbox($size * 0.75, 0, $fontFile($style), 'x' . $text . 'x');
+        $without = imagettfbbox($size * 0.75, 0, $fontFile($style), 'xx');
+        return $with === false || $without === false ? 0 : max(0, (int) (($with[2] - $with[0]) - ($without[2] - $without[0])));
+    };
+    // a line with mixed styles (label-markup.php): its pieces side by side on one row, each with its own size (relative to the biggest, which
+    // is the size of the row), bold and italic on top of those of the whole line
+    $pieceStyle = static fn(array $piece, array $style): array => array('bold' => $piece['bold'] || $style['bold'], 'italic' => $piece['italic'] || $style['italic']);
+    $rowWidth = static function (array $pieces, int $size, array $style) use ($advance, $pieceStyle): int {
+        $sum = 0;
+        foreach ($pieces as $piece) {
+            $sum += $advance($piece['text'], max(1, (int) round($size * $piece['rel'])), $pieceStyle($piece, $style));
+        }
+        return $sum;
+    };
+    // the row is made smaller, every piece by the same part, until it fits the width of the text
+    $fitRow = static function (array $pieces, int $size, array $style) use ($rowWidth, $textWidth): int {
+        $width = $rowWidth($pieces, $size, $style);
+        if ($width > $textWidth && $width > 0) {
+            $size = max(8, (int) floor($size * $textWidth / $width));
+        }
+        while ($size > 8 && $rowWidth($pieces, $size, $style) > $textWidth) {
+            --$size;
+        }
+        return $size;
+    };
+    $plainStyle = array('size_mm' => 0.0, 'bold' => false, 'italic' => false, 'align' => 'left');
     // a text that does not fit in one row gets a smaller font and up to two rows, so that nothing is cut
     $plan = array();
     foreach ($lines as $number => $line) {
         $style = $lineStyles[$number] ?? null;
         $own = $style !== null && $style['size_mm'] > 0 ? (int) min($dots($style['size_mm']), $usable) : $font;
+        $parsed = LabelMarkup::parse($line);
+        $line = $parsed['plain'];
+        if ($parsed['marked'] && $canDraw) {
+            $biggest = max(array_map(static fn(array $p): float => $p['scale'], $parsed['pieces']));
+            $pieces = array_map(static fn(array $p): array => $p + array('rel' => $p['scale'] / $biggest), $parsed['pieces']);
+            $style ??= $plainStyle;
+            $plan[] = array('size' => $fitRow($pieces, max(8, (int) min(round($own * $biggest), $usable)), $style), 'text' => $line, 'style' => $style, 'pieces' => $pieces);
+            continue;
+        }
         if ($needsPicture($style)) {
             $size = $own;
             if ($inkWidth($line, $size, $style) <= $textWidth) {
@@ -433,12 +474,15 @@ try {
     $cursor = $top;
     foreach ($plan as $item) {
         $size = max(8, (int) floor($item['size'] * $scale));
+        if (isset($item['pieces'])) {
+            $size = $fitRow($item['pieces'], $size, $item['style']);
+        }
         if ($cursor + $size > $height - $bottom + (int) ($font * 0.3)) {
             break;
         }
         $baseline = $cursor + (int) round($size * 0.8);
         $boxHeight = (int) ceil($size * 1.15);
-        if ($needsPicture($item['style'])) {
+        if (isset($item['pieces']) || $needsPicture($item['style'])) {
             // the picture is the width of the text area, black on white, one bit per dot; turned by 180 degrees when the label is
             $style = $item['style'];
             $file = $fontFile($style);
@@ -446,9 +490,32 @@ try {
             $white = (int) imagecolorallocate($image, 255, 255, 255);
             $black = (int) imagecolorallocate($image, 0, 0, 0);
             imagefilledrectangle($image, 0, 0, $textWidth - 1, $boxHeight - 1, $white);
-            $ink = $inkWidth($item['text'], $size, $style);
-            $inkX = $style['align'] === 'center' ? (int) floor(($textWidth - $ink) / 2) : ($style['align'] === 'right' ? $textWidth - $ink : 0);
-            imagettftext($image, $size * 0.75, 0, max(0, $inkX), (int) round($size * 0.8), $black, $file, $item['text']);
+            // what is drawn: the text, or the pieces of a mixed line one after another on the same baseline
+            $ops = array();
+            $pieceInfo = null;
+            if (isset($item['pieces'])) {
+                $pieceInfo = array();
+                $rowTotal = 0;
+                foreach ($item['pieces'] as $piece) {
+                    $pieceSize = max(1, (int) round($size * $piece['rel']));
+                    $pieceFont = $pieceStyle($piece, $style);
+                    $w = $advance($piece['text'], $pieceSize, $pieceFont);
+                    $ops[] = array('text' => $piece['text'], 'size' => $pieceSize, 'file' => $fontFile($pieceFont), 'x' => $rowTotal);
+                    $pieceInfo[] = array('text' => $piece['text'], 'bold' => $pieceFont['bold'], 'italic' => $pieceFont['italic'], 'size' => $pieceSize, 'w' => $w);
+                    $rowTotal += $w;
+                }
+                $startX = $style['align'] === 'center' ? (int) floor(($textWidth - $rowTotal) / 2) : ($style['align'] === 'right' ? $textWidth - $rowTotal : 0);
+                foreach ($ops as $k => $op) {
+                    $ops[$k]['x'] = max(0, $startX + $op['x']);
+                }
+            } else {
+                $ink = $inkWidth($item['text'], $size, $style);
+                $inkX = $style['align'] === 'center' ? (int) floor(($textWidth - $ink) / 2) : ($style['align'] === 'right' ? $textWidth - $ink : 0);
+                $ops[] = array('text' => $item['text'], 'size' => $size, 'file' => $file, 'x' => max(0, $inkX));
+            }
+            foreach ($ops as $op) {
+                imagettftext($image, $op['size'] * 0.75, 0, $op['x'], (int) round($size * 0.8), $black, $op['file'], $op['text']);
+            }
             if ($rotated) {
                 $image = imagerotate($image, 180, $white) ?: $image;
             }
@@ -482,7 +549,7 @@ try {
             $zpl[] = sprintf('^FO%d,%d^GFA,%d,%d,%d,%s^FS', $x, $y, $total, $total, $rowBytes, $hex);
             $previewX = $rotated ? $width - $left - $textWidth : $left;
             $previewY = $rotated ? $height - $cursor - $boxHeight : $cursor;
-            $elements[] = array('type' => 'image', 'x' => $previewX, 'y' => $previewY, 'w' => $textWidth, 'h' => $boxHeight, 'src' => 'data:image/png;base64,' . base64_encode($png));
+            $elements[] = array('type' => 'image', 'x' => $previewX, 'y' => $previewY, 'w' => $textWidth, 'h' => $boxHeight, 'src' => 'data:image/png;base64,' . base64_encode($png)) + ($pieceInfo !== null ? array('pieces' => $pieceInfo) : array());
             $cursor += $boxHeight;
             continue;
         }
@@ -515,7 +582,7 @@ try {
     $label = implode("\n", $zpl) . "\n";
 
     if (!empty($payload['dry'])) {
-        respond(200, array('zpl' => $label, 'elements' => $elements, 'margins' => array('left' => $left, 'top' => $top, 'right' => $right, 'bottom' => $bottom), 'width' => $width, 'height' => $height, 'rotated' => $rotated, 'lines' => $lines, 'width_mm' => $design['width_mm'], 'height_mm' => $design['height_mm']));
+        respond(200, array('zpl' => $label, 'elements' => $elements, 'margins' => array('left' => $left, 'top' => $top, 'right' => $right, 'bottom' => $bottom), 'width' => $width, 'height' => $height, 'rotated' => $rotated, 'lines' => array_map(static fn(string $l): string => LabelMarkup::parse($l)['plain'], $lines), 'width_mm' => $design['width_mm'], 'height_mm' => $design['height_mm']));
     }
     if ($generic && $lines === array() && empty($payload['test'])) {
         respond(400, array('error' => 'Type the text of the label first.'));
@@ -530,7 +597,7 @@ try {
     }
     fwrite($socket, $label);
     fclose($socket);
-    respond(200, array('ok' => true, 'printed' => $copies, 'lines' => $lines));
+    respond(200, array('ok' => true, 'printed' => $copies, 'lines' => array_map(static fn(string $l): string => LabelMarkup::parse($l)['plain'], $lines)));
 } catch (Throwable $e) {
     respond(400, array('error' => $e->getMessage() !== '' ? $e->getMessage() : $e::class));
 }
