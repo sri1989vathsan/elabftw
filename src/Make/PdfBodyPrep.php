@@ -325,6 +325,12 @@ final class PdfBodyPrep
             $col->setAttribute('style', 'width:' . round($widths[$i], 2) . 'px');
             $group->append($col);
         }
+        // mPDF drops a <caption> that comes after the <colgroup>: the group goes behind the caption (the order HTML asks for anyway)
+        $caption = $table->querySelector('caption');
+        if ($caption !== null && $caption->parentNode === $table) {
+            $caption->after($group);
+            return;
+        }
         $table->prepend($group);
     }
 

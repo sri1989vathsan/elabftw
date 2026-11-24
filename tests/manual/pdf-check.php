@@ -181,5 +181,14 @@ $check('saved sheet with no stored widths: the width of the table is shared out 
 $measured = PdfBodyPrep::spreadsheets($saved(14, 150, false, false), $page, PdfBodyPrep::MODE_LANDSCAPE, $land);
 $check('saved sheet with neither: widths measured from the text (about 7 px a character), still scaled', str_contains($measured, '<col ') && (str_contains($measured, 'width:1030px;') || str_contains($measured, 'width:700px;')), 'not measured');
 
+// --- pdf-sheet-caption: the caption of a sheet (and of a plain table) is in the PDF. mPDF drops a <caption> that follows a <colgroup>.
+$captioned = '<table class="elabftw-spreadsheet" data-spreadsheet="BLOB" style="width:100%"><caption>SheetCaptionXYZ</caption><thead><tr>' . $coord('') . $coord('A') . '</tr></thead><tbody><tr>' . $coord('1') . $cell('v') . '</tr></tbody></table>';
+$withCaption = PdfBodyPrep::spreadsheets($captioned, $page);
+$check('pdf-sheet-caption: the caption is kept in the prepared body', str_contains($withCaption, '<caption>SheetCaptionXYZ</caption>'), 'caption lost');
+$check('pdf-sheet-caption: the caption comes before the column group (mPDF drops it otherwise)', strpos($withCaption, '<caption>') !== false && strpos($withCaption, '<colgroup>') !== false && strpos($withCaption, '<caption>') < strpos($withCaption, '<colgroup>'), 'colgroup before caption');
+$captionedWithGroup = str_replace('<caption>SheetCaptionXYZ</caption>', '<colgroup><col style="width:42px"><col style="width:120px"></colgroup><caption>SheetCaptionXYZ</caption>', $captioned);
+$moved = PdfBodyPrep::spreadsheets($captionedWithGroup, $page);
+$check('pdf-sheet-caption: a caption written after an existing column group is not dropped either', str_contains($moved, 'SheetCaptionXYZ'), 'caption lost');
+
 echo $failed === 0 ? "ALL PASSED\n" : "$failed FAILED\n";
 exit($failed === 0 ? 0 : 1);
