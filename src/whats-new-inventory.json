@@ -229,5 +229,19 @@
     "shot": "The Who can edit window of an entry",
     "screenshots": [],
     "image": "guide-database-sharing.png"
+  },
+  {
+    "id": "orders-database-flow",
+    "date": "2026-11-24",
+    "area": "Orders",
+    "featured": false,
+    "title": "Orders and the Database: nothing is added by itself",
+    "summary": "Placing an order never adds to the Database on its own. Known items are linked; new ones have a box you tick.",
+    "details": [
+      "An item the Database already knows (found by its name) is linked to the order, with a note that says so.",
+      "A new item shows a box, Add it to the Database too, not ticked. Tick it to see its name, module and Columns under the box.",
+      "An order with several links has one block for each item. A button follows your ticks: Add all, Add the other, or Remove all.",
+      "After the order is placed, the card button Add to database opens a window with a tick for each line, so you can add all or only some."
+    ]
   }
 ]
