@@ -1149,11 +1149,20 @@ async function spreadsheetSoak(options = {}) {
     if (!root || models.get(uid)?.tallRows) return; // a sheet of wrapped long text has rows of different heights on purpose
     await sleep(500);
     if (document.hidden) { note('row-height-check-skipped-hidden'); return; } // the layout loop is throttled then
-    const heights = [...root.querySelectorAll('.jss_worksheet tbody tr')].map(tr => Math.round(tr.getBoundingClientRect().height));
+    const trs = [...root.querySelectorAll('.jss_worksheet tbody tr')];
+    const heights = trs.map(tr => Math.round(tr.getBoundingClientRect().height));
+    // A row whose text wraps (a narrow column and a longer text, e.g. "#oligos in panel 21" in a 133 px column) is as high as its lines: that is the
+    // rule (row-height-fits-text), not a difference. Only rows without wrapped text must have the same height.
+    const wraps = tr => [...tr.querySelectorAll('td[data-x]')].some(td => {
+      if (!td.textContent.trim()) return false;
+      const range = document.createRange(); range.selectNodeContents(td);
+      return new Set([...range.getClientRects()].map(rect => Math.round(rect.top / 4))).size > 1;
+    });
+    const plain = heights.filter((_, i) => !wraps(trs[i]));
     note('row-height-check');
     // rows with and without content can differ by 3 px in the table's own rendering
-    if (heights.length && Math.max(...heights) - Math.min(...heights) > 4) {
-      fail(`rows are not all the same height after ${label}: ${heights.join(' ')}`, { table: models.get(uid)?.label });
+    if (plain.length && Math.max(...plain) - Math.min(...plain) > 4) {
+      fail(`rows are not all the same height after ${label}: ${heights.join(' ')} (rows with wrapped text left out: ${heights.filter((_, i) => wraps(trs[i])).length})`, { table: models.get(uid)?.label });
     }
     // nothing may cover the last row: not the Add rows bar, not the horizontal scroll bar
     const rowsEls = root.querySelectorAll('.jss_worksheet tbody tr');
