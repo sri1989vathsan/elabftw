@@ -1577,8 +1577,8 @@
         "caption": "Labels from a table: paste cells from a spreadsheet, click the column names to put them in the text, and the preview shows the first label; each row is one label"
       },
       {
-        "image": "guide-labels-admin-39cc7b0e.png",
-        "caption": "Admin panel, Labels: the printer address, port and resolution, the QR web address and the label formats (the address shown is only an example)"
+        "image": "guide-labels-admin-f1e5e16f.png",
+        "caption": "Admin panel, Labels: the printer address, port and resolution, the QR web address and the label formats (the address shown, 192.0.2.10, is only an example)"
       }
     ]
   },
