@@ -38,7 +38,7 @@ const SAME_FEATURE = [
   ['guide-templates', 'template-version-history'],
   ['guide-whats-new-popup', 'whats-new-popup'],
   ['guide-list-layouts', 'list-layouts'],
-  ['guide-dashboard', 'dashboard-tiles'],
+  ['guide-dashboard', 'dashboard-tiles', 'back-to-link-in-top-bar'],
   ['guide-create-entry', 'create-with-folder'],
   ['guide-orders', 'orders'],
   ['guide-database', 'database-guide'],
