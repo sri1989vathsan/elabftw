@@ -129,3 +129,61 @@
   right: 0;
   top: 4px;
 }
+
+/* The icons at the right end of the bar (create, notifications, What's new,
+   guide "i", help "?", user initials): one box size, one glyph size, one
+   vertical centre and an even gap. Everything is centred in the box with flex,
+   so a glyph's own metrics (circle icons vs. bell/gift) cannot shift it, and the
+   notification count is absolutely positioned so it never changes the bell's
+   box. */
+#navbar-secondary-nav {
+  --nav-icon-box: 36px;
+  --nav-icon-glyph: 21px;
+  --nav-icon-gap: 16px;
+
+  align-items: center;
+  gap: var(--nav-icon-gap);
+  height: 43px;
+
+  > .nav-item {
+    margin: 0 !important;
+  }
+
+  .nav-link,
+  .btn.nav-link {
+    align-items: center;
+    box-sizing: border-box;
+    display: inline-flex;
+    height: var(--nav-icon-box);
+    justify-content: center;
+    line-height: 1;
+    margin: 0;
+    min-height: 0;
+    min-width: var(--nav-icon-box);
+    padding: 0 !important;
+    position: relative;
+    vertical-align: middle;
+    width: var(--nav-icon-box);
+  }
+
+  .nav-link .fa-2x,
+  .nav-link .fa-solid,
+  .nav-link .far,
+  .nav-link .fas {
+    display: block;
+    font-size: var(--nav-icon-glyph);
+    height: 1em;
+    line-height: 1;
+    text-align: center;
+    width: 1em;
+  }
+
+  /* the user's initials fill the same box (two letters fit, a third squeezes) */
+  .initials {
+    display: block;
+    font-size: calc(var(--nav-icon-glyph) * 0.9);
+    letter-spacing: -0.02em;
+    line-height: 1;
+    white-space: nowrap;
+  }
+}
