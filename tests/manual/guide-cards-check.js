@@ -100,7 +100,6 @@ for (const [card, where] of used) {
 // Cards without an own i button must be reachable another way: through an area i (opens the guide page showing the whole area), or be listed
 // here as page-only (they are still on the What's new / guide page). Keep the reason when you add one.
 const PAGE_ONLY = {
-  'guide-pins': 'the pin buttons sit in every list row; a small i there would clutter the rows. The Experiments area i lists the card too',
   'guide-reminders': 'the reminder chip is drawn by a Svelte component and the reminder field by the to-do panel script; an i there needs a TypeScript build',
 };
 const byId = new Map(entries.map(e => [e.id, e]));
