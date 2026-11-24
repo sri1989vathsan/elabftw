@@ -1359,6 +1359,7 @@
             <span class='reminder-banner-subtitle'>{t('Deadlines approaching')}</span>
           </span>
         </button>
+        <button type='button' class='btn btn-link guide-info-btn p-0 reminder-banner-info' data-action='open-guide-card' data-card='guide-reminders' title={t('About Deadline reminders in the guide')} aria-label={t('About Deadline reminders in the guide')}><i class='fas fa-circle-info' aria-hidden='true'></i></button>
         <button
           type='button'
           class='reminder-banner-dismiss'
@@ -1773,6 +1774,19 @@
 
   .reminder-banner-clear:hover {
     opacity: 1;
+  }
+
+  // the "i" of the guide card, left of the close button
+  .reminder-banner-header :global(.guide-info-btn.btn) {
+    height: 1.4rem;
+    justify-content: center;
+    margin-top: 0.15rem;
+    top: 0;
+    width: 1.4rem;
+  }
+
+  .reminder-banner-header :global(.guide-info-btn.btn > i) {
+    font-size: 1rem;
   }
 
   .reminder-banner-dismiss {
