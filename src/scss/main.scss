@@ -2501,6 +2501,11 @@ h1:has(> #documentTitle) {
     min-width: 0;
   }
 
+  // the icon colour of the bar's icons is set globally (dark on the bar); this one follows the button text
+  button i {
+    color: inherit !important;
+  }
+
   .elabftw-back-button-label {
     overflow: hidden;
     text-overflow: ellipsis;
