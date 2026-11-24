@@ -9,7 +9,7 @@
  * Run it once at each interface size (Settings > Display: compact / comfortable): the columns are compared inside one page, so the size
  * only changes the numbers, not the verdict.
  *
- * It creates "ALN root" with a child "ALN child" and one experiment in each (so both show a count), bookmarks the root, and removes
+ * It creates "ALN root" (bookmarked) and "ALN other" (not), each with a child, and an experiment in three of them (so counts show), and removes
  * all of it afterwards. The view and the "Other folders" state are put back.
  */
 window.foldersAlignmentCheck = async function () {
@@ -35,8 +35,11 @@ window.foldersAlignmentCheck = async function () {
     await wait(2500);
     var root = Number((await api('POST', 'experiments_folders', { name: 'ALN root', parent_id: null })).loc.split('/').pop());
     var child = Number((await api('POST', 'experiments_folders', { name: 'ALN child', parent_id: root })).loc.split('/').pop());
-    made.folders.push(child, root);
-    for (var f of [root, child]) made.experiments.push(Number((await api('POST', 'experiments', { title: 'ALN file', folder_id: f })).loc.split('/').pop()));
+    // an unbookmarked top-level folder with a child, so "Other folders" always has something to show
+    var otherRoot = Number((await api('POST', 'experiments_folders', { name: 'ALN other', parent_id: null })).loc.split('/').pop());
+    var otherChild = Number((await api('POST', 'experiments_folders', { name: 'ALN other child', parent_id: otherRoot })).loc.split('/').pop());
+    made.folders.push(otherChild, otherRoot, child, root);
+    for (var f of [root, child, otherRoot]) made.experiments.push(Number((await api('POST', 'experiments', { title: 'ALN file', folder_id: f })).loc.split('/').pop()));
     $('#foldersPanel [data-action="refresh-folders"]').click();
     await wait(1800);
     $('[data-action="select-folder-view"][data-view="tree"]').click();
