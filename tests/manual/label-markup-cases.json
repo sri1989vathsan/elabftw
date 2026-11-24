@@ -1,0 +1,22 @@
+[
+  { "name": "plain", "in": "Plasmid 12", "marked": false, "pieces": [["Plasmid 12", "", 1]] },
+  { "name": "bold in the middle", "in": "a **b** c", "marked": true, "pieces": [["a ", "", 1], ["b", "b", 1], [" c", "", 1]] },
+  { "name": "italic", "in": "x *y*", "marked": true, "pieces": [["x ", "", 1], ["y", "i", 1]] },
+  { "name": "bold and italic", "in": "***both*** end", "marked": true, "pieces": [["both", "bi", 1], [" end", "", 1]] },
+  { "name": "big and small", "in": "[big]ID[/big] [small]note[/small]", "marked": true, "pieces": [["ID", "", 1.4], [" ", "", 1], ["note", "", 0.7]] },
+  { "name": "bold inside big", "in": "[big]**ID** 12[/big]", "marked": true, "pieces": [["ID", "b", 1.4], [" 12", "", 1.4]] },
+  { "name": "tags in any case", "in": "[BIG]x[/Big]", "marked": true, "pieces": [["x", "", 1.4]] },
+  { "name": "empty pieces are dropped", "in": "a****b", "marked": false, "pieces": [["ab", "", 1]] },
+  { "name": "nothing between the markers", "in": "****", "marked": false, "pieces": [["****", "", 1]] },
+  { "name": "unbalanced bold", "in": "a **b", "marked": false, "pieces": [["a **b", "", 1]] },
+  { "name": "unbalanced italic", "in": "5 * 3", "marked": false, "pieces": [["5 * 3", "", 1]] },
+  { "name": "closing tag without opening", "in": "x[/big]", "marked": false, "pieces": [["x[/big]", "", 1]] },
+  { "name": "tag not closed", "in": "[big]x", "marked": false, "pieces": [["[big]x", "", 1]] },
+  { "name": "big inside small", "in": "[small]a[big]b[/big][/small]", "marked": false, "pieces": [["[small]a[big]b[/big][/small]", "", 1]] },
+  { "name": "crossed tags", "in": "[big]a[/small]", "marked": false, "pieces": [["[big]a[/small]", "", 1]] },
+  { "name": "other brackets are text", "in": "[ ] done [x]", "marked": false, "pieces": [["[ ] done [x]", "", 1]] },
+  { "name": "escaped star is text", "in": "a \\*b\\* c", "marked": false, "pieces": [["a *b* c", "", 1]] },
+  { "name": "escaped value inside bold", "in": "**\\*x\\[**", "marked": true, "pieces": [["*x[", "b", 1]] },
+  { "name": "backslash alone is text", "in": "a\\b **c**", "marked": true, "pieces": [["a\\b ", "", 1], ["c", "b", 1]] },
+  { "name": "accents", "in": "**Zürich** é", "marked": true, "pieces": [["Zürich", "b", 1], [" é", "", 1]] }
+]
