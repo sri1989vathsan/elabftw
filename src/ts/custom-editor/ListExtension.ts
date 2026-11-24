@@ -94,6 +94,44 @@ function handleChecklistClick(editor: Editor, event: MouseEvent): void {
   editor.nodeChanged();
 }
 
+const CONTINUES_ATTR = 'data-continues';
+
+function topLevelOrderedLists(root: HTMLElement): HTMLOListElement[] {
+  return Array.from(root.querySelectorAll<HTMLOListElement>('ol'))
+    .filter(list => !list.parentElement?.closest('li'));
+}
+
+function listLength(list: HTMLOListElement): number {
+  return Array.from(list.children).filter(child => child.tagName === 'LI').length;
+}
+
+function listStart(list: HTMLOListElement): number {
+  const value = parseInt(list.getAttribute('start') ?? '', 10);
+  return Number.isFinite(value) ? value : 1;
+}
+
+/**
+ * A list marked data-continues has no fixed number: its start is the number after the
+ * nearest previous list, so deleting items above renumbers it (and with no list before it
+ * it starts at 1). The computed start is written to the start attribute, which is what is
+ * saved, shown in view mode, printed and exported to PDF.
+ */
+function renumberContinuingLists(editor: Editor): void {
+  let previous: HTMLOListElement | null = null;
+  topLevelOrderedLists(editor.getBody()).forEach(list => {
+    if (list.hasAttribute(CONTINUES_ATTR)) {
+      const next = previous ? listStart(previous) + listLength(previous) : 1;
+      const current = list.getAttribute('start');
+      if (next === 1) {
+        if (current !== null) list.removeAttribute('start');
+      } else if (current !== String(next)) {
+        list.setAttribute('start', String(next));
+      }
+    }
+    previous = list;
+  });
+}
+
 function handleListShortcut(editor: Editor, event: KeyboardEvent): void {
   if ((event.key !== ' ' && event.code !== 'Space')
     || event.ctrlKey
@@ -112,6 +150,7 @@ function handleListShortcut(editor: Editor, event: KeyboardEvent): void {
   let command: 'InsertUnorderedList' | 'InsertOrderedList' | 'Checklist' | null = null;
   let checklistChecked = false;
   let startNumber = 1;
+  let continues = false;
   const numbered = /^(\d{1,3})[.)]$/.exec(marker);
   if (marker === '-') {
     command = 'InsertUnorderedList';
@@ -119,7 +158,15 @@ function handleListShortcut(editor: Editor, event: KeyboardEvent): void {
     // "1" alone, or "N." / "N)" with N of 1 to 3 digits (so "2024. " stays text).
     // The marker is the whole paragraph, so "10.5 mg" or a number inside a sentence never matches.
     command = 'InsertOrderedList';
-    if (numbered) startNumber = Math.max(1, parseInt(numbered[1], 10));
+    if (numbered) {
+      startNumber = Math.max(1, parseInt(numbered[1], 10));
+      // N is exactly the number after the nearest previous list: continue it instead of fixing N
+      const previous = topLevelOrderedLists(editor.getBody())
+        .filter(list => block.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_PRECEDING)
+        .pop();
+      continues = Boolean(previous) && startNumber > 1
+        && startNumber === listStart(previous as HTMLOListElement) + listLength(previous as HTMLOListElement);
+    }
   } else if (marker === '[]' || marker === '[ ]' || marker === '- [ ]') {
     command = 'Checklist';
   } else if (/^(?:- )?\[[xX]\]$/.test(marker)) {
@@ -144,7 +191,10 @@ function handleListShortcut(editor: Editor, event: KeyboardEvent): void {
       if (command === 'InsertOrderedList' && startNumber > 1) {
         const list = (editor.selection.getNode() as HTMLElement).closest('ol');
         // a list merged into a neighbouring one keeps that one's numbering
-        if (list && list.children.length === 1) list.setAttribute('start', String(startNumber));
+        if (list && list.children.length === 1) {
+          list.setAttribute('start', String(startNumber));
+          if (continues) list.setAttribute(CONTINUES_ATTR, 'true');
+        }
       }
     }
   });
@@ -204,6 +254,7 @@ export function registerListExtension(editor: Editor): void {
     },
   });
 
+  editor.on('init SetContent NodeChange input keyup Undo Redo BeforeGetContent', () => renumberContinuingLists(editor));
   editor.on('init', () => normalizeChecklists(editor));
   editor.on('click', event => handleChecklistClick(editor, event));
   editor.on('NodeChange', () => normalizeChecklists(editor));

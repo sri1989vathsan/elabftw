@@ -244,7 +244,7 @@ final class Filter
         // create base config for html5
         $config = HTMLPurifier_HTML5Config::createDefault();
         // allow only certain elements
-        $config->set('HTML.Allowed', 'div[class|style],br,p[class|style],sub,img[src|alt|class|style|width|height],sup,strong,b,em,u,a[href|id|class|style|title|target],time[datetime],s,span[id|class|style|title],ul[class|style],li[class|style|data-checked],ol[style|start],dl,dt,dd,blockquote,h1[id|class|style],h2[id|class|style],h3[id|class|style],h4[id|class|style],h5[id|class|style],h6[id|class|style],hr[class],table[class|style|data-table-sort|data-spreadsheet|data-spreadsheet-style|data-well-plate],thead,tbody,tr[style],td[style|colspan|rowspan],th[class|style|colspan|rowspan],code,source[src|type],video[src|controls|style|width|height],audio[src|controls],pre[class],details[class|open],summary[class],caption,figure,figcaption');
+        $config->set('HTML.Allowed', 'div[class|style],br,p[class|style],sub,img[src|alt|class|style|width|height],sup,strong,b,em,u,a[href|id|class|style|title|target],time[datetime],s,span[id|class|style|title],ul[class|style],li[class|style|data-checked],ol[style|start|data-continues],dl,dt,dd,blockquote,h1[id|class|style],h2[id|class|style],h3[id|class|style],h4[id|class|style],h5[id|class|style],h6[id|class|style],hr[class],table[class|style|data-table-sort|data-spreadsheet|data-spreadsheet-style|data-well-plate],thead,tbody,tr[style],td[style|colspan|rowspan],th[class|style|colspan|rowspan],code,source[src|type],video[src|controls|style|width|height],audio[src|controls],pre[class],details[class|open],summary[class],caption,figure,figcaption');
         $config->set('Attr.AllowedFrameTargets', array('_blank'));
         // keep stable anchors generated for linkable Table of Contents entries
         $config->set('Attr.EnableID', true);
@@ -364,6 +364,7 @@ final class Filter
             $def->addAttribute('table', 'data-spreadsheet-style', 'Enum#standard,notebook,well-plate');
             $def->addAttribute('table', 'data-well-plate', 'Enum#6,12,24,48,96,384');
             $def->addAttribute('li', 'data-checked', 'Enum#true,false');
+            $def->addAttribute('ol', 'data-continues', 'Enum#true');
         }
 
         $purifier = new HTMLPurifier($config);
