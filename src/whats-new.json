@@ -399,7 +399,7 @@
     "id": "print-label",
     "date": "2026-11-17",
     "area": "Others",
-    "featured": false,
+    "featured": true,
     "title": "Print a label",
     "summary": "Print a label from the plus menu: your own text, one label per row of a pasted table, on the label sizes your admins set up.",
     "details": [
@@ -792,7 +792,7 @@
     ],
     "image": "left-sidebar.png",
     "imageAlt": "The left sidebar: a column of small buttons for Folders, Search, Quick search, To-do, Calendar and Contents, here with the Search panel opened",
-    "featured": true,
+    "featured": false,
     "highlight": {
       "x": 0.0,
       "y": 28.6,
