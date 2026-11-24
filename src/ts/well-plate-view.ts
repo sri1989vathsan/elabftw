@@ -23,7 +23,9 @@ import {
   BUILTIN_TEMPLATES,
   colorForIndex,
   deleteUserTemplate,
+  DEFAULT_SWATCHES,
   distinctColor,
+  HEX,
   loadUserTemplates,
   PALETTE,
   recolorGroups,
@@ -777,50 +779,56 @@ export function openWellPlateModal(initial: SpreadsheetData, isEditing: boolean)
       paint();
     };
 
+    // Ten swatches by default. "More" shows the rest of the palette and the custom picker; colours the person
+    // picked or that this plate's groups use stay visible even when it is closed.
+    let showMore = false;
+    const picked = new Set<string>();
     const paintPalette = (): void => {
       palette.replaceChildren();
-      PALETTE.forEach(color => {
+      const addSwatch = (color: string, custom: boolean): void => {
         const swatch = document.createElement('button');
         swatch.type = 'button';
-        swatch.className = 'wp-swatch';
+        swatch.className = custom ? 'wp-swatch wp-swatch-custom' : 'wp-swatch';
         swatch.style.background = color;
-        swatch.title = color;
-        swatch.setAttribute('aria-label', `Colour ${color}`);
+        swatch.title = custom ? `Added ${color}` : color;
+        swatch.setAttribute('aria-label', custom ? `Added colour ${color}` : `Colour ${color}`);
         swatch.setAttribute('aria-pressed', String(color === activeColor));
         swatch.addEventListener('click', () => {
           activeColor = color;
           paintPalette();
         });
         palette.appendChild(swatch);
-      });
-      // Colours already used by this plate's groups that are not in the palette (custom colours) stay one click away.
-      const remembered = groupsWithCounts(working).map(group => group.color).filter((color, i, all) => /^#[0-9a-f]{6}$/.test(color) && !PALETTE.includes(color) && all.indexOf(color) === i);
-      if (!PALETTE.includes(activeColor) && !remembered.includes(activeColor)) remembered.push(activeColor);
-      remembered.forEach(color => {
-        const swatch = document.createElement('button');
-        swatch.type = 'button';
-        swatch.className = 'wp-swatch wp-swatch-custom';
-        swatch.style.background = color;
-        swatch.title = `Custom ${color}`;
-        swatch.setAttribute('aria-label', `Custom colour ${color}`);
-        swatch.setAttribute('aria-pressed', String(color === activeColor));
-        swatch.addEventListener('click', () => {
-          activeColor = color;
+      };
+      DEFAULT_SWATCHES.forEach(color => addSwatch(color, false));
+      if (showMore) PALETTE.filter(color => !DEFAULT_SWATCHES.includes(color)).forEach(color => addSwatch(color, false));
+      const shownNow = new Set<string>(showMore ? PALETTE : DEFAULT_SWATCHES);
+      const kept = [...groupsWithCounts(working).map(group => group.color), ...picked, activeColor]
+        .filter((color, i, all) => HEX.test(color) && !shownNow.has(color) && all.indexOf(color) === i);
+      kept.forEach(color => addSwatch(color, true));
+      if (showMore) {
+        const picker = document.createElement('input');
+        picker.type = 'color';
+        picker.className = 'wp-swatch wp-swatch-picker';
+        picker.value = HEX.test(activeColor) ? activeColor : '#7d8499';
+        picker.title = 'Pick any colour';
+        picker.setAttribute('aria-label', 'Custom colour');
+        picker.addEventListener('change', () => {
+          activeColor = normalizeColor(picker.value);
+          picked.add(activeColor);
           paintPalette();
         });
-        palette.appendChild(swatch);
-      });
-      const picker = document.createElement('input');
-      picker.type = 'color';
-      picker.className = 'wp-swatch wp-swatch-picker';
-      picker.value = /^#[0-9a-f]{6}$/.test(activeColor) ? activeColor : '#7d8499';
-      picker.title = 'Pick any colour';
-      picker.setAttribute('aria-label', 'Custom colour');
-      picker.addEventListener('change', () => {
-        activeColor = normalizeColor(picker.value);
+        palette.appendChild(picker);
+      }
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'btn btn-sm btn-link wp-more-colors';
+      more.textContent = showMore ? 'Fewer colours' : 'More colours';
+      more.setAttribute('aria-expanded', String(showMore));
+      more.addEventListener('click', () => {
+        showMore = !showMore;
         paintPalette();
       });
-      palette.appendChild(picker);
+      palette.appendChild(more);
     };
 
     const paintGroups = (): void => {

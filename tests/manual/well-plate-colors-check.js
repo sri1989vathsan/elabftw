@@ -33,7 +33,7 @@ palette.forEach((a, i) => palette.forEach((b, j) => { if (j > i && j >= OLD.leng
 check('C5 no two colours are nearly identical (new ones: RGB distance >= 45 from all others)', near.length === 0, near.join());
 check('C6 dynamic grouping uses the same list', /colorForIndex/.test(view) && !/const GROUP_COLORS/.test(view), 'GROUP_COLORS is separate');
 check('C7 popup has a custom colour input', /type = 'color';[\s\S]{0,80}wp-swatch-picker/.test(view), 'missing');
-check('C8 custom colours of the plate\'s groups are offered again', /remembered/.test(view) && /wp-swatch-custom/.test(view), 'missing');
+check('C8 custom colours of the plate\'s groups are offered again', /const kept = /.test(view) && /wp-swatch-custom/.test(view), 'missing');
 const cap = read('src/ts/inline-spreadsheet.ts').match(/plateGroups[\s\S]{0,300}?\.slice\(0, (\d+)\)/);
 check('C9 stored group list holds at least a full palette', cap && Number(cap[1]) >= palette.length, cap && cap[1]);
 check('C10 colours are stored per well as background-color and printed exactly', /background-color/.test(view) && /print-color-adjust: exact/.test(read('src/scss/main.scss')), 'missing');
@@ -90,8 +90,19 @@ if (lib) {
   check('C26 broken stored data gives no templates', loadUserTemplates({ getItem: () => '{oops' }).length === 0, 'threw or returned some');
 }
 check('C27 popup has the + button, template select, apply, save and delete', ['wp-add-random', 'wp-template"', 'wp-template-apply', 'wp-template-save', 'wp-template-delete'].every(c => view.includes(c)), 'missing');
-console.log(results.map(r => `${r.ok ? 'PASS' : 'FAIL'} ${r.name}${r.detail ? ' -- ' + r.detail : ''}`).join('\n'));
+if (lib) {
+  const D = lib.DEFAULT_SWATCHES, P2 = lib.PALETTE;
+  check('C29 the popup shows 10 swatches by default', D.length === 10, D.length);
+  check('C30 the 10 defaults are distinct palette colours', new Set(D).size === 10 && D.every(c => P2.includes(c)), D.join());
+  let tight = []; D.forEach((a, i) => D.forEach((b, j) => { if (j > i && lib.colorDistance(a, b) < 80) tight.push(a + '/' + b); }));
+  check('C31 the 10 defaults are clearly different from each other', tight.length === 0, tight.join());
+  check('C32 the rest of the palette and the picker only come with "More colours"; added colours stay visible', /showMore/.test(view) && /More colours/.test(view) && /if \(showMore\) PALETTE/.test(view) && /picked\.add/.test(view), 'missing');
+  check('C33 existing plates and by-column grouping: colorForIndex still walks the full 24-colour palette in the old order', lib.colorForIndex(0) === P2[0] && lib.colorForIndex(8) === '#7d8499' && lib.colorForIndex(16) === '#e67700' && lib.colorForIndex(23) === P2[23], 'order changed');
+  check('C34 by-column grouping still takes its colours from colorForIndex', /colorForIndex\(next\)/.test(view), 'missing');
+  const dyn = []; for (let i = 0; i < 30; i++) dyn.push(lib.colorForIndex(i));
+  check('C35 30 column values still get 30 different colours', new Set(dyn).size === 30, new Set(dyn).size);
+}
 const scss = read('src/scss/main.scss');
 check('C28 the group colour input beats the form-control padding (else its swatch is a thin line) and the template row wraps', /input\.wp-group-color\[type='color'\]/.test(scss) && /\.wp-template-row \{[\s\S]{0,80}flex-wrap: wrap/.test(scss), 'rule missing');
-console.log(results[results.length - 1].ok ? 'PASS ' + results[results.length - 1].name : 'FAIL ' + results[results.length - 1].name);
+console.log(results.map(r => `${r.ok ? 'PASS' : 'FAIL'} ${r.name}${r.detail ? ' -- ' + r.detail : ''}`).join('\n'));
 process.exit(results.every(r => r.ok) ? 0 : 1);
