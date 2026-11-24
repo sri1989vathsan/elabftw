@@ -828,7 +828,7 @@
       "fa-file-lines::Press the page icon on a folder to open its README. The owner and admins edit it; everyone who can see the folder reads it.",
       "fa-ellipsis-vertical::The three dots on a folder give Export, Edit (rename, move, description), Permissions and Delete. Deleting moves its items to Unfiled.",
       "fa-user-shield::Permissions (owner and admins): set Can see and Can edit as on an entry, tick Include subfolders, press Apply and confirm.",
-      "fa-star::Star a folder to bookmark it. Bookmarked folders are listed at the top of the panel as shortcuts; press one to open that folder and see where it sits in the tree. All folders below lists every folder, starred ones included. The Refresh button at the top of the panel loads the tree again."
+      "fa-star::Star a folder to bookmark it: it is listed at the top as a shortcut. Press it to find the folder in All folders."
     ],
     "imageAlt": "The Folders panel with the folder tree of the team: Cloning with Plasmids and Screening, and the Unfiled entry",
     "featured": false,
