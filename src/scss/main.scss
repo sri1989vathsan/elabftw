@@ -13440,3 +13440,44 @@ input.wp-group-color[type='color'] {
 :root[data-ui-size='comfortable'] .whats-new-popup {
   --fx-popup-font: 1.02rem;
 }
+
+/* Scrolling inside a popup never chains to the page behind it (the wheel guard in popup-wheel-lock.ts stops what cannot scroll).
+   Keep this list in step with POPUP_ROOTS there. */
+.modal,
+.dropdown-menu,
+.popover,
+.ui-autocomplete,
+.ui-menu,
+.ts-dropdown,
+.tox-dialog,
+.tox-menu,
+.tox-collection,
+.jcontextmenu,
+.jss_contextmenu,
+.jdropdown-content,
+.inline-spreadsheet-overlay,
+.elabftw-spreadsheet-editor-overlay,
+.inline-spreadsheet-dialog,
+.wp-dialog,
+.pm-overlay,
+.date-reference-overlay,
+.command-palette-overlay,
+.todo-detail-overlay,
+.cal-modal-backdrop,
+.cal-menu-panel,
+.folder-popover,
+.suggested-tags-popover,
+.show-more-filters-popover,
+.favorite-filter-overlay,
+.filter-menu,
+.toc-row-menu,
+.shortcuts-dialog,
+.pm-more-menu,
+.orders-more-menu,
+.pm-link-cards-menu,
+.pmc-popup,
+.html-tool-workspace,
+.full-screen-overlay,
+[data-popup-root] {
+  overscroll-behavior: contain;
+}
