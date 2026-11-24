@@ -411,7 +411,7 @@
       "Printing goes to the label printer of the lab over the network. It needs the printer address, which only an admin can set."
     ],
     "image": "print-label.png",
-    "imageAlt": "The top of the Print a label window with the label format, text size, copies and the preview with dashed margins"
+    "imageAlt": "The Print a label window with three lines of text, the first in bold and the second centred, a filled {sample} box, and the preview showing the label with dashed margins"
   },
   {
     "id": "google-calendar-tasks",
@@ -1558,7 +1558,7 @@
       "fa-table::To print many labels, paste cells from a spreadsheet and click the columns you want. Each row is one label.",
       "fa-gear::Admins set the printer address, port, resolution and formats in Admin panel, Labels. Without a printer address nothing prints."
     ],
-    "imageAlt": "The Print a label window: label format, text size, copies, preview with margins, text lines and a box for pasted table cells",
+    "imageAlt": "The Print a label window with a filled label: three text lines (one bold, one centred), a box for the {sample} value and the preview of the label",
     "featured": false,
     "guide": true,
     "order": 125,
@@ -1571,7 +1571,16 @@
     "news": "New: Print a label in the plus menu, and the Labels tab for admins.",
     "shot": "",
     "image": "guide-labels.png",
-    "screenshots": []
+    "screenshots": [
+      {
+        "image": "guide-labels-table-8f132526.png",
+        "caption": "Labels from a table: paste cells from a spreadsheet, click the column names to put them in the text, and the preview shows the first label; each row is one label"
+      },
+      {
+        "image": "guide-labels-admin-39cc7b0e.png",
+        "caption": "Admin panel, Labels: the printer address, port and resolution, the QR web address and the label formats (the address shown is only an example)"
+      }
+    ]
   },
   {
     "id": "guide-google-calendar",
