@@ -9,7 +9,7 @@
  * page is loaded again. Asserts, at 1400 px, 800 px and 480 px wide, in the compact and the comfortable interface size:
  *  (a) the control is inside <nav id="main-navbar">, its box is inside the bar's box, it is a flex item of the bar's row after the home icon;
  *  (b) it is not position: fixed, and nothing of the page content area (below the bar) lies under its box;
- *  (c) the bar has the same height with and without it, and the right-hand icons stay inside the bar (no wrapping, no overflow);
+ *  (c) the bar has the same height with and without it, and the right-hand icons and the page width are as without it;
  *  (d) the label is shown on wide windows, hidden on narrow ones, and the tooltip always names the place;
  *  (e) a click on the main button goes to the stored page (the dashboard);
  *  (f) the × removes it, the stored places are dropped, and after a reload it stays away.
@@ -78,7 +78,8 @@ const check = (name, ok, detail) => { if (!ok) failed++; console.log(`${ok ? 'PA
         check(`${tag}: it is not floating (position is not fixed)`, !m.fixed, 'fixed');
         check(`${tag}: nothing of the page content lies under it`, m.covered.length === 0, m.covered.join(' | '));
         check(`${tag}: the bar keeps its height (${without.barH} -> ${m.barH})`, Math.abs(m.barH - without.barH) < 1, `${without.barH} vs ${m.barH}`);
-        check(`${tag}: the right-hand icons stay inside the bar, no sideways scroll`, m.secondaryInside !== false && m.scrollW <= m.innerW + 1, `scrollW ${m.scrollW} > ${m.innerW}, secondaryInside ${m.secondaryInside}`);
+        // the same as without the control (the bar itself may be wider than a very narrow window): the control must not make it worse
+        check(`${tag}: the right-hand icons and the width of the page are as without it`, m.secondaryInside === without.secondaryInside && m.scrollW <= Math.max(without.scrollW, m.innerW) + 1, `scrollW ${without.scrollW} -> ${m.scrollW}, secondaryInside ${without.secondaryInside} -> ${m.secondaryInside}`);
         check(`${tag}: label ${w >= 992 ? 'shown' : 'hidden'}, tooltip names the place`, m.labelShown === (w >= 992) && /Dashboard/.test(m.title), `labelShown ${m.labelShown}, title ${m.title}`);
       }
     }
