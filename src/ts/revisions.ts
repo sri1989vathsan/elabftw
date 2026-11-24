@@ -314,7 +314,8 @@ function diffByWords(a: string, b: string): DiffArr[] {
 /** The readable text of an HTML body, with a line break at the end of each block. */
 function bodyToText(html: string): string {
   const safe = DOMPurify.sanitize(html ?? '', { USE_PROFILES: { html: true }, FORBID_TAGS: ['style', 'script', 'iframe', 'form'] });
-  const withBreaks = safe.replace(/<\/(p|div|li|h[1-6]|tr|pre|blockquote)>|<br\s*\/?>/gi, '$&\n');
+  const withBreaks = safe.replace(/<\/(td|th)>/gi, '$&\t').replace(/<\/(p|div|li|h[1-6]|tr|pre|blockquote)>|<br\s*\/?>/gi, '$&\n');
+
   const doc = new DOMParser().parseFromString(withBreaks, 'text/html');
   return (doc.body.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim();
 }
