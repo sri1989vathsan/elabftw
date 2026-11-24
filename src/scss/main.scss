@@ -1066,6 +1066,15 @@ tr:first-child td {
   margin-bottom: 0;
 }
 
+// Applied dynamically as `overlay-${type}` by Notifications.class.ts, so a
+// search for the literal class name finds nothing -- do not remove it as
+// "unused": without it a "Saved" toast has no animation, no background and
+// never fires animationend, and stays on screen as a see-through ghost.
+.overlay-success {
+  animation: slideInOut 3.5s ease-in-out forwards;
+  background-color: var(--primary);
+}
+
 .overlay-error,
 .overlay-warning {
   animation: slideIn 3.5s ease-in forwards;
