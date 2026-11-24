@@ -3152,25 +3152,75 @@ async function spreadsheetSoak(options = {}) {
       await sleep(800);
       note('undo-typing-over-text');
     },
-    // Print and the PDF export are built from the stored table, not from the live grid: its column widths, one coordinate cell per row
-    // and its header row must be the live grid's, or paper and screen differ. The print rules (fills kept, no clipping) must be loaded.
+    // Print and the PDF export are built from the stored table (its data-spreadsheet colWidths), not from the live grid, so for paper to look
+    // like the screen the widths must be in the stored data and the print copy must keep them. A column nobody sized is stored at the default and
+    // the live grid only fits it to its text on screen (fitUnsizedColumns), so the sheet is sized by hand first (drag the headers): then stored
+    // data, stored colgroup, live grid and the print copy (the "beforeprint" copy, wide-table choice FIT = the default) must all have the same
+    // column widths, a copy wider than the page is only scaled (zoom) to the page width, and the header row repeats (<thead>).
     async 'print-pdf-input-equals-live'() {
+      const PAGE = 700; // PRINT_CONTENT_WIDTH of inline-spreadsheet.ts
+      const storedWidths = stored => {
+        let json = null;
+        try { json = JSON.parse(decodeURIComponent(escape(atob(stored.getAttribute('data-spreadsheet') || '')))); } catch { return null; }
+        return json.colWidths || {};
+      };
       for (const way of ['external-html', 'plain-text']) {
         const made = await makeTextSheet(way);
         if (!made) continue;
         await live(made.uid);
         await sleep(700);
+        const table = `print/PDF input (${way})`;
+        // size the columns by hand: the text column wider until the sheet is wider than a portrait page (so that FIT has to scale it), the number column a bit wider
+        for (let n = 0; n < 6; n++) {
+          const total = (sheetMetrics(made.uid)?.cols || []).reduce((a, b) => a + b, 0);
+          if (total > PAGE + 60) break;
+          if (!await resizeColumn(made.uid, 0)) break;
+        }
+        await resizeColumn(made.uid, 1);
+        await sleep(config.settleMs + 600);
         const m = sheetMetrics(made.uid);
         const stored = tableEl(made.uid);
-        const table = `print/PDF input (${way})`;
         if (!m || !stored) { fail(`print-pdf-input-equals-live: no sheet (${way})`); continue; }
-        const widths = [...stored.querySelectorAll(':scope > colgroup > col')].map(c => Math.round(parseFloat(c.style.width) || parseFloat(c.getAttribute('width')) || 0));
-        const dataWidths = widths.slice(widths.length - m.cols.length);
         const near = (a, b) => a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 2);
-        if (!near(dataWidths, m.cols)) dataLoss.push({ context, table, problem: `stored column widths ${dataWidths.join('/')} differ from the live grid ${m.cols.join('/')}` });
+        // 1. stored data (what the PDF reads) = live grid
+        const sw = storedWidths(stored);
+        const dataWidths = m.cols.map((_, i) => Math.round(Number(sw?.[String(i)]) || 0));
+        if (!sw || !near(dataWidths, m.cols)) dataLoss.push({ context, table, problem: `stored colWidths ${dataWidths.join('/')} differ from the live grid ${m.cols.join('/')}` });
+        // 2. stored colgroup = live grid
+        const widths = [...stored.querySelectorAll(':scope > colgroup > col')].map(c => Math.round(parseFloat(c.style.width) || parseFloat(c.getAttribute('width')) || 0));
+        const colgroupData = widths.slice(widths.length - m.cols.length);
+        if (!near(colgroupData, m.cols)) dataLoss.push({ context, table, problem: `stored column widths ${colgroupData.join('/')} differ from the live grid ${m.cols.join('/')}` });
         if (!stored.querySelector('thead')) dataLoss.push({ context, table, problem: 'stored table has no <thead>: the header row cannot repeat on each printed page' });
         const coords = stored.querySelectorAll('tbody tr > .spreadsheet-coordinate').length;
         if (coords !== stored.querySelectorAll('tbody tr').length) dataLoss.push({ context, table, problem: `stored table has ${coords} coordinate cells for ${stored.querySelectorAll('tbody tr').length} rows` });
+        // 3. the print copy, built the way Ctrl+P builds it, in the default mode (fit)
+        const modeBefore = document.body.dataset.sheetsMode;
+        document.body.dataset.sheetsMode = 'fit';
+        window.dispatchEvent(new Event('beforeprint'));
+        await sleep(300);
+        try {
+          const copies = [...document.querySelectorAll('.print-sheet-copy')].filter(copy => {
+            const t = copy.querySelector('table'); const text = t ? t.textContent : '';
+            return t && made.rows.every(row => text.includes(row[0].slice(0, 20)));
+          });
+          // the sheet just made is the last one in the text (an earlier way's sheet has the same text)
+          if (copies.length < 1) dataLoss.push({ context, table, problem: 'no print copy of this sheet was made' });
+          else {
+            const copy = copies[copies.length - 1];
+            const printCols = [...copy.querySelectorAll('table > colgroup > col')].map(c => Math.round(parseFloat(c.style.width) || parseFloat(c.getAttribute('width')) || 0));
+            const printData = printCols.slice(printCols.length - m.cols.length);
+            if (!near(printData, m.cols)) dataLoss.push({ context, table, problem: `print copy column widths ${printData.join('/')} differ from the live grid ${m.cols.join('/')}` });
+            const natural = printCols.reduce((a, b) => a + b, 0);
+            const zoom = parseFloat(copy.style.zoom) || 1;
+            if (natural > PAGE) {
+              if (!(zoom < 1) || Math.abs(natural * zoom - PAGE) > 6) dataLoss.push({ context, table, problem: `print copy is ${natural} px wide: fit must scale it to the page width (${PAGE} px), zoom is ${zoom}` });
+            } else if (zoom !== 1) dataLoss.push({ context, table, problem: `print copy is ${natural} px wide, it fits the page, but it is scaled (zoom ${zoom})` });
+            if (!copy.querySelector('table > thead')) dataLoss.push({ context, table, problem: 'print copy has no <thead>' });
+          }
+        } finally {
+          window.dispatchEvent(new Event('afterprint'));
+          if (modeBefore === undefined) delete document.body.dataset.sheetsMode; else document.body.dataset.sheetsMode = modeBefore;
+        }
         let printRules = '';
         for (const sheet of document.styleSheets) { let list; try { list = sheet.cssRules; } catch { continue; } for (const r of list) if (r.type === CSSRule.MEDIA_RULE && /print/.test(r.media.mediaText)) printRules += r.cssText; }
         if (!/print-color-adjust:\s*exact/.test(printRules)) dataLoss.push({ context, table, problem: 'no print-color-adjust: exact in the print rules (fills would be lost on paper)' });
