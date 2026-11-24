@@ -1765,7 +1765,7 @@
     "guide": true,
     "screenshots": [],
     "image": "guide-reminders.png",
-    "imageAlt": "The reminder chip with the number of deadlines coming up, and the list of deadlines it opens at the top right of the page",
+    "imageAlt": "The list of deadlines opened from the reminder chip, top right: a small i that opens this card and a close button in its header, then five tasks",
     "shot": ""
   }
 ]
