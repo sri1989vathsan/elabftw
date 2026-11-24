@@ -14,6 +14,9 @@ export const PALETTE = [
   '#cc79a7', '#8c564b', '#8a8d00', '#3d3d3d', '#4a90a4', '#b35900', '#7a5195', '#5c7cfa',
 ];
 
+// The ten swatches the popup shows first: clearly different hues (and a grey), the rest of PALETTE is one click away.
+export const DEFAULT_SWATCHES = ['#e5484d', '#f76b15', '#e5a50a', '#30a46c', '#0b7285', '#2a6df4', '#8e4ec6', '#d6409f', '#8c564b', '#7d8499'];
+
 export interface ColorTemplate {
   name: string;
   colors: string[];
